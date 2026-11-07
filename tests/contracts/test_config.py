@@ -250,6 +250,7 @@ def test_public_config_equal_across_roles_without_secret_hashes() -> None:
 
 
 def test_default_role_compatibility_and_invalid_role() -> None:
+    assert config.ServiceRole.__module__ == "proofhunter.config"
     assert config.load_settings(_live_env()) == config.load_settings(
         _live_env(), role=config.ServiceRole.ALL)
     assert config.mode_config_fingerprint(config.load_settings({}), []) == (

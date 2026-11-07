@@ -25,16 +25,17 @@ Install with `uv sync --locked`, then run everything with `UV_OFFLINE=1 uv run -
 
 ```python
 from proofhunter.config import (
-    ServiceRole, load_settings, github_private_key_pem,
+    load_settings, github_private_key_pem,
     public_mode_config, mode_config_fingerprint,
 )
+from proofhunter.config import ServiceRole
 from proofhunter.ports import ConfigError
 ```
 
 `load_settings(environ: Mapping[str, str] | None = None, *,
 role: ServiceRole = ServiceRole.ALL) -> Settings` accepts an explicit mapping
-or the process environment. `ServiceRole` is defined alongside `Profile` in
-`proofhunter.contracts` and re-exported from `proofhunter.config`.
+or the process environment. `ServiceRole` is defined in `proofhunter.config`;
+import it with `from proofhunter.config import ServiceRole`.
 Unknown roles raise `ConfigError`; there is no environment variable for role.
 
 | Role | Required live variables | Additional secret variables read |

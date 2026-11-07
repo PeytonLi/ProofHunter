@@ -12,6 +12,7 @@ import json
 import os
 import re
 from collections.abc import Mapping, Sequence
+from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Final, Literal
 
@@ -32,9 +33,6 @@ from proofhunter.contracts import (
 )
 from proofhunter.contracts import (
     Profile as Profile,
-)
-from proofhunter.contracts import (
-    ServiceRole as ServiceRole,
 )
 from proofhunter.ports import ConfigError
 
@@ -96,6 +94,13 @@ KNOWN_VARIABLES: Final = (
 )
 DEFAULT_ENROLLMENTS: Final = "config/enrollments.example.json"
 DEFAULT_DB_PATH: Final = ".proofhunter/proofhunter.sqlite3"
+
+
+class ServiceRole(StrEnum):
+    ALL = "all"
+    API = "api"
+    WORKER = "worker"
+    AGENT = "agent"
 
 
 class _Frozen(BaseModel):
