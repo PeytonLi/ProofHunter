@@ -107,3 +107,23 @@ safe request ID, allowlisted finish reason, validation result, reason code and
 a SHA-256 request/config fingerprint (including token parameter and reasoning
 effort, never credentials). The wrapper observes bounded parser input without
 replacing local validation. No live entitlement or latency claim is made.
+
+## Live verification
+
+One real request passed with these sanitized facts:
+
+- UTC: 2026-11-07T20:40:02Z
+- HTTP: 200
+- Latency: 11475 ms
+- Provider request id: chatcmpl-01a1b7bd-59bd-701f-ac77-2d6ba03147a6
+- finish_reason: stop
+- Local strict validation: passed
+- Reason code: none
+- Model: muse-spark-1.3
+- Shipped MetaAdapter via create_meta_port with max_attempts=1
+- max_completion_tokens: 4096
+- reasoning_effort: low
+- Body fingerprint: sha256:af732cff49f81648
+
+The output_truncated reason remains a cross-owner follow-up
+(`contracts.py` ReasonCode).
