@@ -1,0 +1,166 @@
+{
+  "arms": {
+    "builtin_eig": {
+      "clean_false_positives": 0,
+      "cost_status": [
+        "measured"
+      ],
+      "cost_usd_per_usable_case": 0.0,
+      "cost_usd_total": 0.0,
+      "defect_episodes": 45,
+      "descriptive_recall_at": {
+        "1": 0.6666666666666666,
+        "3": 0.6666666666666666,
+        "6": 0.6666666666666666
+      },
+      "episodes": 60,
+      "failed_invocations": 0,
+      "invocations_max": 12,
+      "invocations_mean": 7.5,
+      "measurement_modes": [
+        "offline"
+      ],
+      "reason_codes": {
+        "confirmed_evidence": 30,
+        "coverage_complete": 30
+      },
+      "usable_episodes": 60,
+      "verdicts": {
+        "confirmed_existing_defect": 5,
+        "confirmed_regression": 25,
+        "no_defect_found": 30
+      },
+      "wall_ms_p50": 26.097678,
+      "wall_ms_p95": 29.3764,
+      "wall_ms_per_usable_case": 24.753981983333333
+    },
+    "fixed_order": {
+      "clean_false_positives": 0,
+      "cost_status": [
+        "measured"
+      ],
+      "cost_usd_per_usable_case": 0.0,
+      "cost_usd_total": 0.0,
+      "defect_episodes": 45,
+      "descriptive_recall_at": {
+        "1": 0.0,
+        "3": 0.3333333333333333,
+        "6": 0.8888888888888888
+      },
+      "episodes": 60,
+      "failed_invocations": 0,
+      "invocations_max": 12,
+      "invocations_mean": 9.0,
+      "measurement_modes": [
+        "offline"
+      ],
+      "reason_codes": {
+        "confirmed_evidence": 40,
+        "coverage_complete": 20
+      },
+      "usable_episodes": 60,
+      "verdicts": {
+        "confirmed_existing_defect": 5,
+        "confirmed_regression": 35,
+        "no_defect_found": 20
+      },
+      "wall_ms_p50": 22.01175,
+      "wall_ms_p95": 23.670737,
+      "wall_ms_per_usable_case": 22.153299816666667
+    },
+    "uniform_random": {
+      "clean_false_positives": 0,
+      "cost_status": [
+        "measured"
+      ],
+      "cost_usd_per_usable_case": 0.0,
+      "cost_usd_total": 0.0,
+      "defect_episodes": 45,
+      "descriptive_recall_at": {
+        "1": 0.28888888888888886,
+        "3": 0.6888888888888889,
+        "6": 0.8444444444444444
+      },
+      "episodes": 60,
+      "failed_invocations": 0,
+      "invocations_max": 12,
+      "invocations_mean": 7.866666666666666,
+      "measurement_modes": [
+        "offline"
+      ],
+      "reason_codes": {
+        "confirmed_evidence": 38,
+        "coverage_complete": 22
+      },
+      "usable_episodes": 60,
+      "verdicts": {
+        "confirmed_existing_defect": 5,
+        "confirmed_regression": 33,
+        "no_defect_found": 22
+      },
+      "wall_ms_p50": 22.445182,
+      "wall_ms_p95": 26.396958,
+      "wall_ms_per_usable_case": 23.318349166666668
+    }
+  },
+  "arms_requested": [
+    "fixed_order",
+    "uniform_random",
+    "simple_heuristic",
+    "builtin_eig"
+  ],
+  "cases": 12,
+  "dataset_checks": {
+    "clean_cases_with_exposing_pool_input": [],
+    "defect_cases": 9,
+    "defect_cases_without_exposing_pool_input": [],
+    "eig_applicable_defect_cases": 6,
+    "labelled_cases": 12,
+    "source_review_failures": {},
+    "witness_not_reproduced": [],
+    "witness_reproduced": 9
+  },
+  "implementation_sha": "163b5af2dcd5c2f702c4cda93e1cf45407b33778",
+  "manifest_cases_sha256": "5e0f903d2d082ebc218ab81727b02a758f12ba6d70614c8d5f392b34aad3958f",
+  "manifest_version": "bench-double-v1",
+  "measurement_mode": "offline",
+  "pilot_wall_ms": 4497.638951,
+  "projection": {
+    "arms": 13,
+    "arms_with_unknown_cost": [
+      "builtin_ranker",
+      "frontier_agent",
+      "frontier_agent_free_input",
+      "frontier_reviewer",
+      "meta_muse_spark_eig",
+      "qwen_tuned_eig",
+      "qwen_tuned_ranker",
+      "qwen_untuned_eig",
+      "qwen_untuned_ranker",
+      "simple_heuristic"
+    ],
+    "cases": 1010,
+    "cases_source": "split_targets validation+test (defect+clean)",
+    "expected_executions_per_episode": 8.122222222222222,
+    "expected_executions_total": 533223.8888888889,
+    "formula": "cases x arms x repetitions x executions_per_episode",
+    "note": "Execution is local reviewed in-process code (0 USD). Model-arm dollars stay unknown until their lanes report measured per-episode costs.",
+    "projected_usd_measured_arms": 0.0,
+    "repetitions": 5,
+    "worst_case_executions_total": 984750
+  },
+  "protocol_version": "research-protocol-v1",
+  "rows_sha256": "7d61d999ff5ea0f3e28afe50b86e698edba5787f95d5f0711b0043ec41b81add",
+  "schema": "research-pilot-report-v1",
+  "seeds": [
+    1633385816,
+    3469185555,
+    2611436028,
+    2392925855,
+    277584464
+  ],
+  "skipped_arms": {
+    "simple_heuristic": "no double for selector 'simple_heuristic'"
+  },
+  "split": "validation"
+}

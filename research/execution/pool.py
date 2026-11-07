@@ -1,6 +1,8 @@
-"""Shared candidate pool: identical for every arm on a (case, replicate seed)."""
+"""Shared candidate pool: identical for every arm on a case (protocol ``candidate_pool``)."""
 
 from __future__ import annotations
+
+from typing import Final
 
 from proofhunter import bayes
 from proofhunter.contracts import (
@@ -11,41 +13,43 @@ from proofhunter.contracts import (
     ProviderName,
     ProviderProvenance,
     builtin_hypothesis_payload,
-    canonical_sha256,
 )
 from research.schemas.models import CaseRecord, ProtocolV1
 
+POOL_GENERATOR: Final = "proofhunter.bayes.generate"
+POOL_PLAN: Final = "proofhunter.contracts.builtin_hypothesis_payload"
+POOL_SEED_SOURCE: Final = "CaseRecord.candidate_seed"
 
-def plan_from_payload(payload: HypothesisPlanPayload, mode: ProviderMode) -> HypothesisPlan:
-    return HypothesisPlan(hypotheses=payload.hypotheses, provenance=ProviderProvenance(
-        provider=ProviderName.META, mode=mode, model_id=None, request_id=None,
-        latency_ms=None, attempts=0 if mode is ProviderMode.NOT_CALLED else 1, reason_code=None))
+
+def as_plan(payload: HypothesisPlanPayload, *, mode: ProviderMode) -> HypothesisPlan:
+    """Wrap a validated payload as a production plan without provider identifiers."""
+    return HypothesisPlan(
+        hypotheses=payload.hypotheses,
+        provenance=ProviderProvenance(
+            provider=ProviderName.META, mode=mode, model_id=None, request_id=None,
+            latency_ms=None, attempts=0, reason_code=None,
+        ),
+    )
 
 
 def builtin_plan() -> HypothesisPlan:
-    return plan_from_payload(builtin_hypothesis_payload(), ProviderMode.NOT_CALLED)
+    return as_plan(builtin_hypothesis_payload(), mode=ProviderMode.FALLBACK)
 
 
-def pool_seed(candidate_seed: int, replicate_seed: int) -> int:
-    """``CaseRecord.candidate_seed`` combined with the replicate seed (RESEARCH-SPEC 3.2)."""
-    digest = canonical_sha256({"candidate_seed": candidate_seed, "replicate_seed": replicate_seed})
-    return int(digest[:8], 16)
+def check_pool_policy(protocol: ProtocolV1) -> None:
+    pool = protocol.candidate_pool
+    if (pool.get("generator"), pool.get("plan"), pool.get("seed_source")) != (
+        POOL_GENERATOR, POOL_PLAN, POOL_SEED_SOURCE
+    ):
+        raise ValueError("protocol candidate_pool differs from the implemented pool policy")
 
 
 def shared_pool(case: CaseRecord, protocol: ProtocolV1) -> CandidateBank:
-    """Frozen OWNERSHIP signature: the pool at ``case.candidate_seed``."""
-    return seeded_pool(case, protocol, None)
-
-
-def seeded_pool(
-    case: CaseRecord, protocol: ProtocolV1, replicate_seed: int | None
-) -> CandidateBank:
-    """Production generator over the built-in plan; never depends on the arm."""
-    if protocol.candidate_pool.get("generator") != "proofhunter.bayes.generate":
-        raise ValueError("protocol names an unsupported candidate generator")
-    seed = case.candidate_seed if replicate_seed is None else pool_seed(case.candidate_seed,
-                                                                         replicate_seed)
-    bank = bayes.generate(builtin_plan(), seed)
-    if len(bank.candidates) > protocol.candidate_pool.get("max_candidates", 64):
+    """``bayes.generate(builtin plan, case.candidate_seed)``; never depends on the arm."""
+    check_pool_policy(protocol)
+    bank = bayes.generate(builtin_plan(), case.candidate_seed)
+    if len(bank.candidates) > int(protocol.candidate_pool["max_candidates"]):
         raise ValueError("pool exceeds protocol max_candidates")
+    if bank.generator_version != protocol.candidate_pool["generator_version"]:
+        raise ValueError("pool generator version differs from protocol")
     return bank

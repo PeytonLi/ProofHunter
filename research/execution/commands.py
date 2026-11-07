@@ -1,226 +1,166 @@
-"""``run-pilot`` and ``evaluate`` CLI handlers (offline, local, no paid calls)."""
+"""CLI handlers: ``run-pilot`` and ``evaluate`` (dispatched by the frozen ``research/cli.py``)."""
 
 from __future__ import annotations
 
 import argparse
-import importlib
+import hashlib
 import json
 import sys
-from collections import Counter
-from collections.abc import Iterable, Sequence
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
-from proofhunter.contracts import Strategy, sha256_hex
-from research.schemas.interfaces import CaseSources, EpisodeContext, EpisodeState, Ledger, Selector
-from research.schemas.models import (
-    CostStatus,
-    LedgerCategory,
-    LedgerEntry,
-    LedgerPhase,
-    MeasurementMode,
-    ProtocolV1,
-    RawResultRow,
+from research.execution import pilot
+from research.execution.lanes import (
+    ArmFactory,
+    FrozenArtifacts,
+    LaneMissing,
+    open_ledger,
+    open_store,
 )
+from research.execution.runner import (
+    REPO,
+    ResearchEpisodeRunner,
+    implementation_sha,
+    make_runner,
+)
+from research.schemas.interfaces import CaseStore
+from research.schemas.models import MeasurementMode, ProtocolV1, RawResultRow, Split
 
-REPO = Path(__file__).resolve().parents[2]
 PROTOCOL = REPO / "research" / "spec" / "protocol-v1.json"
 ARTIFACTS = REPO / "research" / "artifacts" / "execution"
-FIXED_ORDER = (Strategy.BOUNDARY, Strategy.CONSTRAINT, Strategy.SEEDED_FUZZ)
-MISSING = 3
-
-
-class FixedOrderSelector:
-    """Spec ``fixed_order``: anchors, then boundary, constraint, seeded_fuzz; ties by hash."""
-
-    arm_id = "fixed_order"
-
-    def reset(self, context: EpisodeContext) -> None:
-        del context
-
-    def choose(self, state: EpisodeState) -> str:
-        return min(state.available, key=lambda c: (
-            not c.is_anchor, FIXED_ORDER.index(c.strategy), c.input_sha256)).input_sha256
-
-
-class JsonlLedger:
-    """Fallback append-only ledger used until ``research.metrics.ledger`` is available."""
-
-    def __init__(self, path: Path) -> None:
-        self.path = path
-
-    def append(self, entry: LedgerEntry) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        with self.path.open("a") as fh:
-            fh.write(LedgerEntry.model_validate(entry.model_dump()).model_dump_json() + "\n")
-
-    def entries(self) -> Sequence[LedgerEntry]:
-        if not self.path.exists():
-            return []
-        return [LedgerEntry.model_validate_json(x) for x in self.path.read_text().splitlines()]
-
-
-def open_ledger(path: Path) -> Ledger:
-    try:
-        module = importlib.import_module("research.metrics.ledger")
-    except ModuleNotFoundError:
-        return JsonlLedger(path)
-    ledger: Ledger = module.open_ledger(path)
-    return ledger
+PILOT_ARMS = ("fixed_order", "uniform_random", "simple_heuristic", "builtin_eig")
 
 
 def load_protocol(path: Path = PROTOCOL) -> ProtocolV1:
-    return ProtocolV1.model_validate_json(path.read_text())
+    return ProtocolV1.model_validate_json(path.read_text(encoding="utf-8"))
 
 
-def local_compute_entry(run_id: str, phase: LedgerPhase, wall_ms: float, episodes: int
-                        ) -> LedgerEntry:
-    """Unpaid local execution: recorded for timing, cost measured as 0 USD."""
-    return LedgerEntry(
-        schema_version="research-ledger-v1",
-        entry_id=f"integration:{run_id}", recorded_at=datetime.now(UTC), lane="integration",
-        provider="local", category=LedgerCategory.EXECUTION_INFRA, phase=phase,
-        resource_id=None, run_id=run_id, case_id=None, quantity=float(episodes),
-        unit="episode", unit_price_usd=0.0, cost_usd=0.0, cost_status=CostStatus.MEASURED,
-        pricing_reference="local VM subprocess execution; no provider billing",
-        pricing_date=datetime.now(UTC).strftime("%Y-%m-%d"), wall_ms=wall_ms, queue_ms=None,
-        measurement_mode=MeasurementMode.OFFLINE, paid=False, estimated_job_usd=0.0,
-        coordinator_checkin_ref=None, teardown_verified=None)
+def _stamp() -> str:
+    return datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
 
 
-def bench_plumbing_sources() -> list[CaseSources]:
-    """Frozen bench corpus wrapped as cases: verifies execution plumbing, not a research result."""
-    from bench.corpus import ROOT, load
-    from proofhunter.contracts import canonical_sha256
-    from research.schemas.models import CaseRecord, Split, Track
-
-    out = []
-    for i, case in enumerate(load(ROOT).cases):
-        base, head = (ROOT / case.base_path).read_bytes(), (ROOT / case.head_path).read_bytes()
-        out.append(CaseSources(CaseRecord(
-            schema_version="research-case-v1", track=Track.A, case_id=f"bench-{case.case_id}",
-            split=Split.VALIDATION, family_id="bench_plumbing",
-            defect_origin=f"bench:{case.case_id}", near_dup_cluster=f"bench:{case.case_id}",
-            template_id="bench-corpus", template_version="1",
-            template_sha256=sha256_hex(base + head), params={}, params_sha256=canonical_sha256({}),
-            contract_id="checkout-rounding@1", base_source_sha256=sha256_hex(base),
-            head_source_sha256=sha256_hex(head), candidate_seed=i), base, head))
-    return out
+def _common(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--store", type=Path, help="dataset store root (research.data.store)")
+    parser.add_argument("--protocol", type=Path, default=PROTOCOL)
+    parser.add_argument("--out", type=Path)
+    parser.add_argument("--mode", choices=[m.value for m in MeasurementMode], default="offline")
+    parser.add_argument("--arms", help="comma-separated arm ids (default: see command)")
+    parser.add_argument("--doubles", action="store_true",
+                        help="integration self-test: reviewed bench corpus + selector doubles")
 
 
-def _store_sources(root: Path, splits: Iterable[str]) -> list[CaseSources]:
-    store = importlib.import_module("research.data.store").open_store(root)
-    wanted = set(splits)
-    return [store.sources(c.case_id) for c in store.manifest().cases if c.split.value in wanted]
-
-
-def _write(rows: list[RawResultRow], out: Path, run_id: str, extra: dict[str, Any]) -> Path:
+def _setup(
+    args: argparse.Namespace, split: Split
+) -> tuple[ProtocolV1, Path, CaseStore, ResearchEpisodeRunner, pilot.Factory]:
+    protocol = load_protocol(args.protocol)
+    out = args.out or ARTIFACTS / f"{args.command}-{_stamp()}"
     out.mkdir(parents=True, exist_ok=True)
-    data = "".join(r.model_dump_json() + "\n" for r in rows)
-    (out / "raw_results.jsonl").write_text(data)
-    verdicts = Counter(f"{r.arm_id}:{r.verdict}" for r in rows)
-    summary = {"run_id": run_id, "rows": len(rows),
-               "raw_results_sha256": sha256_hex(data.encode()), "verdicts": dict(verdicts),
-               "max_invocations_seen": max((r.invocations.base + r.invocations.head
-                                            + r.invocations.confirm for r in rows), default=0),
-               "failed_invocations": sum(r.invocations.failed for r in rows),
-               "cost_usd": sum(r.cost_usd or 0.0 for r in rows),
-               "cost_unknown_rows": sum(r.cost_status is CostStatus.UNKNOWN for r in rows),
-               **extra}
-    path = out / "summary.json"
-    path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
-    return path
+    ledger = open_ledger(out / "ledger.jsonl")
+    store: CaseStore
+    runner: ResearchEpisodeRunner
+    factory: pilot.Factory
+    if args.doubles:
+        from research.execution import doubles
+
+        store = doubles.BenchStore(split)
+        runner = doubles.offline_runner(protocol)
+        runner.ledger = ledger
+        runner.implementation = implementation_sha()
+        factory = doubles.DoubleFactory()
+    else:
+        if args.store is None:
+            raise LaneMissing("--store is required (or --doubles for the self-test)")
+        store = open_store(args.store)
+        runner = make_runner(protocol, ledger)
+        factory = ArmFactory(FrozenArtifacts.load(getattr(args, "config", None)))
+    return protocol, out, store, runner, factory
 
 
 def run_pilot(argv: Sequence[str]) -> int:
-    """Reproduction pilot: ``fixed_order`` over reviewed cases, first replicate seed."""
-    from research.execution.allowlist import from_bench_corpus
-    from research.execution.runner import TrackARunner
-
     parser = argparse.ArgumentParser(prog="research run-pilot")
-    parser.add_argument("--store", type=Path, help="dataset store root (research.data.store)")
-    parser.add_argument("--splits", nargs="+", default=["train", "validation"])
-    parser.add_argument("--bench-plumbing", action="store_true",
-                        help="use the frozen bench corpus to check execution plumbing only")
-    parser.add_argument("--seeds", type=int, default=1, help="number of replicate seeds")
-    parser.add_argument("--out", type=Path, default=ARTIFACTS / "pilot")
+    _common(parser)
+    parser.add_argument("--split", choices=["train", "validation"], default="validation")
+    parser.add_argument("--cases", type=int, default=50, help="maximum pilot cases (<= 50)")
+    parser.add_argument("--smoke", action="store_true", help="3 cases, 1 seed")
+    parser.add_argument("--seeds", type=int, default=1, help="number of preregistered seeds")
+    parser.add_argument("--config", type=Path, help="frozen artifacts JSON for model arms")
     args = parser.parse_args(argv)
-    if "test" in args.splits:
-        parser.error("the pilot never touches the sealed test split")
-    protocol = load_protocol()
-    ledger = open_ledger(args.out / "ledger.jsonl")
-    if args.bench_plumbing:
-        sources, allowlist = bench_plumbing_sources(), from_bench_corpus()
-    elif args.store is not None:
-        try:
-            sources, allowlist = _store_sources(args.store, args.splits), None
-        except ModuleNotFoundError as error:
-            print(f"dependency missing: {error.name} (dataset lane)", file=sys.stderr)
-            return MISSING
-    else:
-        parser.error("give --store or --bench-plumbing")
-    runner = TrackARunner(protocol=protocol, ledger=ledger, allowlist=allowlist)
-    rows = [runner.run(s, FixedOrderSelector(), None, arm_id="fixed_order", seed=seed,
-                       repetition=0, mode=MeasurementMode.OFFLINE)
-            for seed in protocol.replicate_seeds[:args.seeds] for s in sources]
-    run_id = "pilot-" + sha256_hex("".join(r.run_id for r in rows).encode())[:16]
-    ledger.append(local_compute_entry(run_id, LedgerPhase.PILOT,
-                                      sum(r.timings.wall_ms for r in rows), len(rows)))
-    print(_write(rows, args.out, run_id, {
-        "scope": "bench_plumbing_not_research_result" if args.bench_plumbing else "dataset",
-        "implementation_sha": runner.implementation}))
+    args.command = "pilot"
+    if not 1 <= args.cases <= 50 or not 1 <= args.seeds <= 5:
+        parser.error("--cases must be 1..50 and --seeds 1..5")
+    try:
+        protocol, out, store, runner, factory = _setup(args, Split(args.split))
+        seeds = protocol.replicate_seeds[: 1 if args.smoke else args.seeds]
+        arms = args.arms.split(",") if args.arms else list(PILOT_ARMS)
+        report = pilot.run(store, protocol, runner, factory, arms=arms,
+                           split=Split(args.split), max_cases=3 if args.smoke else args.cases,
+                           seeds=seeds, mode=MeasurementMode(args.mode), out=out)
+    except (LaneMissing, ValueError) as error:
+        print(f"run-pilot: {error}", file=sys.stderr)
+        return 1
+    print(json.dumps({"out": str(out), "cases": report["cases"],
+                      "arms": sorted(report["arms"]), "skipped": report["skipped_arms"],
+                      "rows_sha256": report["rows_sha256"]}, sort_keys=True))
     return 0
-
-
-def _selector(arm_id: str, seed: int, checkpoints: Path | None) -> Selector:
-    if arm_id == "fixed_order" and checkpoints is None:
-        return FixedOrderSelector()
-    if arm_id.endswith("_ranker"):
-        ranker = importlib.import_module("research.ranker.selector")
-        if checkpoints is None:
-            raise ValueError("ranker arms need --checkpoints")
-        loaded: Selector = ranker.load_ranker_selector(checkpoints / "ranker.txt", arm_id=arm_id)
-        return loaded
-    baselines = importlib.import_module("research.baselines.selectors")
-    made: Selector = baselines.make_selector(arm_id, seed=seed)
-    return made
 
 
 def evaluate(argv: Sequence[str]) -> int:
-    """Executing arms x preregistered seeds over a split; emits label-free raw rows."""
-    from research.execution.runner import TrackARunner
-
     parser = argparse.ArgumentParser(prog="research evaluate")
-    parser.add_argument("--store", type=Path, required=True)
-    parser.add_argument("--split", default="validation")
-    parser.add_argument("--arms", nargs="+", default=["fixed_order"])
-    parser.add_argument("--checkpoints", type=Path)
-    parser.add_argument("--out", type=Path, default=ARTIFACTS / "evaluate")
+    _common(parser)
+    parser.add_argument("--split", choices=["validation", "test"], default="validation")
+    parser.add_argument("--config", type=Path, required=True,
+                        help="frozen artifacts JSON (checkpoint/adapter sha256, model ids, arms)")
+    parser.add_argument("--max-cases", type=int, help="development cap (never with --split test)")
     args = parser.parse_args(argv)
-    protocol = load_protocol()
-    known = {a.arm_id: a for a in protocol.arms}
-    if bad := [a for a in args.arms if a not in known or not known[a].executes]:
-        parser.error(f"not executing protocol arms: {bad}")
-    if any(known[a].generator is not None for a in args.arms):
-        print("generator arms need the generator lane's frozen checkpoints (not wired yet)",
-              file=sys.stderr)
-        return MISSING
+    args.command = "evaluate"
+    if args.split == "test" and args.max_cases is not None:
+        parser.error("the sealed test split runs in full")
     try:
-        sources = _store_sources(args.store, [args.split])
-        selectors = {(a, s): _selector(a, s, args.checkpoints)
-                     for a in args.arms for s in protocol.replicate_seeds}
-    except ModuleNotFoundError as error:
-        print(f"dependency missing: {error.name}", file=sys.stderr)
-        return MISSING
-    ledger = open_ledger(args.out / "ledger.jsonl")
-    runner = TrackARunner(protocol=protocol, ledger=ledger)
-    rows = [runner.run(src, selectors[(a, s)], None, arm_id=a, seed=s, repetition=0,
-                       mode=MeasurementMode.OFFLINE)
-            for a in args.arms for s in protocol.replicate_seeds for src in sources]
-    run_id = "evaluate-" + sha256_hex("".join(r.run_id for r in rows).encode())[:16]
-    ledger.append(local_compute_entry(run_id, LedgerPhase.EVALUATION,
-                                      sum(r.timings.wall_ms for r in rows), len(rows)))
-    print(_write(rows, args.out, run_id, {"split": args.split,
-                                          "implementation_sha": runner.implementation}))
-    return 0
+        artifacts = FrozenArtifacts.load(args.config)
+        protocol, out, store, runner, factory = _setup(args, Split(args.split))
+        arm_ids = (args.arms.split(",") if args.arms else list(artifacts.arms or [])
+                   or [a.arm_id for a in protocol.arms])
+        specs = {a.arm_id: a for a in protocol.arms}
+        if set(arm_ids) - set(specs):
+            raise ValueError(f"arms not in protocol: {sorted(set(arm_ids) - set(specs))}")
+        cases = sorted((c for c in store.manifest().cases
+                        if c.split.value == args.split), key=lambda c: c.case_id)
+        cases = cases[: args.max_cases] if args.max_cases else cases
+        rows: list[RawResultRow] = []
+        skipped: dict[str, str] = {}
+        for arm_id in arm_ids:
+            spec = specs[arm_id]
+            try:
+                generator = factory.generator(spec)
+                factory.selector(spec, protocol.replicate_seeds[0])
+            except LaneMissing as error:
+                skipped[arm_id] = str(error)
+                continue
+            for case in cases:
+                sources = store.sources(case.case_id)
+                for repetition, seed in enumerate(protocol.replicate_seeds):
+                    selector = factory.selector(spec, seed)
+                    rows.append(runner.run(
+                        sources, selector, generator, arm_id=arm_id, seed=seed,
+                        repetition=repetition, mode=MeasurementMode(args.mode)))
+    except (LaneMissing, ValueError) as error:
+        print(f"evaluate: {error}", file=sys.stderr)
+        return 1
+    rows_path = out / "rows.jsonl"
+    rows_path.write_text("".join(r.model_dump_json() + "\n" for r in rows), encoding="utf-8")
+    (out / "events.jsonl").write_text("".join(
+        json.dumps(e, sort_keys=True) + "\n" for e in runner.events), encoding="utf-8")
+    manifest = {
+        "schema": "research-evaluation-run-v1", "protocol_version": protocol.schema_version,
+        "implementation_sha": runner.implementation,
+        "config_sha256": hashlib.sha256(args.config.read_bytes()).hexdigest(),
+        "split": args.split, "measurement_mode": args.mode, "training": "disabled",
+        "seeds": protocol.replicate_seeds, "cases": len(cases), "arms_run": sorted(
+            set(arm_ids) - set(skipped)), "arms_skipped": skipped, "rows": len(rows),
+        "rows_sha256": hashlib.sha256(rows_path.read_bytes()).hexdigest(),
+    }
+    (out / "run-manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+    print(json.dumps({"out": str(out), **{k: manifest[k] for k in (
+        "rows", "rows_sha256", "arms_run", "arms_skipped")}}, sort_keys=True))
+    return 0 if rows else 1

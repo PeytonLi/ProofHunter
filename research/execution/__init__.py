@@ -1,1 +1,1 @@
-"""Track A execution adapter and Track B design-only refusal (research-protocol-v1)."""
+"""Integration lane: shared pool, episode runner, run-pilot and evaluate (research-protocol-v1)."""
