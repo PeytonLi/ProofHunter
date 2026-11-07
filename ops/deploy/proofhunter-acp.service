@@ -1,0 +1,18 @@
+[Unit]
+Description=ProofHunter ACP operator-only example (disabled)
+After=proofhunter-api.service
+
+[Service]
+User=proofhunter
+WorkingDirectory=/opt/proofhunter
+EnvironmentFile=/etc/proofhunter/offline.env
+# Offline ACP has only interactive --local mode. Never start a public agent here.
+ExecStart=/opt/proofhunter/.venv/bin/python -m proofhunter.acp --local
+StandardInput=tty
+TTYPath=/dev/tty12
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+
+# Deliberately no Install section: operator console example, not a daemon to enable.

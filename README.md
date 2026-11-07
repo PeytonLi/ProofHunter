@@ -2,17 +2,33 @@
 
 ProofHunter checks whether an authorized GitHub pull request changes behavior that matters. A maintainer asks inside ASI:One, ProofHunter pins the PR to exact base and head commits, tests a small budget of informative inputs against a trusted oracle, and returns a verdict with a reproducible evidence receipt. The full specification is [ProofHunter-PRD.md](ProofHunter-PRD.md).
 
-Status: G0 setup freeze. Shared contracts, ports, fixtures and gates are in place; role modules land after G1.
+Status: offline integration implemented. Live release remains operator-gated.
 
 ## Quickstart (offline)
 
 ```bash
 uv sync --locked
-UV_OFFLINE=1 python tools/gate.py setup
-uv run --locked pytest -q tests/contracts
+export UV_OFFLINE=1 PROOFHUNTER_PROFILE=offline
+uv run --locked pytest -q
+uv run --locked python -m proofhunter demo --offline --case buggy --seed 17 --receipt ./buggy-receipt.json
+uv run --locked python -m proofhunter demo --offline --case fixed --seed 17 --receipt ./fixed-receipt.json
+uv run --locked python -m proofhunter replay --offline --receipt ./buggy-receipt.json --probe counterexample
+uv run --locked python -m bench.run --offline --split sample --seed 17 --output ./bench-results.jsonl
+uv run --locked python -m proofhunter serve --profile offline
+uv run --locked python -m proofhunter worker --profile offline
+python tools/gate.py integrated --evidence ~/ph-evidence
 ```
 
 Everything defaults to `PROOFHUNTER_PROFILE=offline`. No provider credentials are read in that profile and every live feature flag is off.
+
+`serve` requires explicitly supplied, distinct `PROOFHUNTER_TEST_API_TOKEN` and
+`PROOFHUNTER_TEST_OPERATOR_TOKEN` (local test credentials only). It binds
+127.0.0.1 by default. API and worker must share `PROOFHUNTER_DB_PATH`.
+Standalone demos use a temporary database unless that path is supplied.
+`half_even` and `existing` are also supported demo cases. Demo exit 0 means a
+terminal evidence receipt, not necessarily a clean verdict. Live CLI requests
+are refused in this offline build. See [integration notes](docs/integration.md)
+for recovery limitations, golden differences and remaining release gates.
 
 ## Where things are
 

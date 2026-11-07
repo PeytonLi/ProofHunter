@@ -18,9 +18,11 @@ import subprocess
 import sys
 import tempfile
 from collections.abc import Sequence
+from contextlib import nullcontext
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
+EVIDENCE: Path | None = None
 
 SETUP_PATHS = (
     "src/proofhunter/__init__.py", "src/proofhunter/contracts.py", "src/proofhunter/ports.py",
@@ -78,6 +80,9 @@ def run(label: str, args: Sequence[str], *, env: dict[str, str] | None = None,
     result = subprocess.run(command, cwd=cwd, env=env or offline_env(), text=True,
                             capture_output=True, check=False)
     output = (result.stdout + result.stderr).strip()
+    if EVIDENCE is not None:
+        name = "".join(character if character.isalnum() else "-" for character in label)
+        (EVIDENCE / f"{name}.log").write_text(result.stdout + result.stderr, encoding="utf-8")
     if output:
         print("\n".join("    " + line for line in output.splitlines()[-40:]), flush=True)
     failed = result.returncode != 0
@@ -121,12 +126,21 @@ def _demo_checks(buggy: dict[str, object], fixed: dict[str, object]) -> None:
     if not isinstance(probes, list) or not isinstance(number, int):
         raise GateFailure("buggy receipt has no counterexample probe")
     probe = probes[number - 1]
-    observed = (probe["oracle"]["expected_cents"], probe["base"]["value"],
-                probe["head"]["value"], (probe.get("confirmation") or {}).get("value"))
-    if probe["candidate"]["prices_cents"] == [15, 15, 15] and observed != (41, 41, 42, 42):
-        raise GateFailure(f"buggy sentinel evidence {observed}, expected (41, 41, 42, 42)")
+    observed = (
+        probe["oracle"]["expected_cents"],
+        probe["base"]["value"],
+        probe["head"]["value"],
+        (probe.get("confirmation") or {}).get("value"),
+    )
+    if (
+        probe["candidate"]["prices_cents"] != [15, 15, 15]
+        or probe["candidate"]["discount_percent"] != 10
+    ):
+        raise GateFailure("buggy seed-17 counterexample is not the pinned sentinel")
     if observed[0] != observed[1] or observed[2] != observed[3] or observed[1] == observed[2]:
         raise GateFailure(f"buggy evidence chain invalid: {observed}")
+    if observed != (41, 41, 42, 42):
+        raise GateFailure(f"buggy sentinel evidence {observed}, expected (41, 41, 42, 42)")
     if fixed.get("verdict") != "no_defect_found":
         raise GateFailure(f"fixed verdict {fixed.get('verdict')!r}")
     coverage = fixed.get("coverage")
@@ -139,28 +153,88 @@ def integrated_gate() -> None:
     run("required modules", uv_run("python", "-c", CHECK_MODULES))
     setup_gate()
     run("full offline suite", uv_run("pytest", "-q"))
-    with tempfile.TemporaryDirectory(prefix="proofhunter-g2-") as tmp:
+    run("lint (all paths)", uv_run("ruff", "check", "."))
+    run("types (production, bench, tools)", uv_run("mypy", "src", "bench", "tools"))
+    run("types (integration tests)", uv_run("mypy", "tests/integration"))
+    with (
+        nullcontext(str(EVIDENCE))
+        if EVIDENCE is not None
+        else tempfile.TemporaryDirectory(prefix="proofhunter-g2-")
+    ) as tmp:
         work = Path(tmp)
         env = offline_env({"PROOFHUNTER_DB_PATH": str(work / "proofhunter.sqlite3")})
         buggy, fixed = work / "buggy-receipt.json", work / "fixed-receipt.json"
         for case, path in (("buggy", buggy), ("fixed", fixed)):
-            run(f"demo {case}", uv_run("python", "-m", "proofhunter", "demo", "--offline",
-                                       "--case", case, "--seed", "17", "--receipt", str(path)),
-                env=env)
+            run(
+                f"demo {case}",
+                uv_run(
+                    "python",
+                    "-m",
+                    "proofhunter",
+                    "demo",
+                    "--offline",
+                    "--case",
+                    case,
+                    "--seed",
+                    "17",
+                    "--receipt",
+                    str(path),
+                ),
+                env=env,
+            )
         _demo_checks(_load(buggy), _load(fixed))
-        run("counterexample replay", uv_run("python", "-m", "proofhunter", "replay", "--offline",
-                                            "--receipt", str(buggy), "--probe",
-                                            "counterexample"), env=env)
+        run(
+            "counterexample replay",
+            uv_run(
+                "python",
+                "-m",
+                "proofhunter",
+                "replay",
+                "--offline",
+                "--receipt",
+                str(buggy),
+                "--probe",
+                "counterexample",
+            ),
+            env=env,
+        )
         tampered = work / "tampered-receipt.json"
         data = _load(buggy)
         data["seed"] = int(str(data["seed"])) + 1
         tampered.write_text(json.dumps(data), encoding="utf-8")
-        run("tampered receipt is refused", uv_run(
-            "python", "-m", "proofhunter", "replay", "--offline", "--receipt", str(tampered),
-            "--probe", "counterexample"), env=env, expect_failure=True)
+        run(
+            "tampered receipt is refused",
+            uv_run(
+                "python",
+                "-m",
+                "proofhunter",
+                "replay",
+                "--offline",
+                "--receipt",
+                str(tampered),
+                "--probe",
+                "counterexample",
+            ),
+            env=env,
+            expect_failure=True,
+        )
         results = work / "bench-results.jsonl"
-        run("sample bench", uv_run("python", "-m", "bench.run", "--offline", "--split", "sample",
-                                   "--seed", "17", "--output", str(results)), env=env)
+        run(
+            "sample bench",
+            uv_run(
+                "python",
+                "-m",
+                "bench.run",
+                "--offline",
+                "--split",
+                "sample",
+                "--seed",
+                "17",
+                "--output",
+                str(results),
+            ),
+            env=env,
+        )
         rows = [line for line in results.read_text(encoding="utf-8").splitlines() if line.strip()]
         if not rows:
             raise GateFailure("sample bench wrote no rows")
@@ -170,10 +244,15 @@ def integrated_gate() -> None:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    global EVIDENCE
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("stage", choices=("setup", "integrated"))
+    parser.add_argument("--evidence", type=Path)
     args = parser.parse_args(argv)
+    if args.evidence is not None:
+        args.evidence.mkdir(parents=True, exist_ok=True)
+        EVIDENCE = args.evidence.resolve()
     try:
         setup_gate() if args.stage == "setup" else integrated_gate()
     except GateFailure as error:

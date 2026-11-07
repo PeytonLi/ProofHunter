@@ -1,0 +1,18 @@
+[Unit]
+Description=ProofHunter offline verification worker example
+After=proofhunter-api.service
+
+[Service]
+User=proofhunter
+WorkingDirectory=/opt/proofhunter
+EnvironmentFile=/etc/proofhunter/offline.env
+ExecStart=/opt/proofhunter/.venv/bin/python -m proofhunter worker --profile offline
+StateDirectory=proofhunter
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
