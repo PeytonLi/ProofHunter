@@ -25,61 +25,19 @@ from proofhunter.contracts import (
     canonical_sha256,
     sha256_hex,
 )
-
-SANDBOX_FILES = Path(__file__).resolve().parents[3] / "ops" / "sandbox"
-OBSERVE_COMMAND = "/usr/bin/sudo -n /usr/bin/python3 -I /opt/proofhunter/wrapper.py"
-CANARY_COMMAND = "/usr/bin/sudo -n /usr/bin/python3 -I /opt/proofhunter/canary.py"
-ENV = {"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", "HOME": "/nonexistent"}
-CANARY_EXPECTED: dict[str, Any] = {
-    "egress_denied": True,
-    "metadata_denied": True,
-    "secrets_absent": True,
-    "restricted_child": True,
-    "probes_denied": dict.fromkeys(
-        (
-            "github.com",
-            "raw.githubusercontent.com",
-            "pypi.org",
-            "files.pythonhosted.org",
-            "registry.npmjs.org",
-            "1.1.1.1",
-            "app.daytona.io",
-            "169.254.169.254",
-            "169.254.170.2",
-        ),
-        True,
-    ),
-}
-
-
-def valid_canary(data: Any) -> bool:
-    if type(data) is not dict or set(data) != set(CANARY_EXPECTED):
-        return False
-    probes = data["probes_denied"]
-    return (
-        all(data[key] is True for key in CANARY_EXPECTED if key != "probes_denied")
-        and type(probes) is dict
-        and set(probes) == set(CANARY_EXPECTED["probes_denied"])
-        and all(value is True for value in probes.values())
-    )
-
-
-def harness_sha256() -> str:
-    return sha256_hex(
-        b"".join((SANDBOX_FILES / name).read_bytes() for name in ("wrapper.py", "canary.py"))
-    )
-
-
-def strict_json(raw: str) -> Any:
-    def pairs(items: list[tuple[str, Any]]) -> dict[str, Any]:
-        result: dict[str, Any] = {}
-        for key, value in items:
-            if key in result:
-                raise ValueError("duplicate key")
-            result[key] = value
-        return result
-
-    return json.loads(raw, object_pairs_hook=pairs)
+from proofhunter.runner.approval import (
+    CANARY_COMMAND,
+    ENV,
+    OBSERVE_COMMAND,
+    config_fingerprint,
+    harness_sha256,
+    local_approval_refusal,
+    strict_json,
+    valid_canary,
+)
+from proofhunter.runner.approval import (
+    CANARY_EXPECTED as CANARY_EXPECTED,
+)
 
 
 class DaytonaRunner:
@@ -100,20 +58,7 @@ class DaytonaRunner:
         self.state_dir = state_dir
         self.enabled = enabled
         self.harness = harness_sha256()
-        self.fingerprint = canonical_sha256(
-            {
-                "snapshot": snapshot,
-                "image_digest": image_digest,
-                "harness": self.harness,
-                "deployment": deployment,
-                "network_block_all": True,
-                "public": False,
-                "env": ENV,
-                "cpu": 1,
-                "memory_gib": 1,
-                "uid": 65534,
-            }
-        )
+        self.fingerprint = config_fingerprint(snapshot, image_digest, self.harness, deployment)
         self._attestation: IsolationAttestation | None = None
         self.approval_refusal_reason: str | None = None
 
@@ -199,43 +144,10 @@ class DaytonaRunner:
         self._ledger("deleted", sandbox.id, run_id)
 
     def _approved(self) -> bool:
-        self.approval_refusal_reason = "approval_invalid"
-        try:
-            path = self.state_dir / "runner-isolation-approval.json"
-            if path.stat().st_size > 4096:
-                return False
-            approval = strict_json(path.read_text())
-            if type(approval) is not dict:
-                return False
-            tier = approval.get("daytona_account_tier")
-            if type(tier) is not int or tier < 1:
-                self.approval_refusal_reason = "account_tier_invalid"
-                return False
-            if tier < 3:
-                self.approval_refusal_reason = "account_tier_insufficient"
-                return False
-            if "canary_result" not in approval:
-                self.approval_refusal_reason = "canary_result_missing"
-                return False
-            if not valid_canary(approval["canary_result"]):
-                self.approval_refusal_reason = "canary_result_not_denied"
-                return False
-            if (
-                approval
-                != {
-                    "config_fingerprint": self.fingerprint,
-                    "image_digest": self.image_digest,
-                    "effective_policy_reviewed": True,
-                    "daytona_account_tier": tier,
-                    "canary_result": CANARY_EXPECTED,
-                }
-                or approval["effective_policy_reviewed"] is not True
-            ):
-                return False
-            self.approval_refusal_reason = None
-            return True
-        except (OSError, ValueError):
-            return False
+        self.approval_refusal_reason = local_approval_refusal(
+            self.state_dir, fingerprint=self.fingerprint, image_digest=self.image_digest
+        )
+        return self.approval_refusal_reason is None
 
     async def attest(self) -> IsolationAttestation:
         self._attestation = await asyncio.to_thread(self._attest)
