@@ -1,0 +1,468 @@
+{
+  "$defs": {
+    "ArmMetrics": {
+      "additionalProperties": false,
+      "properties": {
+        "cases": {
+          "title": "Cases",
+          "type": "integer"
+        },
+        "censored_miss_runs": {
+          "title": "Censored Miss Runs",
+          "type": "integer"
+        },
+        "censored_misses": {
+          "$ref": "#/$defs/Metric"
+        },
+        "clean_fp_rate": {
+          "$ref": "#/$defs/Metric"
+        },
+        "component_costs": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ComponentCost"
+          },
+          "title": "Component Costs",
+          "type": "object"
+        },
+        "cost": {
+          "$ref": "#/$defs/CostMetrics"
+        },
+        "degraded_by_reason": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Metric"
+          },
+          "title": "Degraded By Reason",
+          "type": "object"
+        },
+        "degraded_rate": {
+          "$ref": "#/$defs/Metric"
+        },
+        "inconclusive_by_reason": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Metric"
+          },
+          "title": "Inconclusive By Reason",
+          "type": "object"
+        },
+        "inconclusive_rate": {
+          "$ref": "#/$defs/Metric"
+        },
+        "latency_ms": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Metric"
+          },
+          "propertyNames": {
+            "enum": [
+              "p50",
+              "p95"
+            ]
+          },
+          "title": "Latency Ms",
+          "type": "object"
+        },
+        "paired": {
+          "additionalProperties": {
+            "$ref": "#/$defs/PairedMetrics"
+          },
+          "title": "Paired",
+          "type": "object"
+        },
+        "precision": {
+          "$ref": "#/$defs/Metric"
+        },
+        "recall": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Metric"
+          },
+          "title": "Recall",
+          "type": "object"
+        },
+        "runs": {
+          "title": "Runs",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "runs",
+        "cases",
+        "recall",
+        "precision",
+        "clean_fp_rate",
+        "inconclusive_rate",
+        "inconclusive_by_reason",
+        "censored_misses",
+        "censored_miss_runs",
+        "latency_ms",
+        "cost",
+        "component_costs",
+        "degraded_rate",
+        "degraded_by_reason",
+        "paired"
+      ],
+      "title": "ArmMetrics",
+      "type": "object"
+    },
+    "Bootstrap": {
+      "additionalProperties": false,
+      "properties": {
+        "confidence": {
+          "title": "Confidence",
+          "type": "number"
+        },
+        "group_by": {
+          "const": "family_id",
+          "title": "Group By",
+          "type": "string"
+        },
+        "method": {
+          "const": "percentile",
+          "title": "Method",
+          "type": "string"
+        },
+        "resamples": {
+          "title": "Resamples",
+          "type": "integer"
+        },
+        "seed": {
+          "title": "Seed",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "method",
+        "confidence",
+        "resamples",
+        "seed",
+        "group_by"
+      ],
+      "title": "Bootstrap",
+      "type": "object"
+    },
+    "ComponentCost": {
+      "additionalProperties": false,
+      "properties": {
+        "entries": {
+          "title": "Entries",
+          "type": "integer"
+        },
+        "estimated_entries": {
+          "title": "Estimated Entries",
+          "type": "integer"
+        },
+        "estimated_usd": {
+          "title": "Estimated Usd",
+          "type": "number"
+        },
+        "measured_entries": {
+          "title": "Measured Entries",
+          "type": "integer"
+        },
+        "measured_usd": {
+          "title": "Measured Usd",
+          "type": "number"
+        },
+        "unknown_entries": {
+          "title": "Unknown Entries",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "entries",
+        "measured_usd",
+        "measured_entries",
+        "estimated_usd",
+        "estimated_entries",
+        "unknown_entries"
+      ],
+      "title": "ComponentCost",
+      "type": "object"
+    },
+    "CostMetrics": {
+      "additionalProperties": false,
+      "properties": {
+        "estimated": {
+          "$ref": "#/$defs/StatusCost"
+        },
+        "measured": {
+          "$ref": "#/$defs/StatusCost"
+        },
+        "unknown": {
+          "$ref": "#/$defs/UnknownCost"
+        }
+      },
+      "required": [
+        "measured",
+        "estimated",
+        "unknown"
+      ],
+      "title": "CostMetrics",
+      "type": "object"
+    },
+    "Metric": {
+      "additionalProperties": false,
+      "properties": {
+        "ci": {
+          "enum": [
+            "grouped_bootstrap_95",
+            "none"
+          ],
+          "title": "Ci",
+          "type": "string"
+        },
+        "ci_high": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ci High"
+        },
+        "ci_low": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ci Low"
+        },
+        "estimate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Estimate"
+        },
+        "n": {
+          "title": "N",
+          "type": "integer"
+        },
+        "n_clusters": {
+          "title": "N Clusters",
+          "type": "integer"
+        },
+        "n_runs": {
+          "title": "N Runs",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "estimate",
+        "ci_low",
+        "ci_high",
+        "n",
+        "n_runs",
+        "n_clusters",
+        "ci"
+      ],
+      "title": "Metric",
+      "type": "object"
+    },
+    "ModeMetrics": {
+      "additionalProperties": false,
+      "properties": {
+        "component_costs": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ComponentCost"
+          },
+          "title": "Component Costs",
+          "type": "object"
+        },
+        "splits": {
+          "additionalProperties": {
+            "$ref": "#/$defs/SplitMetrics"
+          },
+          "title": "Splits",
+          "type": "object"
+        }
+      },
+      "required": [
+        "component_costs",
+        "splits"
+      ],
+      "title": "ModeMetrics",
+      "type": "object"
+    },
+    "PairedMetrics": {
+      "additionalProperties": false,
+      "properties": {
+        "clean_fp_rate": {
+          "$ref": "#/$defs/Metric"
+        },
+        "cost_usd": {
+          "$ref": "#/$defs/Metric"
+        },
+        "recall": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Metric"
+          },
+          "title": "Recall",
+          "type": "object"
+        },
+        "shared_episodes": {
+          "title": "Shared Episodes",
+          "type": "integer"
+        },
+        "wall_ms": {
+          "$ref": "#/$defs/Metric"
+        }
+      },
+      "required": [
+        "shared_episodes",
+        "recall",
+        "clean_fp_rate",
+        "cost_usd",
+        "wall_ms"
+      ],
+      "title": "PairedMetrics",
+      "type": "object"
+    },
+    "SplitMetrics": {
+      "additionalProperties": false,
+      "properties": {
+        "arms": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ArmMetrics"
+          },
+          "title": "Arms",
+          "type": "object"
+        },
+        "available": {
+          "title": "Available",
+          "type": "boolean"
+        },
+        "clean_cases": {
+          "title": "Clean Cases",
+          "type": "integer"
+        },
+        "defect_cases": {
+          "title": "Defect Cases",
+          "type": "integer"
+        },
+        "descriptive_only": {
+          "title": "Descriptive Only",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "available",
+        "defect_cases",
+        "clean_cases",
+        "descriptive_only",
+        "arms"
+      ],
+      "title": "SplitMetrics",
+      "type": "object"
+    },
+    "StatusCost": {
+      "additionalProperties": false,
+      "properties": {
+        "runs": {
+          "title": "Runs",
+          "type": "integer"
+        },
+        "total_usd": {
+          "title": "Total Usd",
+          "type": "number"
+        },
+        "usd_per_case": {
+          "$ref": "#/$defs/Metric"
+        },
+        "usd_per_confirmed_defect": {
+          "$ref": "#/$defs/Metric"
+        }
+      },
+      "required": [
+        "runs",
+        "total_usd",
+        "usd_per_case",
+        "usd_per_confirmed_defect"
+      ],
+      "title": "StatusCost",
+      "type": "object"
+    },
+    "UnknownCost": {
+      "additionalProperties": false,
+      "properties": {
+        "rate": {
+          "$ref": "#/$defs/Metric"
+        },
+        "runs": {
+          "title": "Runs",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "runs",
+        "rate"
+      ],
+      "title": "UnknownCost",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "bootstrap": {
+      "$ref": "#/$defs/Bootstrap"
+    },
+    "budgets": {
+      "items": {
+        "type": "integer"
+      },
+      "title": "Budgets",
+      "type": "array"
+    },
+    "degraded_records": {
+      "title": "Degraded Records",
+      "type": "integer"
+    },
+    "max_pairs": {
+      "title": "Max Pairs",
+      "type": "integer"
+    },
+    "modes": {
+      "additionalProperties": {
+        "$ref": "#/$defs/ModeMetrics"
+      },
+      "title": "Modes",
+      "type": "object"
+    },
+    "protocol_version": {
+      "title": "Protocol Version",
+      "type": "string"
+    },
+    "references": {
+      "items": {
+        "type": "string"
+      },
+      "title": "References",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "research-metrics-v1",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "protocol_version",
+    "bootstrap",
+    "budgets",
+    "max_pairs",
+    "references",
+    "degraded_records",
+    "modes"
+  ],
+  "title": "MetricsDocument",
+  "type": "object"
+}
