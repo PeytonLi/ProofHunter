@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import copy
 import json
 from typing import Any
@@ -11,8 +12,14 @@ from pydantic import SecretStr
 from fixtures import catalog
 from fixtures.adapters import FixtureRepositoryValidator, FixtureSource, load_plan_payload
 from proofhunter.config import MetaSettings, Profile, Settings, load_settings
-from proofhunter.contracts import PlanningContext, ReasonCode
-from proofhunter.meta import MetaError, build_request, create_meta_port
+from proofhunter.contracts import HypothesisPlanPayload, PlanningContext, ReasonCode
+from proofhunter.meta import (
+    OVERALL_TIMEOUT,
+    REQUEST_TIMEOUT,
+    MetaError,
+    build_request,
+    create_meta_port,
+)
 from proofhunter.ports import MetaPort
 
 
@@ -40,6 +47,24 @@ def response() -> dict[str, Any]:
 
 async def no_sleep(_: float) -> None:
     pass
+
+
+async def test_wall_clock_request_timeout(context: PlanningContext,
+                                          monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("proofhunter.meta.REQUEST_TIMEOUT", 0.01)
+    calls = 0
+
+    async def handler(_: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        await asyncio.sleep(1)
+        return httpx.Response(200, json=response())
+
+    with pytest.raises(MetaError) as caught:
+        await create_meta_port(settings(), transport=httpx.MockTransport(handler),
+                               sleep=no_sleep).propose(context)
+    assert caught.value.code == ReasonCode.PROVIDER_TIMEOUT
+    assert calls == caught.value.attempts == 2
 
 
 async def test_happy(context: PlanningContext) -> None:
@@ -70,12 +95,33 @@ async def test_disabled(context: PlanningContext, key: bool, offline: bool) -> N
 
 def test_request(context: PlanningContext) -> None:
     fixture = json.loads((catalog.PROVIDERS_DIR / "meta_request.json").read_text())
+    fixture.pop("max_tokens")
+    fixture.update(max_completion_tokens=4096, reasoning_effort="low")
+    fixture["response_format"]["json_schema"]["schema"]["$defs"]["SourceRef"][
+        "properties"]["path"].pop("pattern")
     actual = build_request(context, settings().meta.model)
     user = json.loads(actual["messages"][1]["content"])
     assert user.pop("diff") == context.diff
     assert user.pop("contract_text") == context.contract_text
     actual["messages"][1]["content"] = json.dumps(user, sort_keys=True)
     assert actual == fixture
+    assert "pattern" in HypothesisPlanPayload.model_json_schema()["$defs"][
+        "SourceRef"]["properties"]["path"]
+    assert REQUEST_TIMEOUT > 20
+    assert 2 * REQUEST_TIMEOUT + 2 < OVERALL_TIMEOUT <= 45
+
+
+@pytest.mark.parametrize("path", ["../checkout.py", "/checkout.py", "a/../checkout.py"])
+async def test_local_path_validation(context: PlanningContext, path: str) -> None:
+    outer = response()
+    payload = json.loads(outer["choices"][0]["message"]["content"])
+    payload["hypotheses"][0]["source_refs"][0]["path"] = path
+    outer["choices"][0]["message"]["content"] = json.dumps(payload)
+    with pytest.raises(MetaError) as caught:
+        await create_meta_port(settings(), transport=httpx.MockTransport(
+            lambda _: httpx.Response(200, json=outer))).propose(context)
+    assert caught.value.code == ReasonCode.PROVIDER_INVALID_RESPONSE
+    assert caught.value.attempts == 1
 
 
 @pytest.mark.parametrize("kind", [
