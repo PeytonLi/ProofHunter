@@ -7,6 +7,7 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
+from research.metrics.export import metrics_document, write_metrics
 from research.metrics.ledger import read_ledger, totals
 from research.metrics.results import (
     ResultsError,
@@ -53,11 +54,15 @@ def report(argv: Sequence[str]) -> int:
             for f in read_label_files(args.labels, allow_sealed=args.unseal_test_labels)
             for lab in f.labels
         ]
-        scores = dict(score(rows, labels, protocol, read_degraded(*args.degraded)))
-        scores["ledger"] = totals(e for p in args.ledger for e in read_ledger(p))
+        degraded = read_degraded(*args.degraded)
+        ledger = [e for p in args.ledger for e in read_ledger(p)]
+        scores = dict(score(rows, labels, protocol, degraded))
+        scores["ledger"] = totals(ledger)
+        metrics = metrics_document(rows, labels, protocol, degraded=degraded, ledger=ledger)
     except (ResultsError, ValueError) as error:
         print(f"report failed: {error}", file=sys.stderr)
         return 1
     path = render_report(scores, args.out)
+    write_metrics(args.out / "metrics.json", metrics)
     print(path)
     return 0
