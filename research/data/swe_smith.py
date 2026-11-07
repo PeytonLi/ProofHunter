@@ -41,7 +41,7 @@ def export_metadata(parquet_dir: Path, out: Path) -> int:
     ``uv run --no-project --with pyarrow==18.1.0 --with pydantic python -m research.data.swe_smith
     export <parquet_dir> <out.jsonl>``. The patch is reduced to its file paths and a hash.
     """
-    import pyarrow.parquet as pq  # noqa: PLC0415 - optional, export step only
+    import pyarrow.parquet as pq
 
     rows = 0
     with out.open("w") as fh:

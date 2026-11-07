@@ -103,7 +103,7 @@ def collect(store: I.CaseStore, split: M.Split, seeds: Sequence[int]) -> list[M.
             pool = X.pool(X.pool_seed(case.candidate_seed, seed))
             pool_sha = c.pool_sha256(pool)
             remaining = list(pool)
-            rng = random.Random(f"{POLICY}:{case.case_id}:{seed}")
+            rng = random.Random(f"{POLICY}:{case.case_id}:{seed}")  # noqa: S311
             for step in range(1, M.MAX_PAIRS + 1):
                 if not remaining:
                     break

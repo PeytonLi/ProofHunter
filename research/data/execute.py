@@ -30,7 +30,7 @@ def call(entry: Entry, item: Input) -> int | None:
     """Return the entry result, or ``None`` for an exception or an invalid output."""
     try:
         value = entry(list(item[0]), item[1])
-    except Exception:  # noqa: BLE001 - any failure is an unusable outcome
+    except Exception:
         return None
     if isinstance(value, bool) or not isinstance(value, int) or value < 0:
         return None
@@ -78,7 +78,7 @@ def probe_set(replicate_seeds: Sequence[int], master_seed: int) -> list[Input]:
                 add([pattern[k % len(pattern)] for k in range(n)], d)
             add(list(range(1, n + 1)), d)
             add([1000 * (k + 1) for k in range(n)], d)
-    rng = random.Random(f"{PROBE_SET_VERSION}:{master_seed}")
+    rng = random.Random(f"{PROBE_SET_VERSION}:{master_seed}")  # noqa: S311
     while len(out) < 3200:
         n = rng.randint(0, 8)
         mode = rng.random()
