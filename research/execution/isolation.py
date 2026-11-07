@@ -175,13 +175,15 @@ def network_namespace_available() -> bool:
 def _limits(policy: ResourcePolicy) -> None:
     for kind, limit in (
         (resource.RLIMIT_AS, policy.memory_mib * 1024 * 1024),
-        (resource.RLIMIT_CPU, policy.execution_timeout_seconds),
         (resource.RLIMIT_NOFILE, 64),
         (resource.RLIMIT_NPROC, policy.max_processes),
         (resource.RLIMIT_FSIZE, 0),
         (resource.RLIMIT_CORE, 0),
     ):
         resource.setrlimit(kind, (limit, limit))
+    # CPU is a backstop one second behind the wall deadline (which stays primary under load).
+    cpu = policy.execution_timeout_seconds + 1
+    resource.setrlimit(resource.RLIMIT_CPU, (cpu, cpu + 1))
 
 
 def _unique(items: list[tuple[str, object]]) -> dict[str, object]:
@@ -231,6 +233,8 @@ def _collect(process: subprocess.Popen[bytes], request: ExecutionRequest, policy
     except subprocess.TimeoutExpired:
         return ObservationOutcome.TIMEOUT, None, bytes(buffers["stdout"]), b"", False, None
     stdout, stderr = bytes(buffers["stdout"]), bytes(buffers["stderr"])
+    if code in (-signal.SIGXCPU, -signal.SIGKILL):
+        return ObservationOutcome.TIMEOUT, None, stdout, stderr, False, code
     if code != 0:
         return ObservationOutcome.NONZERO, None, stdout, stderr, False, code
     try:
