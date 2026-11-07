@@ -7,6 +7,7 @@ knowledge of other lanes' file layouts. Reports go to ``research/artifacts/verif
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from collections import defaultdict
 from collections.abc import Sequence
@@ -50,6 +51,21 @@ def discover(roots: Sequence[Path]) -> dict[str, list[tuple[Path, dict[str, Any]
     return found
 
 
+def load_sources(roots: Sequence[Path]) -> tuple[dict[str, bytes], GateResult]:
+    """Content-addressed case sources (``sources/<sha256>.py``); names must equal content hashes."""
+    gate = GateResult("source_hashes")
+    out: dict[str, bytes] = {}
+    for root in roots:
+        for path in sorted(root.rglob("sources/*.py")) if root.is_dir() else []:
+            data = path.read_bytes()
+            digest = hashlib.sha256(data).hexdigest()
+            if digest != path.stem:
+                gate.error("source_hash_mismatch", f"content sha256 {digest}", str(path))
+            out[path.stem] = data
+    gate.stats["sources"] = len(out)
+    return out, gate
+
+
 def production_hashes(protocol: dict[str, Any]) -> GateResult:
     gate = GateResult("production_frozen")
     for rel, want in protocol["production_lock_sha256"].items():
@@ -78,12 +94,25 @@ def run_all(roots: Sequence[Path], *, reported: Path | None, live: bool) -> list
 
         bench = load_bench()
         bench_hashes = {h for c in bench.cases for h in (c.base_sha256, c.head_sha256)}
+        source_map, source_gate = load_sources(roots)
+        case_sources = None
+        if source_map:
+            results.append(source_gate)
+            case_sources = {}
+            for c in cases:
+                base = source_map.get(c["base_source_sha256"])
+                head = source_map.get(c["head_source_sha256"])
+                if base is not None and head is not None:
+                    case_sources[c["case_id"]] = (base, head)
         results.append(splits.audit_manifest_splits(cases, protocol=protocol, labels=labels,
+                                                    sources=case_sources,
                                                     bench_hashes=bench_hashes))
         results.append(provenance.audit_label_files(cases, label_files,
                                                     manifests[-1]["cases_sha256"]))
         train_paths = sorted({p for m in ("RankingObservation", "GeneratorExample")
-                              for p, _ in found.get(m, [])})
+                              for p, _ in found.get(m, [])}
+                             | {p for p, lf in found.get("LabelFile", [])
+                                if lf.get("split") != "test"})
         if train_paths:
             results.append(splits.audit_training_artifacts(cases, train_paths))
     else:
