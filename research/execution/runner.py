@@ -48,7 +48,8 @@ from proofhunter.contracts import (
     sha256_hex,
 )
 from research.execution.pool import as_plan, shared_pool
-from research.execution.sandbox import Execution, Executor, ReviewedTemplateExecutor
+from research.execution.process_sandbox import PhasedExecution, ProcessTemplateExecutor
+from research.execution.sandbox import Execution, Executor
 from research.schemas.interfaces import (
     CaseSources,
     EpisodeContext,
@@ -165,6 +166,8 @@ class _Episode:
     attempts: int = 0
     execution_ms: float = 0.0
     confirmation_ms: float = 0.0
+    startup_ms: float | None = None
+    cleanup_ms: float | None = None
 
     @property
     def invocations(self) -> int:
@@ -178,10 +181,17 @@ class _Episode:
         source = self.sources.base_source if side is Side.BASE else self.sources.head_source
         source_sha = hashlib.sha256(source).hexdigest()
         result: Execution = self.executor(side.value, source, candidate.as_input())
+        run_ms = result.duration_ms
+        if isinstance(result, PhasedExecution):
+            self.startup_ms = (self.startup_ms or 0.0) + result.startup_ms
+            self.cleanup_ms = (self.cleanup_ms or 0.0) + result.cleanup_ms
+            run_ms = result.execution_ms
+            if not result.cleaned:
+                result = Execution(ObservationOutcome.INFRA_ERROR, None, result.duration_ms)
         if side is Side.CONFIRM:
-            self.confirmation_ms += result.duration_ms
+            self.confirmation_ms += run_ms
         else:
-            self.execution_ms += result.duration_ms
+            self.execution_ms += run_ms
         ok = result.outcome is ObservationOutcome.OK
         if not ok:
             self.failed += 1
@@ -452,10 +462,10 @@ class ResearchEpisodeRunner:
             timings=Timings(
                 wall_ms=(perf_counter_ns() - start) / 1e6, queue_ms=None,
                 generation_ms=timings["generation_ms"], feature_ms=None,
-                ranking_ms=timings["ranking_ms"], sandbox_startup_ms=None,
+                ranking_ms=timings["ranking_ms"], sandbox_startup_ms=episode.startup_ms,
                 execution_ms=episode.execution_ms,
                 confirmation_ms=episode.confirmation_ms if episode.counts["confirm"] else None,
-                cleanup_ms=None, cold_start=None),
+                cleanup_ms=episode.cleanup_ms, cold_start=None),
             tokens=TokenUsage(input_tokens=None, output_tokens=None, reasoning_tokens=None),
             cost_usd=cost, cost_status=status)
 
@@ -470,7 +480,7 @@ def make_runner(protocol: ProtocolV1, ledger: Ledger) -> ResearchEpisodeRunner:
             reviewed.update({sources.case.base_source_sha256, sources.case.head_source_sha256})
         return reason
 
-    executor = ReviewedTemplateExecutor(reviewed.__contains__,
-                                        timeout_seconds=protocol.invocation_timeout_seconds)
+    executor = ProcessTemplateExecutor(reviewed.__contains__,
+                                       timeout_seconds=protocol.invocation_timeout_seconds)
     return ResearchEpisodeRunner(protocol=protocol, ledger=ledger, executor=executor,
                                  review=review)
