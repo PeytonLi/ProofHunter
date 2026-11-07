@@ -13,6 +13,18 @@ from research.schemas.interfaces import CaseStore, HypothesisGenerator, Ledger, 
 from research.schemas.models import ArmSpec, LedgerEntry, LedgerPhase, MeasurementMode
 
 SINGLE_JOB_CHECKIN_USD = 50.0
+#: Frozen protocol-v1 arm whose spec (selector loop, feedback, budget) each grid role reuses.
+GRID_BASE = {"generator": "meta_muse_spark_eig", "reviewer": "frontier_reviewer",
+             "agent": "frontier_agent"}
+
+
+def grid_addons() -> dict[str, str]:
+    """``<role>:<model>`` add-on arms from the baselines grid, mapped to their frozen base arm."""
+    try:
+        arms = _attr("research.baselines.grid", "grid_arms")()
+    except LaneMissing:
+        return {}
+    return {arm: GRID_BASE[arm.partition(":")[0]] for arm in arms}
 
 FACTORY_SELECTORS = {"fixed_order", "uniform_random", "simple_heuristic"}
 
@@ -100,6 +112,12 @@ class ArmFactory:
 
     def selector(self, spec: ArmSpec, seed: int) -> Selector:
         selector: Selector
+        if ":" in spec.arm_id:
+            role = spec.arm_id.partition(":")[0]
+            kwargs = {} if role == "generator" else self._provider_kwargs(spec.arm_id)
+            selector = _attr("research.baselines.grid", "make_arm_selector")(
+                spec.arm_id, seed=seed, **kwargs)
+            return selector
         if spec.selector in FACTORY_SELECTORS or spec.selector == "eig":
             arm_id = spec.arm_id if spec.selector in FACTORY_SELECTORS else "builtin_eig"
             selector = _attr("research.baselines.selectors", "make_selector")(arm_id, seed=seed)
@@ -135,6 +153,10 @@ class ArmFactory:
 
     def generator(self, spec: ArmSpec) -> HypothesisGenerator | None:
         generator: HypothesisGenerator
+        if spec.arm_id.startswith("generator:"):
+            generator = _attr("research.baselines.grid", "make_generator")(
+                spec.arm_id, **self._provider_kwargs(spec.arm_id))
+            return generator
         if spec.generator in (None, "builtin_plan"):
             return None
         if spec.generator == "meta_muse_spark":

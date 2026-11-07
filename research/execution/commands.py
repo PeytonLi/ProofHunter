@@ -15,6 +15,7 @@ from research.execution.lanes import (
     ArmFactory,
     FrozenArtifacts,
     LaneMissing,
+    grid_addons,
     open_ledger,
     open_store,
 )
@@ -99,7 +100,8 @@ def _setup(
             phase=LedgerPhase.PILOT if args.command == "pilot" else LedgerPhase.EVALUATION,
             estimated_job_usd=_estimates(args.estimate))
     addons = getattr(getattr(factory, "artifacts", None), "addon_arms", None) or {}
-    runner.addons = {arm_id: spec["base"] for arm_id, spec in addons.items()}
+    runner.addons = {**grid_addons(),
+                     **{arm_id: spec["base"] for arm_id, spec in addons.items()}}
     return protocol, out, store, runner, factory
 
 

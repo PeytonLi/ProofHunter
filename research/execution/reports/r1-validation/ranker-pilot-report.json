@@ -1,0 +1,154 @@
+{
+  "arms": {
+    "learned_ranker": {
+      "clean_false_positives": 0,
+      "cleanup_ms_mean": 1.7782510959568754,
+      "cost_status": [
+        "measured"
+      ],
+      "cost_usd_per_usable_case": 0.0,
+      "cost_usd_total": 0.0,
+      "defect_episodes": 230,
+      "descriptive_recall_at": {
+        "1": 0.13043478260869565,
+        "3": 0.2826086956521739,
+        "6": 0.4782608695652174
+      },
+      "episodes": 250,
+      "execution_ms_mean": 158.78493520001211,
+      "failed_invocations": 0,
+      "invocations_max": 13,
+      "invocations_mean": 10.04,
+      "measurement_modes": [
+        "offline"
+      ],
+      "reason_codes": {
+        "confirmed_evidence": 110,
+        "coverage_complete": 140
+      },
+      "sandbox_startup_ms_mean": 31.35247186799097,
+      "usable_episodes": 250,
+      "verdicts": {
+        "confirmed_existing_defect": 15,
+        "confirmed_regression": 95,
+        "no_defect_found": 140
+      },
+      "wall_ms_p50": 283.70896,
+      "wall_ms_p95": 427.657168,
+      "wall_ms_per_usable_case": 270.03559918
+    },
+    "learned_ranker_no_belief": {
+      "clean_false_positives": 0,
+      "cleanup_ms_mean": 1.7610106200099835,
+      "cost_status": [
+        "measured"
+      ],
+      "cost_usd_per_usable_case": 0.0,
+      "cost_usd_total": 0.0,
+      "defect_episodes": 230,
+      "descriptive_recall_at": {
+        "1": 0.15217391304347827,
+        "3": 0.30434782608695654,
+        "6": 0.30434782608695654
+      },
+      "episodes": 250,
+      "execution_ms_mean": 150.71201114003998,
+      "failed_invocations": 0,
+      "invocations_max": 12,
+      "invocations_mean": 9.84,
+      "measurement_modes": [
+        "offline"
+      ],
+      "reason_codes": {
+        "confirmed_evidence": 70,
+        "coverage_complete": 180
+      },
+      "sandbox_startup_ms_mean": 30.2467580599714,
+      "usable_episodes": 250,
+      "verdicts": {
+        "confirmed_existing_defect": 10,
+        "confirmed_regression": 60,
+        "no_defect_found": 180
+      },
+      "wall_ms_p50": 277.03626,
+      "wall_ms_p95": 350.761395,
+      "wall_ms_per_usable_case": 254.644627904
+    }
+  },
+  "arms_requested": [
+    "learned_ranker",
+    "learned_ranker_no_belief"
+  ],
+  "cases": 50,
+  "dataset_checks": {
+    "clean_cases_with_exposing_pool_input": [],
+    "defect_cases": 46,
+    "defect_cases_without_exposing_pool_input": [
+      "a-27ba7c1768a5e1201a97",
+      "a-595d7d84ac252fdf30b8",
+      "a-829fa8ed542177321c90",
+      "a-c7250c554d4374ef4451",
+      "a-5701adda7cbaba10a3b1",
+      "a-46fe128adcc348370c9b",
+      "a-aa9653bcd1001e4a6758",
+      "a-bd76e01fc4635bed529f",
+      "a-4ce52366fd52f4388b0d",
+      "a-1cddbc4824c56ed7933e",
+      "a-233cf89e71ef825c5b18"
+    ],
+    "eig_applicable_defect_cases": 17,
+    "labelled_cases": 50,
+    "source_review_failures": {},
+    "witness_not_reproduced": [],
+    "witness_reproduced": 46
+  },
+  "degraded_by_arm": {},
+  "implementation_sha": "0c8a09a7028d1cc3a767c9598af00f1c0f9d9b84",
+  "manifest_cases_sha256": "ba3d927d994c4c54944ab42a03b2b253ac97bbfa0193fca37e28b22c87b21520",
+  "manifest_version": "track-a-cases-v1",
+  "measurement_mode": "offline",
+  "pilot_wall_ms": 259578.306739,
+  "projection": {
+    "arms": 13,
+    "arms_with_unknown_cost": [
+      "builtin_eig",
+      "builtin_ranker",
+      "fixed_order",
+      "frontier_agent",
+      "frontier_agent_free_input",
+      "frontier_reviewer",
+      "meta_muse_spark_eig",
+      "qwen_tuned_eig",
+      "qwen_tuned_ranker",
+      "qwen_untuned_eig",
+      "qwen_untuned_ranker",
+      "simple_heuristic",
+      "uniform_random"
+    ],
+    "cases": 639,
+    "cases_source": "manifest test split (defect+clean)",
+    "expected_executions_per_episode": 9.94,
+    "expected_executions_total": 412857.89999999997,
+    "formula": "cases x arms x repetitions x executions_per_episode",
+    "note": "Execution is local reviewed template code in isolated child processes (0 USD). Model-arm dollars stay unknown until their lanes report measured per-episode costs.",
+    "projected_usd_by_arm": {
+      "learned_ranker": 0.0,
+      "learned_ranker_no_belief": 0.0
+    },
+    "projected_usd_measured_arms": 0.0,
+    "repetitions": 5,
+    "worst_case_executions_total": 623025
+  },
+  "protocol_version": "research-protocol-v1",
+  "rows_sha256": "70dfd566841df4270540d8f0bf44c6c8e37dcfe85c9468543a8d71376e95cd29",
+  "schema": "research-pilot-report-v1",
+  "seeds": [
+    1633385816,
+    3469185555,
+    2611436028,
+    2392925855,
+    277584464
+  ],
+  "skipped_arms": {},
+  "split": "validation"
+}

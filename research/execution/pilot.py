@@ -177,9 +177,10 @@ def project(summary: Mapping[str, Any], protocol: ProtocolV1,
 
 def degraded_reason(selector: object, generator: object) -> str | None:
     """The baseline selector's ``degraded`` reason, else a generator fallback, else ``None``."""
-    reason = getattr(selector, "degraded", None)
-    if reason is not None:
-        return str(reason)
+    for source in (selector, generator):
+        reason = getattr(source, "degraded", None)
+        if reason is not None:
+            return str(reason)
     last = getattr(generator, "last", None)
     if last is not None and getattr(last, "mode", None) == "fallback":
         code = getattr(last, "reason_code", None)
