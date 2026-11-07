@@ -1,17 +1,19 @@
 {
- "excluded": 11374,
+ "excluded": 13391,
  "excluded_by_reason": {
   "cross_split_behavior_duplicate": 127,
-  "cross_split_source_duplicate": 124,
+  "cross_split_diff_duplicate": 615,
+  "cross_split_source_duplicate": 677,
   "equivalent_on_probe_set": 1824,
-  "near_duplicate_behavior": 1261,
-  "over_split_target": 8038
+  "near_duplicate_behavior": 1626,
+  "over_split_target": 8522
  },
  "excluded_by_reason_and_split": {
-  "test:cross_split_source_duplicate": 29,
+  "test:cross_split_diff_duplicate": 615,
+  "test:cross_split_source_duplicate": 582,
   "test:equivalent_on_probe_set": 205,
-  "test:near_duplicate_behavior": 368,
-  "test:over_split_target": 2188,
+  "test:near_duplicate_behavior": 733,
+  "test:over_split_target": 2672,
   "train:cross_split_behavior_duplicate": 86,
   "train:cross_split_source_duplicate": 63,
   "train:equivalent_on_probe_set": 979,
@@ -23,7 +25,7 @@
   "validation:near_duplicate_behavior": 195,
   "validation:over_split_target": 2449
  },
- "kept": 3332,
+ "kept": 3343,
  "notes": "over_split_target rows are valid cases left out by the deterministic family round-robin; cross_split_behavior_duplicate keeps the cluster in the highest-priority split (test > validation > train)",
  "raw_candidates": 14706,
  "schema": "track-a-exclusion-report-v1"

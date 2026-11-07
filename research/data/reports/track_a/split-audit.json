@@ -1,15 +1,20 @@
 {
  "behavior_fingerprint_shared_across_splits": 0,
- "clusters_recorded": 3332,
+ "clusters_recorded": 3343,
  "code_shape_shared_across_splits": [],
+ "diff_fingerprint_shared_across_splits": 0,
+ "diff_fingerprint_shared_examples": {},
+ "diff_fingerprint_version": "normalized-diff-v1",
+ "diff_fingerprints_recorded": 3286,
  "grouping_key_violations": {
   "defect_origin_cross_split": [],
+  "diff_fingerprint_cross_split": [],
   "family_id_cross_split": [],
   "near_dup_cluster_cross_split": [],
   "template_id_cross_split": []
  },
  "known_shared_structure": "Rounding helper styles (addfloor/divmod/float/fraction/decimal) recur across splits in different shape combinations; shapes, template ids, families, defect origins and behavior clusters do not. CaseRecord.params/family_id are public by schema design; arms must not read them (EpisodeContext excludes them).",
- "manifest_cases_sha256": "ba3d927d994c4c54944ab42a03b2b253ac97bbfa0193fca37e28b22c87b21520",
+ "manifest_cases_sha256": "dcd14e3f8e17533d89dd526d1d801493bfe019c58939cdc806ff87e637459340",
  "production_benchmark_source_overlap": [],
  "schema": "track-a-split-audit-v1",
  "source_sha256_shared_across_splits": 0,
@@ -17,11 +22,11 @@
  "split_policy": "grouped-family-origin-cluster-v1",
  "summary": {
   "test": {
-   "cases": 639,
+   "cases": 650,
    "cases_per_family": {
-    "clean_s10": 50,
-    "clean_s11": 44,
-    "clean_s12": 45,
+    "clean_s10": 41,
+    "clean_s11": 47,
+    "clean_s12": 62,
     "discount_step": 97,
     "half_even_rounding": 41,
     "item_cap": 97,
@@ -29,12 +34,12 @@
     "subtotal_residue_glitch": 72,
     "total_cap": 96
    },
-   "clean_controls": 139,
+   "clean_controls": 150,
    "defect_cases": 500,
    "defect_families": 6,
    "existing_defects": 58,
    "max_cases_per_cluster": 1,
-   "near_dup_clusters": 639,
+   "near_dup_clusters": 650,
    "templates": 21
   },
   "train": {
@@ -89,6 +94,6 @@
    "templates": 10
   }
  },
- "test_label_file": "labels/test.sealed.json (read only via store.labels('test', unseal=...))",
+ "test_label_file": "labels/test.sealed.json (store.labels('test', unseal=...) only)",
  "test_labels_sealed": true
 }

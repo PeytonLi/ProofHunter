@@ -1,0 +1,61 @@
+{
+ "after": {
+  "cases_sha256": "dcd14e3f8e17533d89dd526d1d801493bfe019c58939cdc806ff87e637459340",
+  "dataset_commit": "ac50b9838ed359f8923961bca8c38ac0c69ca0c0",
+  "generator/train.jsonl": "cc5c14121f548500dff1aa3a2810dea02e33b737b901d1b3d22debe2ad5e48e9",
+  "generator/validation.jsonl": "57a119d8bbf92b9816e0af52bb40fd597808818a144dc896b4593e6910c48866",
+  "labels/train.json.file": "7163a3af8adbef1d7f66e30e45ab26f6552a1207e6a44277fe04c5bb50e9c596",
+  "labels/validation.json.file": "8f4124e64e6925bd15085eaec431b2154317a43417b5eb44c5a43f1763bea72a",
+  "observations/train.jsonl": "d349fb46b948813ad19fc26dca119904d507f7b70cd5c9cfc272c11e9dd83d2c",
+  "observations/validation.jsonl": "1e88d2c4573eb2bac1e8b8197e36b97f0be798afdd90e6b2260a71b55e289cb7",
+  "train.labels_array": "08b0b2743328cde00bf70fe3b892f667e337db62aebb35b57d1198f83b2339ea",
+  "train.manifest_records": "c9bf9b9d6756209a32f2db4e3e7949a4d60b33dd6d61423a3f9865e088a85b1c",
+  "train.manifest_records_n": 2333,
+  "train.source_files": "35e09e85eee72ac8477921c0eab0d8383e8eda91fb1af320c4f310652c4aa8cc",
+  "validation.labels_array": "3215740e379213803108b70b8d83c0a75cf6bf958a1682fb8cc6738d94535200",
+  "validation.manifest_records": "34e0f935368cfa0a814d003830bc722a6edbb0aa1e0f657e6bbca00bc17bf63e",
+  "validation.manifest_records_n": 360,
+  "validation.source_files": "79b85a106834d7b4f9b9fb3830961616fa7554f1937eba3f98c6517c4795b69c"
+ },
+ "before": {
+  "cases_sha256": "ba3d927d994c4c54944ab42a03b2b253ac97bbfa0193fca37e28b22c87b21520",
+  "dataset_commit": "cadc5b4d91828fec1adcb5341a11c2c466e57c1f",
+  "generator/train.jsonl": "cc5c14121f548500dff1aa3a2810dea02e33b737b901d1b3d22debe2ad5e48e9",
+  "generator/validation.jsonl": "57a119d8bbf92b9816e0af52bb40fd597808818a144dc896b4593e6910c48866",
+  "labels/train.json.file": "3905f2041c4726d0054b54685bbd10446bb9a8266bf037fe9309cb922d49c395",
+  "labels/validation.json.file": "bddd8d213dc6958f8a4282b2164a8a34ac0908be855edda960491519c71546cc",
+  "observations/train.jsonl": "d349fb46b948813ad19fc26dca119904d507f7b70cd5c9cfc272c11e9dd83d2c",
+  "observations/validation.jsonl": "1e88d2c4573eb2bac1e8b8197e36b97f0be798afdd90e6b2260a71b55e289cb7",
+  "train.labels_array": "08b0b2743328cde00bf70fe3b892f667e337db62aebb35b57d1198f83b2339ea",
+  "train.manifest_records": "c9bf9b9d6756209a32f2db4e3e7949a4d60b33dd6d61423a3f9865e088a85b1c",
+  "train.manifest_records_n": 2333,
+  "train.source_files": "35e09e85eee72ac8477921c0eab0d8383e8eda91fb1af320c4f310652c4aa8cc",
+  "validation.labels_array": "3215740e379213803108b70b8d83c0a75cf6bf958a1682fb8cc6738d94535200",
+  "validation.manifest_records": "34e0f935368cfa0a814d003830bc722a6edbb0aa1e0f657e6bbca00bc17bf63e",
+  "validation.manifest_records_n": 360,
+  "validation.source_files": "79b85a106834d7b4f9b9fb3830961616fa7554f1937eba3f98c6517c4795b69c"
+ },
+ "changed": [
+  "cases_sha256",
+  "dataset_commit",
+  "labels/train.json.file",
+  "labels/validation.json.file"
+ ],
+ "identical": [
+  "generator/train.jsonl",
+  "generator/validation.jsonl",
+  "observations/train.jsonl",
+  "observations/validation.jsonl",
+  "train.labels_array",
+  "train.manifest_records",
+  "train.manifest_records_n",
+  "train.source_files",
+  "validation.labels_array",
+  "validation.manifest_records",
+  "validation.manifest_records_n",
+  "validation.source_files"
+ ],
+ "note": "labels/{train,validation}.json differ only in manifest_cases_sha256 (frozen LabelFile field checked by the store); the label arrays are identical.",
+ "previous_dataset_commit": "ac50b9838ed359f8923961bca8c38ac0c69ca0c0",
+ "repair": "test-only clean-control repair for normalized-diff-v1 cross-split leak"
+}
