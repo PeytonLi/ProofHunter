@@ -1,0 +1,121 @@
+{
+  "schema_version": "research-baselines-models-v1",
+  "verified_on": "2026-11-07",
+  "frontier": {
+    "provider": "openai",
+    "endpoint": "https://api.openai.com/v1/responses",
+    "key_env": "PROOFHUNTER_OPENAI_API_KEY",
+    "listing_check": "GET https://api.openai.com/v1/models with PROOFHUNTER_OPENAI_API_KEY on 2026-11-07 listed gpt-6-sol, gpt-6.1-sol and gpt-6-astra",
+    "primary_model_id": "gpt-6-sol",
+    "optional_model_id": "gpt-6-astra",
+    "selection_note": "Coordinator-pinned primary gpt-6-sol (listed by /v1/models). It is absent from the public pricing table on 2026-11-07, so its rate (assessment pin 2/0.2/10 USD per 1M) is unverified and its costs are recorded as cost_status=estimated; gpt-6-astra and gpt-6.1-sol rates were verified on the pricing page.",
+    "reasoning_effort": "low",
+    "max_output_tokens": 4096,
+    "temperature": null,
+    "store": false,
+    "include": [
+      "reasoning.encrypted_content"
+    ],
+    "pricing_reference": "https://developers.openai.com/api/docs/pricing (Standard, short context <=272K input tokens)",
+    "pricing_date": "2026-11-07",
+    "pricing_usd_per_1m_tokens": {
+      "gpt-6-sol": {
+        "input": 2.0,
+        "cached_input": 0.2,
+        "output": 10.0,
+        "verified": false
+      },
+      "gpt-6.1-sol": {
+        "input": 2.0,
+        "cached_input": 0.1,
+        "output": 10.0,
+        "verified": true
+      },
+      "gpt-6-astra": {
+        "input": 10.0,
+        "cached_input": 1.0,
+        "output": 50.0,
+        "verified": true
+      }
+    },
+    "retry_policy": {
+      "max_attempts_per_request": 3,
+      "retry_on": [
+        "http_429",
+        "http_5xx",
+        "transport_error",
+        "timeout"
+      ],
+      "backoff_seconds": [
+        1.0,
+        2.0
+      ],
+      "retry_after_cap_seconds": 8.0,
+      "request_timeout_seconds": 90.0,
+      "response_byte_cap": 1048576
+    },
+    "episode_caps": {
+      "reviewer_successful_calls": 1,
+      "agent_max_model_calls": 18,
+      "agent_invalid_tool_calls_per_step": 2,
+      "max_input_tokens_per_episode": 250000,
+      "max_output_tokens_per_episode": 40000
+    },
+    "tools": {
+      "run_pair": {
+        "type": "function",
+        "name": "run_pair",
+        "strict": true,
+        "description": "Run one paired probe (base and head) on a candidate from the shared pool. Consumes one unit of the paired-probe budget and returns the oracle/base/head outcome.",
+        "parameters": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "candidate_id"
+          ],
+          "properties": {
+            "candidate_id": {
+              "type": "string",
+              "description": "Pool candidate id, e.g. c07."
+            }
+          }
+        }
+      },
+      "reviewer_output": {
+        "type": "json_schema",
+        "name": "reviewer_ranking",
+        "strict": true,
+        "schema": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "ranking"
+          ],
+          "properties": {
+            "ranking": {
+              "type": "array",
+              "maxItems": 6,
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "meta": {
+    "provider": "meta",
+    "model_id": "muse-spark-1.3",
+    "key_env": "MODEL_API_KEY",
+    "adapter": "proofhunter.meta.create_meta_port (production, read-only)",
+    "max_completion_tokens": 4096,
+    "reasoning_effort": "low",
+    "temperature": 0,
+    "max_attempts": 2,
+    "fallback": "proofhunter.contracts.builtin_hypothesis_payload on any adapter error (production pipeline behaviour)",
+    "snap_routing": "disabled",
+    "pricing_reference": "unpublished: no public Meta Model API price for muse-spark-1.3 found; production adapter exposes no token usage",
+    "pricing_date": "2026-11-07"
+  }
+}
