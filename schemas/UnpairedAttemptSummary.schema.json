@@ -1,0 +1,133 @@
+{
+  "$defs": {
+    "AttemptStatus": {
+      "enum": [
+        "reserved",
+        "running",
+        "completed",
+        "ambiguous",
+        "cancelled"
+      ],
+      "title": "AttemptStatus",
+      "type": "string"
+    },
+    "ObservationOutcome": {
+      "enum": [
+        "ok",
+        "timeout",
+        "nonzero",
+        "invalid",
+        "denied",
+        "infra_error"
+      ],
+      "title": "ObservationOutcome",
+      "type": "string"
+    },
+    "ReasonCode": {
+      "description": "Machine reason codes for errors, stop reasons and verdict reasons.",
+      "enum": [
+        "invalid_pr_url",
+        "repo_not_enrolled",
+        "fork_unsupported",
+        "revision_unavailable",
+        "oracle_unavailable",
+        "isolation_unverified",
+        "provider_unavailable",
+        "budget_exhausted",
+        "nondeterministic",
+        "coverage_insufficient",
+        "stale_event",
+        "conflicting_idempotency_key",
+        "internal_error",
+        "confirmed_evidence",
+        "coverage_complete",
+        "inputs_exhausted",
+        "deadline_exceeded",
+        "trust_failure",
+        "preexisting_mismatch_changed",
+        "unsupported_contract",
+        "source_invalid",
+        "invalid_request",
+        "unauthorized",
+        "forbidden",
+        "not_found",
+        "receipt_pending",
+        "replay_unavailable",
+        "rate_limited",
+        "payload_too_large",
+        "invalid_signature",
+        "feature_disabled",
+        "provider_timeout",
+        "provider_refused",
+        "provider_invalid_response",
+        "receipt_tampered",
+        "lease_lost"
+      ],
+      "title": "ReasonCode",
+      "type": "string"
+    },
+    "Side": {
+      "enum": [
+        "base",
+        "head",
+        "confirm"
+      ],
+      "title": "Side",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "attempt_id": {
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+      "title": "Attempt Id",
+      "type": "string"
+    },
+    "charged": {
+      "title": "Charged",
+      "type": "boolean"
+    },
+    "input_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Input Sha256",
+      "type": "string"
+    },
+    "outcome": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ObservationOutcome"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "reason_code": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ReasonCode"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "side": {
+      "$ref": "#/$defs/Side"
+    },
+    "status": {
+      "$ref": "#/$defs/AttemptStatus"
+    }
+  },
+  "required": [
+    "attempt_id",
+    "side",
+    "input_sha256",
+    "status",
+    "outcome",
+    "charged",
+    "reason_code"
+  ],
+  "title": "UnpairedAttemptSummary",
+  "type": "object"
+}

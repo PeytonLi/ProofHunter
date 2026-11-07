@@ -1,0 +1,29 @@
+{
+  "additionalProperties": false,
+  "description": "Parsed, normalized PR URL (owner/repo/number only, before enrollment lookup).",
+  "properties": {
+    "number": {
+      "maximum": 2147483647,
+      "minimum": 1,
+      "title": "Number",
+      "type": "integer"
+    },
+    "owner": {
+      "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9._-]{1,100}$",
+      "title": "Owner",
+      "type": "string"
+    },
+    "repo": {
+      "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9._-]{1,100}$",
+      "title": "Repo",
+      "type": "string"
+    }
+  },
+  "required": [
+    "owner",
+    "repo",
+    "number"
+  ],
+  "title": "PrRef",
+  "type": "object"
+}

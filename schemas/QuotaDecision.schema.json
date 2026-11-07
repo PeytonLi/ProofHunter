@@ -1,0 +1,84 @@
+{
+  "$defs": {
+    "ReasonCode": {
+      "description": "Machine reason codes for errors, stop reasons and verdict reasons.",
+      "enum": [
+        "invalid_pr_url",
+        "repo_not_enrolled",
+        "fork_unsupported",
+        "revision_unavailable",
+        "oracle_unavailable",
+        "isolation_unverified",
+        "provider_unavailable",
+        "budget_exhausted",
+        "nondeterministic",
+        "coverage_insufficient",
+        "stale_event",
+        "conflicting_idempotency_key",
+        "internal_error",
+        "confirmed_evidence",
+        "coverage_complete",
+        "inputs_exhausted",
+        "deadline_exceeded",
+        "trust_failure",
+        "preexisting_mismatch_changed",
+        "unsupported_contract",
+        "source_invalid",
+        "invalid_request",
+        "unauthorized",
+        "forbidden",
+        "not_found",
+        "receipt_pending",
+        "replay_unavailable",
+        "rate_limited",
+        "payload_too_large",
+        "invalid_signature",
+        "feature_disabled",
+        "provider_timeout",
+        "provider_refused",
+        "provider_invalid_response",
+        "receipt_tampered",
+        "lease_lost"
+      ],
+      "title": "ReasonCode",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "allowed": {
+      "title": "Allowed",
+      "type": "boolean"
+    },
+    "reason_code": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ReasonCode"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "retry_after_seconds": {
+      "anyOf": [
+        {
+          "maximum": 3600,
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Retry After Seconds"
+    }
+  },
+  "required": [
+    "allowed",
+    "reason_code",
+    "retry_after_seconds"
+  ],
+  "title": "QuotaDecision",
+  "type": "object"
+}

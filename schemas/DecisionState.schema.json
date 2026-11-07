@@ -1,0 +1,142 @@
+{
+  "$defs": {
+    "BinaryOutcome": {
+      "enum": [
+        "match",
+        "mismatch"
+      ],
+      "title": "BinaryOutcome",
+      "type": "string"
+    },
+    "CoverageTag": {
+      "enum": [
+        "empty",
+        "singleton",
+        "multi_item",
+        "zero_discount",
+        "full_discount",
+        "half_cent",
+        "max_items",
+        "max_price"
+      ],
+      "title": "CoverageTag",
+      "type": "string"
+    },
+    "HypothesisId": {
+      "description": "Canonical hypothesis IDs, assigned only by the local app.",
+      "enum": [
+        "H0",
+        "per_item_rounding",
+        "half_even_rounding",
+        "other"
+      ],
+      "title": "HypothesisId",
+      "type": "string"
+    },
+    "Strategy": {
+      "enum": [
+        "boundary",
+        "constraint",
+        "seeded_fuzz"
+      ],
+      "title": "Strategy",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Structured bounded state for ``RoutePort.choose``; never raw repo text.",
+  "properties": {
+    "belief": {
+      "additionalProperties": {
+        "ge": 0.0,
+        "le": 1.0,
+        "type": "number"
+      },
+      "propertyNames": {
+        "$ref": "#/$defs/HypothesisId"
+      },
+      "title": "Belief",
+      "type": "object"
+    },
+    "contract_id": {
+      "const": "checkout-rounding@1",
+      "title": "Contract Id",
+      "type": "string"
+    },
+    "last_outcome": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/BinaryOutcome"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "missing_coverage": {
+      "items": {
+        "$ref": "#/$defs/CoverageTag"
+      },
+      "maxItems": 8,
+      "title": "Missing Coverage",
+      "type": "array"
+    },
+    "observed_coverage": {
+      "items": {
+        "$ref": "#/$defs/CoverageTag"
+      },
+      "maxItems": 8,
+      "title": "Observed Coverage",
+      "type": "array"
+    },
+    "remaining_pairs": {
+      "maximum": 6,
+      "minimum": 0,
+      "title": "Remaining Pairs",
+      "type": "integer"
+    },
+    "run_id": {
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "snap_requests_remaining": {
+      "maximum": 3,
+      "minimum": 0,
+      "title": "Snap Requests Remaining",
+      "type": "integer"
+    },
+    "step": {
+      "maximum": 15,
+      "minimum": 1,
+      "title": "Step",
+      "type": "integer"
+    },
+    "unseen_candidates": {
+      "additionalProperties": {
+        "maximum": 64,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "propertyNames": {
+        "$ref": "#/$defs/Strategy"
+      },
+      "title": "Unseen Candidates",
+      "type": "object"
+    }
+  },
+  "required": [
+    "run_id",
+    "contract_id",
+    "step",
+    "remaining_pairs",
+    "snap_requests_remaining",
+    "observed_coverage",
+    "missing_coverage",
+    "unseen_candidates",
+    "last_outcome",
+    "belief"
+  ],
+  "title": "DecisionState",
+  "type": "object"
+}

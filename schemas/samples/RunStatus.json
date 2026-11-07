@@ -1,0 +1,82 @@
+{
+  "attempts_used": 2,
+  "budget": {
+    "cost": {
+      "amount_usd_micros": null,
+      "status": "unknown"
+    },
+    "deadline_at": "2026-11-07T19:03:00.000000Z",
+    "limits": {
+      "deadline_seconds": 180,
+      "invocation_timeout_seconds": 5,
+      "max_candidates": 64,
+      "max_confirmations": 1,
+      "max_context_bytes": 32768,
+      "max_hypotheses": 8,
+      "max_meta_requests": 2,
+      "max_output_bytes": 16384,
+      "max_pairs": 6,
+      "max_sandbox_invocations": 15,
+      "max_snap_requests": 3
+    },
+    "used": {
+      "candidates_generated": 0,
+      "confirmations": 0,
+      "meta_requests": 0,
+      "pairs": 0,
+      "sandbox_invocations": 0,
+      "snap_requests": 0
+    },
+    "wall_clock_ms": null
+  },
+  "created_at": "2026-11-07T19:00:00.000000Z",
+  "detail": {
+    "base_sha": "ed3eac4ed8d400e24b716b163c5f281a2ffcf460",
+    "coverage": {
+      "coverage_guard_used": false,
+      "distinct_usable_pairs": 0,
+      "missing": [
+        "empty",
+        "full_discount",
+        "half_cent",
+        "multi_item",
+        "zero_discount"
+      ],
+      "observed": [],
+      "required": [
+        "empty",
+        "full_discount",
+        "half_cent",
+        "multi_item",
+        "zero_discount"
+      ]
+    },
+    "evidence": {
+      "base_mismatches": 0,
+      "confirmations": 0,
+      "excluded": 0,
+      "head_mismatches": 0,
+      "matches": 0,
+      "shared_mismatches": 0
+    },
+    "execution_mode": "offline_fixture",
+    "head_sha": "83359b9ff5a9ced05c22ee2feeaaa67e667fe34e",
+    "parent_receipt_sha256": null,
+    "pr_number": 1,
+    "provider_modes": {
+      "github": "offline_fixture",
+      "meta": "offline_fixture",
+      "runner": "offline_fixture",
+      "snap": "offline_fixture"
+    },
+    "repo_full_name": "proofhunter-demo/checkout-demo",
+    "run_kind": "verification"
+  },
+  "is_stale": null,
+  "reason_code": null,
+  "receipt_sha256": null,
+  "run_id": "00000000-05e7-4001-8000-000000000001",
+  "status": "testing",
+  "updated_at": "2026-11-07T19:00:00.000000Z",
+  "verdict": null
+}

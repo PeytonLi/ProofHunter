@@ -1,0 +1,75 @@
+{
+  "$defs": {
+    "OracleStatus": {
+      "enum": [
+        "ok",
+        "unavailable",
+        "invalid"
+      ],
+      "title": "OracleStatus",
+      "type": "string"
+    },
+    "TrustTier": {
+      "enum": [
+        "T1",
+        "T2",
+        "T3"
+      ],
+      "title": "TrustTier",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "contract_id": {
+      "const": "checkout-rounding@1",
+      "title": "Contract Id",
+      "type": "string"
+    },
+    "contract_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Contract Sha256",
+      "type": "string"
+    },
+    "expected_cents": {
+      "anyOf": [
+        {
+          "maximum": 9223372036854775807,
+          "minimum": -9223372036854775808,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Expected Cents"
+    },
+    "input_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Input Sha256",
+      "type": "string"
+    },
+    "oracle_version": {
+      "pattern": "^[A-Za-z0-9._@:+-]{1,64}$",
+      "title": "Oracle Version",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/OracleStatus"
+    },
+    "trust_tier": {
+      "$ref": "#/$defs/TrustTier"
+    }
+  },
+  "required": [
+    "contract_id",
+    "contract_sha256",
+    "oracle_version",
+    "input_sha256",
+    "trust_tier",
+    "expected_cents",
+    "status"
+  ],
+  "title": "OracleResult",
+  "type": "object"
+}

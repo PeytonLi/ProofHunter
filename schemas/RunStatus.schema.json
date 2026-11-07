@@ -1,0 +1,643 @@
+{
+  "$defs": {
+    "Budget": {
+      "additionalProperties": false,
+      "description": "Limits plus consumed counts, deadline, wall clock and cost (or unknown).",
+      "properties": {
+        "cost": {
+          "$ref": "#/$defs/CostRecord"
+        },
+        "deadline_at": {
+          "format": "date-time",
+          "title": "Deadline At",
+          "type": "string"
+        },
+        "limits": {
+          "$ref": "#/$defs/BudgetLimits"
+        },
+        "used": {
+          "$ref": "#/$defs/BudgetUsage"
+        },
+        "wall_clock_ms": {
+          "anyOf": [
+            {
+              "maximum": 9223372036854775807,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Wall Clock Ms"
+        }
+      },
+      "required": [
+        "limits",
+        "used",
+        "deadline_at",
+        "wall_clock_ms",
+        "cost"
+      ],
+      "title": "Budget",
+      "type": "object"
+    },
+    "BudgetLimits": {
+      "additionalProperties": false,
+      "description": "Per-run limits (PRD section 2 defaults); enforced before spending.",
+      "properties": {
+        "deadline_seconds": {
+          "default": 180,
+          "maximum": 180,
+          "minimum": 1,
+          "title": "Deadline Seconds",
+          "type": "integer"
+        },
+        "invocation_timeout_seconds": {
+          "default": 5,
+          "maximum": 5,
+          "minimum": 1,
+          "title": "Invocation Timeout Seconds",
+          "type": "integer"
+        },
+        "max_candidates": {
+          "default": 64,
+          "maximum": 64,
+          "minimum": 1,
+          "title": "Max Candidates",
+          "type": "integer"
+        },
+        "max_confirmations": {
+          "default": 1,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Max Confirmations",
+          "type": "integer"
+        },
+        "max_context_bytes": {
+          "default": 32768,
+          "maximum": 32768,
+          "minimum": 1,
+          "title": "Max Context Bytes",
+          "type": "integer"
+        },
+        "max_hypotheses": {
+          "default": 8,
+          "maximum": 8,
+          "minimum": 2,
+          "title": "Max Hypotheses",
+          "type": "integer"
+        },
+        "max_meta_requests": {
+          "default": 2,
+          "maximum": 2,
+          "minimum": 0,
+          "title": "Max Meta Requests",
+          "type": "integer"
+        },
+        "max_output_bytes": {
+          "default": 16384,
+          "maximum": 16384,
+          "minimum": 1,
+          "title": "Max Output Bytes",
+          "type": "integer"
+        },
+        "max_pairs": {
+          "default": 6,
+          "maximum": 6,
+          "minimum": 1,
+          "title": "Max Pairs",
+          "type": "integer"
+        },
+        "max_sandbox_invocations": {
+          "default": 15,
+          "maximum": 15,
+          "minimum": 1,
+          "title": "Max Sandbox Invocations",
+          "type": "integer"
+        },
+        "max_snap_requests": {
+          "default": 3,
+          "maximum": 3,
+          "minimum": 0,
+          "title": "Max Snap Requests",
+          "type": "integer"
+        }
+      },
+      "title": "BudgetLimits",
+      "type": "object"
+    },
+    "BudgetUsage": {
+      "additionalProperties": false,
+      "properties": {
+        "candidates_generated": {
+          "maximum": 64,
+          "minimum": 0,
+          "title": "Candidates Generated",
+          "type": "integer"
+        },
+        "confirmations": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confirmations",
+          "type": "integer"
+        },
+        "meta_requests": {
+          "maximum": 2,
+          "minimum": 0,
+          "title": "Meta Requests",
+          "type": "integer"
+        },
+        "pairs": {
+          "maximum": 6,
+          "minimum": 0,
+          "title": "Pairs",
+          "type": "integer"
+        },
+        "sandbox_invocations": {
+          "maximum": 15,
+          "minimum": 0,
+          "title": "Sandbox Invocations",
+          "type": "integer"
+        },
+        "snap_requests": {
+          "maximum": 3,
+          "minimum": 0,
+          "title": "Snap Requests",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "pairs",
+        "confirmations",
+        "sandbox_invocations",
+        "meta_requests",
+        "snap_requests",
+        "candidates_generated"
+      ],
+      "title": "BudgetUsage",
+      "type": "object"
+    },
+    "CostRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "amount_usd_micros": {
+          "anyOf": [
+            {
+              "maximum": 9223372036854775807,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Amount Usd Micros"
+        },
+        "status": {
+          "$ref": "#/$defs/CostStatus"
+        }
+      },
+      "required": [
+        "status",
+        "amount_usd_micros"
+      ],
+      "title": "CostRecord",
+      "type": "object"
+    },
+    "CostStatus": {
+      "enum": [
+        "measured",
+        "unknown"
+      ],
+      "title": "CostStatus",
+      "type": "string"
+    },
+    "Coverage": {
+      "additionalProperties": false,
+      "properties": {
+        "coverage_guard_used": {
+          "title": "Coverage Guard Used",
+          "type": "boolean"
+        },
+        "distinct_usable_pairs": {
+          "maximum": 15,
+          "minimum": 0,
+          "title": "Distinct Usable Pairs",
+          "type": "integer"
+        },
+        "missing": {
+          "items": {
+            "$ref": "#/$defs/CoverageTag"
+          },
+          "maxItems": 8,
+          "title": "Missing",
+          "type": "array"
+        },
+        "observed": {
+          "items": {
+            "$ref": "#/$defs/CoverageTag"
+          },
+          "maxItems": 8,
+          "title": "Observed",
+          "type": "array"
+        },
+        "required": {
+          "items": {
+            "$ref": "#/$defs/CoverageTag"
+          },
+          "maxItems": 8,
+          "title": "Required",
+          "type": "array"
+        }
+      },
+      "required": [
+        "required",
+        "observed",
+        "missing",
+        "distinct_usable_pairs",
+        "coverage_guard_used"
+      ],
+      "title": "Coverage",
+      "type": "object"
+    },
+    "CoverageTag": {
+      "enum": [
+        "empty",
+        "singleton",
+        "multi_item",
+        "zero_discount",
+        "full_discount",
+        "half_cent",
+        "max_items",
+        "max_price"
+      ],
+      "title": "CoverageTag",
+      "type": "string"
+    },
+    "EvidenceCounts": {
+      "additionalProperties": false,
+      "properties": {
+        "base_mismatches": {
+          "maximum": 15,
+          "minimum": 0,
+          "title": "Base Mismatches",
+          "type": "integer"
+        },
+        "confirmations": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confirmations",
+          "type": "integer"
+        },
+        "excluded": {
+          "maximum": 15,
+          "minimum": 0,
+          "title": "Excluded",
+          "type": "integer"
+        },
+        "head_mismatches": {
+          "maximum": 15,
+          "minimum": 0,
+          "title": "Head Mismatches",
+          "type": "integer"
+        },
+        "matches": {
+          "maximum": 15,
+          "minimum": 0,
+          "title": "Matches",
+          "type": "integer"
+        },
+        "shared_mismatches": {
+          "maximum": 15,
+          "minimum": 0,
+          "title": "Shared Mismatches",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "matches",
+        "head_mismatches",
+        "shared_mismatches",
+        "base_mismatches",
+        "excluded",
+        "confirmations"
+      ],
+      "title": "EvidenceCounts",
+      "type": "object"
+    },
+    "ExecutionMode": {
+      "enum": [
+        "live",
+        "offline_fixture"
+      ],
+      "title": "ExecutionMode",
+      "type": "string"
+    },
+    "ProviderMode": {
+      "enum": [
+        "live",
+        "stub",
+        "fallback",
+        "policy",
+        "offline_fixture",
+        "disabled",
+        "not_called"
+      ],
+      "title": "ProviderMode",
+      "type": "string"
+    },
+    "ProviderName": {
+      "enum": [
+        "github",
+        "meta",
+        "snap",
+        "runner"
+      ],
+      "title": "ProviderName",
+      "type": "string"
+    },
+    "ReasonCode": {
+      "description": "Machine reason codes for errors, stop reasons and verdict reasons.",
+      "enum": [
+        "invalid_pr_url",
+        "repo_not_enrolled",
+        "fork_unsupported",
+        "revision_unavailable",
+        "oracle_unavailable",
+        "isolation_unverified",
+        "provider_unavailable",
+        "budget_exhausted",
+        "nondeterministic",
+        "coverage_insufficient",
+        "stale_event",
+        "conflicting_idempotency_key",
+        "internal_error",
+        "confirmed_evidence",
+        "coverage_complete",
+        "inputs_exhausted",
+        "deadline_exceeded",
+        "trust_failure",
+        "preexisting_mismatch_changed",
+        "unsupported_contract",
+        "source_invalid",
+        "invalid_request",
+        "unauthorized",
+        "forbidden",
+        "not_found",
+        "receipt_pending",
+        "replay_unavailable",
+        "rate_limited",
+        "payload_too_large",
+        "invalid_signature",
+        "feature_disabled",
+        "provider_timeout",
+        "provider_refused",
+        "provider_invalid_response",
+        "receipt_tampered",
+        "lease_lost"
+      ],
+      "title": "ReasonCode",
+      "type": "string"
+    },
+    "RunKind": {
+      "enum": [
+        "verification",
+        "replay"
+      ],
+      "title": "RunKind",
+      "type": "string"
+    },
+    "RunState": {
+      "enum": [
+        "queued",
+        "fetching",
+        "planning",
+        "testing",
+        "finalizing",
+        "completed",
+        "failed"
+      ],
+      "title": "RunState",
+      "type": "string"
+    },
+    "RunStatusDetail": {
+      "additionalProperties": false,
+      "description": "Optional status detail: mode, coverage progress and short evidence counts.",
+      "properties": {
+        "base_sha": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{40}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Base Sha"
+        },
+        "coverage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Coverage"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evidence": {
+          "$ref": "#/$defs/EvidenceCounts"
+        },
+        "execution_mode": {
+          "$ref": "#/$defs/ExecutionMode"
+        },
+        "head_sha": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{40}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Head Sha"
+        },
+        "parent_receipt_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Parent Receipt Sha256"
+        },
+        "pr_number": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Pr Number"
+        },
+        "provider_modes": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ProviderMode"
+          },
+          "propertyNames": {
+            "$ref": "#/$defs/ProviderName"
+          },
+          "title": "Provider Modes",
+          "type": "object"
+        },
+        "repo_full_name": {
+          "anyOf": [
+            {
+              "maxLength": 201,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Repo Full Name"
+        },
+        "run_kind": {
+          "$ref": "#/$defs/RunKind"
+        }
+      },
+      "required": [
+        "run_kind",
+        "execution_mode",
+        "repo_full_name",
+        "pr_number",
+        "base_sha",
+        "head_sha",
+        "coverage",
+        "evidence",
+        "provider_modes",
+        "parent_receipt_sha256"
+      ],
+      "title": "RunStatusDetail",
+      "type": "object"
+    },
+    "Verdict": {
+      "enum": [
+        "confirmed_regression",
+        "confirmed_existing_defect",
+        "no_defect_found",
+        "inconclusive"
+      ],
+      "title": "Verdict",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "attempts_used": {
+      "maximum": 15,
+      "minimum": 0,
+      "title": "Attempts Used",
+      "type": "integer"
+    },
+    "budget": {
+      "$ref": "#/$defs/Budget"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "detail": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RunStatusDetail"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "is_stale": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Is Stale"
+    },
+    "reason_code": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ReasonCode"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "receipt_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Receipt Sha256"
+    },
+    "run_id": {
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/RunState"
+    },
+    "updated_at": {
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+    },
+    "verdict": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Verdict"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "run_id",
+    "status",
+    "created_at",
+    "updated_at",
+    "is_stale",
+    "attempts_used",
+    "budget",
+    "verdict",
+    "reason_code",
+    "receipt_sha256"
+  ],
+  "title": "RunStatus",
+  "type": "object"
+}

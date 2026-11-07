@@ -1,0 +1,10 @@
+{
+  "data": [
+    {
+      "id": "subq-snap-1.1",
+      "object": "model",
+      "owned_by": "subq"
+    }
+  ],
+  "object": "list"
+}

@@ -1,0 +1,192 @@
+{
+  "$defs": {
+    "Candidate": {
+      "additionalProperties": false,
+      "properties": {
+        "coverage_tags": {
+          "items": {
+            "$ref": "#/$defs/CoverageTag"
+          },
+          "maxItems": 8,
+          "title": "Coverage Tags",
+          "type": "array"
+        },
+        "discount_percent": {
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Discount Percent",
+          "type": "integer"
+        },
+        "generator_version": {
+          "pattern": "^[A-Za-z0-9._@:+-]{1,64}$",
+          "title": "Generator Version",
+          "type": "string"
+        },
+        "input_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Input Sha256",
+          "type": "string"
+        },
+        "is_anchor": {
+          "title": "Is Anchor",
+          "type": "boolean"
+        },
+        "prices_cents": {
+          "items": {
+            "maximum": 10000,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 8,
+          "title": "Prices Cents",
+          "type": "array"
+        },
+        "strategy": {
+          "$ref": "#/$defs/Strategy"
+        }
+      },
+      "required": [
+        "prices_cents",
+        "discount_percent",
+        "input_sha256",
+        "strategy",
+        "is_anchor",
+        "coverage_tags",
+        "generator_version"
+      ],
+      "title": "Candidate",
+      "type": "object"
+    },
+    "CoverageTag": {
+      "enum": [
+        "empty",
+        "singleton",
+        "multi_item",
+        "zero_discount",
+        "full_discount",
+        "half_cent",
+        "max_items",
+        "max_price"
+      ],
+      "title": "CoverageTag",
+      "type": "string"
+    },
+    "HypothesisId": {
+      "description": "Canonical hypothesis IDs, assigned only by the local app.",
+      "enum": [
+        "H0",
+        "per_item_rounding",
+        "half_even_rounding",
+        "other"
+      ],
+      "title": "HypothesisId",
+      "type": "string"
+    },
+    "SelectionReason": {
+      "enum": [
+        "max_eig",
+        "coverage_guard",
+        "replay"
+      ],
+      "title": "SelectionReason",
+      "type": "string"
+    },
+    "Strategy": {
+      "enum": [
+        "boundary",
+        "constraint",
+        "seeded_fuzz"
+      ],
+      "title": "Strategy",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "candidate": {
+      "$ref": "#/$defs/Candidate"
+    },
+    "candidate_pool_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Candidate Pool Sha256",
+      "type": "string"
+    },
+    "eig_bits": {
+      "ge": 0.0,
+      "le": 3.0,
+      "title": "Eig Bits",
+      "type": "number"
+    },
+    "likelihood_mismatch": {
+      "additionalProperties": {
+        "ge": 0.0,
+        "le": 1.0,
+        "type": "number"
+      },
+      "propertyNames": {
+        "$ref": "#/$defs/HypothesisId"
+      },
+      "title": "Likelihood Mismatch",
+      "type": "object"
+    },
+    "p_mismatch": {
+      "ge": 0.0,
+      "le": 1.0,
+      "title": "P Mismatch",
+      "type": "number"
+    },
+    "pool_size": {
+      "maximum": 64,
+      "minimum": 1,
+      "title": "Pool Size",
+      "type": "integer"
+    },
+    "predictions": {
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "maximum": 9223372036854775807,
+            "minimum": -9223372036854775808,
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "propertyNames": {
+        "$ref": "#/$defs/HypothesisId"
+      },
+      "title": "Predictions",
+      "type": "object"
+    },
+    "prior": {
+      "additionalProperties": {
+        "ge": 0.0,
+        "le": 1.0,
+        "type": "number"
+      },
+      "propertyNames": {
+        "$ref": "#/$defs/HypothesisId"
+      },
+      "title": "Prior",
+      "type": "object"
+    },
+    "reason": {
+      "$ref": "#/$defs/SelectionReason"
+    }
+  },
+  "required": [
+    "candidate",
+    "candidate_pool_sha256",
+    "pool_size",
+    "eig_bits",
+    "p_mismatch",
+    "prior",
+    "likelihood_mismatch",
+    "predictions",
+    "reason"
+  ],
+  "title": "ProbeSelection",
+  "type": "object"
+}

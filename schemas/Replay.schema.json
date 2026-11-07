@@ -1,0 +1,140 @@
+{
+  "$defs": {
+    "CandidateInput": {
+      "additionalProperties": false,
+      "description": "Legal input of ``checkout-rounding@1``.",
+      "properties": {
+        "discount_percent": {
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Discount Percent",
+          "type": "integer"
+        },
+        "prices_cents": {
+          "items": {
+            "maximum": 10000,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 8,
+          "title": "Prices Cents",
+          "type": "array"
+        }
+      },
+      "required": [
+        "prices_cents",
+        "discount_percent"
+      ],
+      "title": "CandidateInput",
+      "type": "object"
+    },
+    "ExecutionMode": {
+      "enum": [
+        "live",
+        "offline_fixture"
+      ],
+      "title": "ExecutionMode",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "base_sha": {
+      "pattern": "^[0-9a-f]{40}$",
+      "title": "Base Sha",
+      "type": "string"
+    },
+    "base_source_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Base Source Sha256",
+      "type": "string"
+    },
+    "command": {
+      "maxLength": 256,
+      "title": "Command",
+      "type": "string"
+    },
+    "contract_id": {
+      "const": "checkout-rounding@1",
+      "title": "Contract Id",
+      "type": "string"
+    },
+    "contract_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Contract Sha256",
+      "type": "string"
+    },
+    "execution_mode": {
+      "$ref": "#/$defs/ExecutionMode"
+    },
+    "harness_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Harness Sha256",
+      "type": "string"
+    },
+    "harness_version": {
+      "pattern": "^[A-Za-z0-9._@:+-]{1,64}$",
+      "title": "Harness Version",
+      "type": "string"
+    },
+    "head_sha": {
+      "pattern": "^[0-9a-f]{40}$",
+      "title": "Head Sha",
+      "type": "string"
+    },
+    "head_source_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Head Source Sha256",
+      "type": "string"
+    },
+    "image_digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Image Digest",
+      "type": "string"
+    },
+    "input": {
+      "$ref": "#/$defs/CandidateInput"
+    },
+    "input_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Input Sha256",
+      "type": "string"
+    },
+    "oracle_version": {
+      "pattern": "^[A-Za-z0-9._@:+-]{1,64}$",
+      "title": "Oracle Version",
+      "type": "string"
+    },
+    "probe_no": {
+      "maximum": 15,
+      "minimum": 1,
+      "title": "Probe No",
+      "type": "integer"
+    },
+    "snapshot_id": {
+      "pattern": "^[A-Za-z0-9._:@/+=-]{1,128}$",
+      "title": "Snapshot Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "probe_no",
+    "input",
+    "input_sha256",
+    "base_sha",
+    "head_sha",
+    "base_source_sha256",
+    "head_source_sha256",
+    "harness_version",
+    "harness_sha256",
+    "contract_id",
+    "contract_sha256",
+    "oracle_version",
+    "snapshot_id",
+    "image_digest",
+    "execution_mode",
+    "command"
+  ],
+  "title": "Replay",
+  "type": "object"
+}

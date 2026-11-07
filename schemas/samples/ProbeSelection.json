@@ -1,0 +1,41 @@
+{
+  "candidate": {
+    "coverage_tags": [
+      "half_cent",
+      "multi_item"
+    ],
+    "discount_percent": 10,
+    "generator_version": "candidate-generator-v1",
+    "input_sha256": "326b2a8732d3411ecd4165eeab7faf0abb8efc089d0b3f333c5ec1264635635a",
+    "is_anchor": true,
+    "prices_cents": [
+      15,
+      15,
+      15
+    ],
+    "strategy": "constraint"
+  },
+  "candidate_pool_sha256": "34ce593f03f398bdf613ce7816eafb4c59537e5234824f1a883ab835f75e9e99",
+  "eig_bits": 0.71129798609,
+  "likelihood_mismatch": {
+    "H0": 0.02,
+    "half_even_rounding": 0.98,
+    "other": 0.2,
+    "per_item_rounding": 0.98
+  },
+  "p_mismatch": 0.326,
+  "pool_size": 23,
+  "predictions": {
+    "H0": 41,
+    "half_even_rounding": 40,
+    "other": null,
+    "per_item_rounding": 42
+  },
+  "prior": {
+    "H0": 0.6,
+    "half_even_rounding": 0.15,
+    "other": 0.1,
+    "per_item_rounding": 0.15
+  },
+  "reason": "max_eig"
+}

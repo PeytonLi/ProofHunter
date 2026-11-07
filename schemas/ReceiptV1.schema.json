@@ -1,0 +1,1782 @@
+{
+  "$defs": {
+    "AttemptStatus": {
+      "enum": [
+        "reserved",
+        "running",
+        "completed",
+        "ambiguous",
+        "cancelled"
+      ],
+      "title": "AttemptStatus",
+      "type": "string"
+    },
+    "Budget": {
+      "additionalProperties": false,
+      "description": "Limits plus consumed counts, deadline, wall clock and cost (or unknown).",
+      "properties": {
+        "cost": {
+          "$ref": "#/$defs/CostRecord"
+        },
+        "deadline_at": {
+          "format": "date-time",
+          "title": "Deadline At",
+          "type": "string"
+        },
+        "limits": {
+          "$ref": "#/$defs/BudgetLimits"
+        },
+        "used": {
+          "$ref": "#/$defs/BudgetUsage"
+        },
+        "wall_clock_ms": {
+          "anyOf": [
+            {
+              "maximum": 9223372036854775807,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Wall Clock Ms"
+        }
+      },
+      "required": [
+        "limits",
+        "used",
+        "deadline_at",
+        "wall_clock_ms",
+        "cost"
+      ],
+      "title": "Budget",
+      "type": "object"
+    },
+    "BudgetLimits": {
+      "additionalProperties": false,
+      "description": "Per-run limits (PRD section 2 defaults); enforced before spending.",
+      "properties": {
+        "deadline_seconds": {
+          "default": 180,
+          "maximum": 180,
+          "minimum": 1,
+          "title": "Deadline Seconds",
+          "type": "integer"
+        },
+        "invocation_timeout_seconds": {
+          "default": 5,
+          "maximum": 5,
+          "minimum": 1,
+          "title": "Invocation Timeout Seconds",
+          "type": "integer"
+        },
+        "max_candidates": {
+          "default": 64,
+          "maximum": 64,
+          "minimum": 1,
+          "title": "Max Candidates",
+          "type": "integer"
+        },
+        "max_confirmations": {
+          "default": 1,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Max Confirmations",
+          "type": "integer"
+        },
+        "max_context_bytes": {
+          "default": 32768,
+          "maximum": 32768,
+          "minimum": 1,
+          "title": "Max Context Bytes",
+          "type": "integer"
+        },
+        "max_hypotheses": {
+          "default": 8,
+          "maximum": 8,
+          "minimum": 2,
+          "title": "Max Hypotheses",
+          "type": "integer"
+        },
+        "max_meta_requests": {
+          "default": 2,
+          "maximum": 2,
+          "minimum": 0,
+          "title": "Max Meta Requests",
+          "type": "integer"
+        },
+        "max_output_bytes": {
+          "default": 16384,
+          "maximum": 16384,
+          "minimum": 1,
+          "title": "Max Output Bytes",
+          "type": "integer"
+        },
+        "max_pairs": {
+          "default": 6,
+          "maximum": 6,
+          "minimum": 1,
+          "title": "Max Pairs",
+          "type": "integer"
+        },
+        "max_sandbox_invocations": {
+          "default": 15,
+          "maximum": 15,
+          "minimum": 1,
+          "title": "Max Sandbox Invocations",
+          "type": "integer"
+        },
+        "max_snap_requests": {
+          "default": 3,
+          "maximum": 3,
+          "minimum": 0,
+          "title": "Max Snap Requests",
+          "type": "integer"
+        }
+      },
+      "title": "BudgetLimits",
+      "type": "object"
+    },
+    "BudgetUsage": {
+      "additionalProperties": false,
+      "properties": {
+        "candidates_generated": {
+          "maximum": 64,
+          "minimum": 0,
+          "title": "Candidates Generated",
+          "type": "integer"
+        },
+        "confirmations": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confirmations",
+          "type": "integer"
+        },
+        "meta_requests": {
+          "maximum": 2,
+          "minimum": 0,
+          "title": "Meta Requests",
+          "type": "integer"
+        },
+        "pairs": {
+          "maximum": 6,
+          "minimum": 0,
+          "title": "Pairs",
+          "type": "integer"
+        },
+        "sandbox_invocations": {
+          "maximum": 15,
+          "minimum": 0,
+          "title": "Sandbox Invocations",
+          "type": "integer"
+        },
+        "snap_requests": {
+          "maximum": 3,
+          "minimum": 0,
+          "title": "Snap Requests",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "pairs",
+        "confirmations",
+        "sandbox_invocations",
+        "meta_requests",
+        "snap_requests",
+        "candidates_generated"
+      ],
+      "title": "BudgetUsage",
+      "type": "object"
+    },
+    "Candidate": {
+      "additionalProperties": false,
+      "properties": {
+        "coverage_tags": {
+          "items": {
+            "$ref": "#/$defs/CoverageTag"
+          },
+          "maxItems": 8,
+          "title": "Coverage Tags",
+          "type": "array"
+        },
+        "discount_percent": {
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Discount Percent",
+          "type": "integer"
+        },
+        "generator_version": {
+          "pattern": "^[A-Za-z0-9._@:+-]{1,64}$",
+          "title": "Generator Version",
+          "type": "string"
+        },
+        "input_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Input Sha256",
+          "type": "string"
+        },
+        "is_anchor": {
+          "title": "Is Anchor",
+          "type": "boolean"
+        },
+        "prices_cents": {
+          "items": {
+            "maximum": 10000,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 8,
+          "title": "Prices Cents",
+          "type": "array"
+        },
+        "strategy": {
+          "$ref": "#/$defs/Strategy"
+        }
+      },
+      "required": [
+        "prices_cents",
+        "discount_percent",
+        "input_sha256",
+        "strategy",
+        "is_anchor",
+        "coverage_tags",
+        "generator_version"
+      ],
+      "title": "Candidate",
+      "type": "object"
+    },
+    "CandidateInput": {
+      "additionalProperties": false,
+      "description": "Legal input of ``checkout-rounding@1``.",
+      "properties": {
+        "discount_percent": {
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Discount Percent",
+          "type": "integer"
+        },
+        "prices_cents": {
+          "items": {
+            "maximum": 10000,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 8,
+          "title": "Prices Cents",
+          "type": "array"
+        }
+      },
+      "required": [
+        "prices_cents",
+        "discount_percent"
+      ],
+      "title": "CandidateInput",
+      "type": "object"
+    },
+    "ConfirmationStatus": {
+      "enum": [
+        "not_attempted",
+        "reproduced",
+        "disagreed",
+        "unusable"
+      ],
+      "title": "ConfirmationStatus",
+      "type": "string"
+    },
+    "CostRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "amount_usd_micros": {
+          "anyOf": [
+            {
+              "maximum": 9223372036854775807,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Amount Usd Micros"
+        },
+        "status": {
+          "$ref": "#/$defs/CostStatus"
+        }
+      },
+      "required": [
+        "status",
+        "amount_usd_micros"
+      ],
+      "title": "CostRecord",
+      "type": "object"
+    },
+    "CostStatus": {
+      "enum": [
+        "measured",
+        "unknown"
+      ],
+      "title": "CostStatus",
+      "type": "string"
+    },
+    "Coverage": {
+      "additionalProperties": false,
+      "properties": {
+        "coverage_guard_used": {
+          "title": "Coverage Guard Used",
+          "type": "boolean"
+        },
+        "distinct_usable_pairs": {
+          "maximum": 15,
+          "minimum": 0,
+          "title": "Distinct Usable Pairs",
+          "type": "integer"
+        },
+        "missing": {
+          "items": {
+            "$ref": "#/$defs/CoverageTag"
+          },
+          "maxItems": 8,
+          "title": "Missing",
+          "type": "array"
+        },
+        "observed": {
+          "items": {
+            "$ref": "#/$defs/CoverageTag"
+          },
+          "maxItems": 8,
+          "title": "Observed",
+          "type": "array"
+        },
+        "required": {
+          "items": {
+            "$ref": "#/$defs/CoverageTag"
+          },
+          "maxItems": 8,
+          "title": "Required",
+          "type": "array"
+        }
+      },
+      "required": [
+        "required",
+        "observed",
+        "missing",
+        "distinct_usable_pairs",
+        "coverage_guard_used"
+      ],
+      "title": "Coverage",
+      "type": "object"
+    },
+    "CoverageTag": {
+      "enum": [
+        "empty",
+        "singleton",
+        "multi_item",
+        "zero_discount",
+        "full_discount",
+        "half_cent",
+        "max_items",
+        "max_price"
+      ],
+      "title": "CoverageTag",
+      "type": "string"
+    },
+    "EvidenceKind": {
+      "description": "Classification of one probe pair relative to the T1 oracle.\n\n* ``match``: base = expected and head = expected (usable, Y=match).\n* ``head_mismatch``: base = expected, head != expected (usable, Y=mismatch).\n* ``shared_mismatch``: base = head != expected (pre-existing defect, no update).\n* ``base_mismatch``: base != expected and head != base (no update).\n* ``excluded``: unusable pair (see ``ExclusionReason``), no update.",
+      "enum": [
+        "match",
+        "head_mismatch",
+        "shared_mismatch",
+        "base_mismatch",
+        "excluded"
+      ],
+      "title": "EvidenceKind",
+      "type": "string"
+    },
+    "ExclusionReason": {
+      "enum": [
+        "base_mismatch",
+        "timeout",
+        "nonzero_exit",
+        "invalid_output",
+        "denied",
+        "infra_error",
+        "trust_failure",
+        "duplicate",
+        "oracle_unavailable",
+        "budget_exhausted"
+      ],
+      "title": "ExclusionReason",
+      "type": "string"
+    },
+    "ExecutionMode": {
+      "enum": [
+        "live",
+        "offline_fixture"
+      ],
+      "title": "ExecutionMode",
+      "type": "string"
+    },
+    "HypothesisId": {
+      "description": "Canonical hypothesis IDs, assigned only by the local app.",
+      "enum": [
+        "H0",
+        "per_item_rounding",
+        "half_even_rounding",
+        "other"
+      ],
+      "title": "HypothesisId",
+      "type": "string"
+    },
+    "HypothesisSource": {
+      "enum": [
+        "meta",
+        "builtin",
+        "mandatory"
+      ],
+      "title": "HypothesisSource",
+      "type": "string"
+    },
+    "HypothesisSummary": {
+      "additionalProperties": false,
+      "description": "Receipt record of retained hypotheses and the persisted initial prior.",
+      "properties": {
+        "initial_prior": {
+          "additionalProperties": {
+            "ge": 0.0,
+            "le": 1.0,
+            "type": "number"
+          },
+          "propertyNames": {
+            "$ref": "#/$defs/HypothesisId"
+          },
+          "title": "Initial Prior",
+          "type": "object"
+        },
+        "plan_source": {
+          "$ref": "#/$defs/PlanSource"
+        },
+        "prior_policy": {
+          "pattern": "^[A-Za-z0-9._@:+-]{1,64}$",
+          "title": "Prior Policy",
+          "type": "string"
+        },
+        "rejected_proposals": {
+          "maximum": 6,
+          "minimum": 0,
+          "title": "Rejected Proposals",
+          "type": "integer"
+        },
+        "retained": {
+          "items": {
+            "$ref": "#/$defs/RetainedHypothesis"
+          },
+          "maxItems": 8,
+          "minItems": 2,
+          "title": "Retained",
+          "type": "array"
+        }
+      },
+      "required": [
+        "plan_source",
+        "prior_policy",
+        "retained",
+        "initial_prior",
+        "rejected_proposals"
+      ],
+      "title": "HypothesisSummary",
+      "type": "object"
+    },
+    "ObservationOutcome": {
+      "enum": [
+        "ok",
+        "timeout",
+        "nonzero",
+        "invalid",
+        "denied",
+        "infra_error"
+      ],
+      "title": "ObservationOutcome",
+      "type": "string"
+    },
+    "OracleResult": {
+      "additionalProperties": false,
+      "properties": {
+        "contract_id": {
+          "const": "checkout-rounding@1",
+          "title": "Contract Id",
+          "type": "string"
+        },
+        "contract_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Contract Sha256",
+          "type": "string"
+        },
+        "expected_cents": {
+          "anyOf": [
+            {
+              "maximum": 9223372036854775807,
+              "minimum": -9223372036854775808,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Expected Cents"
+        },
+        "input_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Input Sha256",
+          "type": "string"
+        },
+        "oracle_version": {
+          "pattern": "^[A-Za-z0-9._@:+-]{1,64}$",
+          "title": "Oracle Version",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/OracleStatus"
+        },
+        "trust_tier": {
+          "$ref": "#/$defs/TrustTier"
+        }
+      },
+      "required": [
+        "contract_id",
+        "contract_sha256",
+        "oracle_version",
+        "input_sha256",
+        "trust_tier",
+        "expected_cents",
+        "status"
+      ],
+      "title": "OracleResult",
+      "type": "object"
+    },
+    "OracleStatus": {
+      "enum": [
+        "ok",
+        "unavailable",
+        "invalid"
+      ],
+      "title": "OracleStatus",
+      "type": "string"
+    },
+    "PlanConstraints": {
+      "additionalProperties": false,
+      "properties": {
+        "discount_percent": {
+          "anyOf": [
+            {
+              "maximum": 100,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Discount Percent"
+        },
+        "max_items": {
+          "anyOf": [
+            {
+              "maximum": 8,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Max Items"
+        },
+        "min_items": {
+          "anyOf": [
+            {
+              "maximum": 8,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Min Items"
+        },
+        "require_fractional_cent": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Require Fractional Cent"
+        }
+      },
+      "required": [
+        "min_items",
+        "max_items",
+        "discount_percent",
+        "require_fractional_cent"
+      ],
+      "title": "PlanConstraints",
+      "type": "object"
+    },
+    "PlanSource": {
+      "enum": [
+        "meta",
+        "builtin_fallback",
+        "builtin_restored",
+        "offline_fixture"
+      ],
+      "title": "PlanSource",
+      "type": "string"
+    },
+    "PolicyVersions": {
+      "additionalProperties": false,
+      "properties": {
+        "canonical_serializer": {
+          "default": "ph-canonical-json-v1",
+          "pattern": "^[A-Za-z0-9._@:+-]{1,64}$",
+          "title": "Canonical Serializer",
+          "type": "string"
+        },
+        "generator_version": {
+          "default": "candidate-generator-v1",
+          "pattern": "^[A-Za-z0-9._@:+-]{1,64}$",
+          "title": "Generator Version",
+          "type": "string"
+        },
+        "harness_version": {
+          "default": "proofhunter-harness@1",
+          "pattern": "^[A-Za-z0-9._@:+-]{1,64}$",
+          "title": "Harness Version",
+          "type": "string"
+        },
+        "likelihood_policy": {
+          "default": "rounding-likelihood-v1",
+          "pattern": "^[A-Za-z0-9._@:+-]{1,64}$",
+          "title": "Likelihood Policy",
+          "type": "string"
+        },
+        "oracle_version": {
+          "default": "checkout-rounding-oracle@1",
+          "pattern": "^[A-Za-z0-9._@:+-]{1,64}$",
+          "title": "Oracle Version",
+          "type": "string"
+        },
+        "prior_policy": {
+          "default": "v1",
+          "pattern": "^[A-Za-z0-9._@:+-]{1,64}$",
+          "title": "Prior Policy",
+          "type": "string"
+        },
+        "route_fallback_policy": {
+          "default": "route-fallback-v1",
+          "pattern": "^[A-Za-z0-9._@:+-]{1,64}$",
+          "title": "Route Fallback Policy",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "selection_policy": {
+          "default": "eig-select-v1",
+          "pattern": "^[A-Za-z0-9._@:+-]{1,64}$",
+          "title": "Selection Policy",
+          "type": "string"
+        },
+        "verdict_policy": {
+          "default": "verdict-rules-v1",
+          "pattern": "^[A-Za-z0-9._@:+-]{1,64}$",
+          "title": "Verdict Policy",
+          "type": "string"
+        }
+      },
+      "title": "PolicyVersions",
+      "type": "object"
+    },
+    "ProviderMode": {
+      "enum": [
+        "live",
+        "stub",
+        "fallback",
+        "policy",
+        "offline_fixture",
+        "disabled",
+        "not_called"
+      ],
+      "title": "ProviderMode",
+      "type": "string"
+    },
+    "ProviderName": {
+      "enum": [
+        "github",
+        "meta",
+        "snap",
+        "runner"
+      ],
+      "title": "ProviderName",
+      "type": "string"
+    },
+    "ProviderUsage": {
+      "additionalProperties": false,
+      "properties": {
+        "calls": {
+          "maximum": 15,
+          "minimum": 0,
+          "title": "Calls",
+          "type": "integer"
+        },
+        "fallbacks": {
+          "maximum": 15,
+          "minimum": 0,
+          "title": "Fallbacks",
+          "type": "integer"
+        },
+        "mode": {
+          "$ref": "#/$defs/ProviderMode"
+        },
+        "model_id": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9._:@/+=-]{1,128}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Model Id"
+        },
+        "reason_code": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReasonCode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "mode",
+        "model_id",
+        "calls",
+        "fallbacks",
+        "reason_code"
+      ],
+      "title": "ProviderUsage",
+      "type": "object"
+    },
+    "PublicObservation": {
+      "additionalProperties": false,
+      "description": "``SandboxObservation`` without operator identifiers (no ``sandbox_id``).",
+      "properties": {
+        "attempt_id": {
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+          "title": "Attempt Id",
+          "type": "string"
+        },
+        "commit_sha": {
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Commit Sha",
+          "type": "string"
+        },
+        "duration_ms": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "title": "Duration Ms",
+          "type": "integer"
+        },
+        "exit_code": {
+          "anyOf": [
+            {
+              "maximum": 9223372036854775807,
+              "minimum": -9223372036854775808,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Exit Code"
+        },
+        "harness_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Harness Sha256",
+          "type": "string"
+        },
+        "image_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Image Digest",
+          "type": "string"
+        },
+        "input_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Input Sha256",
+          "type": "string"
+        },
+        "outcome": {
+          "$ref": "#/$defs/ObservationOutcome"
+        },
+        "runner_mode": {
+          "$ref": "#/$defs/RunnerMode"
+        },
+        "side": {
+          "$ref": "#/$defs/Side"
+        },
+        "snapshot_id": {
+          "pattern": "^[A-Za-z0-9._:@/+=-]{1,128}$",
+          "title": "Snapshot Id",
+          "type": "string"
+        },
+        "source_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Sha256",
+          "type": "string"
+        },
+        "started_at": {
+          "format": "date-time",
+          "title": "Started At",
+          "type": "string"
+        },
+        "stderr_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Stderr Sha256"
+        },
+        "stdout_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Stdout Sha256"
+        },
+        "truncated": {
+          "title": "Truncated",
+          "type": "boolean"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "maximum": 9223372036854775807,
+              "minimum": -9223372036854775808,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "attempt_id",
+        "side",
+        "commit_sha",
+        "source_sha256",
+        "input_sha256",
+        "runner_mode",
+        "snapshot_id",
+        "image_digest",
+        "harness_sha256",
+        "started_at",
+        "duration_ms",
+        "outcome",
+        "value",
+        "exit_code",
+        "stdout_sha256",
+        "stderr_sha256",
+        "truncated"
+      ],
+      "title": "PublicObservation",
+      "type": "object"
+    },
+    "PublicProbeRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "base": {
+          "$ref": "#/$defs/PublicObservation"
+        },
+        "candidate": {
+          "$ref": "#/$defs/Candidate"
+        },
+        "candidate_pool_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Candidate Pool Sha256",
+          "type": "string"
+        },
+        "confirmation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PublicObservation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "confirmation_status": {
+          "$ref": "#/$defs/ConfirmationStatus"
+        },
+        "eig_bits": {
+          "ge": 0.0,
+          "le": 3.0,
+          "title": "Eig Bits",
+          "type": "number"
+        },
+        "evidence_kind": {
+          "$ref": "#/$defs/EvidenceKind"
+        },
+        "exclusion_reason": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExclusionReason"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "head": {
+          "$ref": "#/$defs/PublicObservation"
+        },
+        "likelihood_mismatch": {
+          "additionalProperties": {
+            "ge": 0.0,
+            "le": 1.0,
+            "type": "number"
+          },
+          "propertyNames": {
+            "$ref": "#/$defs/HypothesisId"
+          },
+          "title": "Likelihood Mismatch",
+          "type": "object"
+        },
+        "oracle": {
+          "$ref": "#/$defs/OracleResult"
+        },
+        "posterior": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "ge": 0.0,
+                "le": 1.0,
+                "type": "number"
+              },
+              "propertyNames": {
+                "$ref": "#/$defs/HypothesisId"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Posterior"
+        },
+        "predictions": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "maximum": 9223372036854775807,
+                "minimum": -9223372036854775808,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "propertyNames": {
+            "$ref": "#/$defs/HypothesisId"
+          },
+          "title": "Predictions",
+          "type": "object"
+        },
+        "prior": {
+          "additionalProperties": {
+            "ge": 0.0,
+            "le": 1.0,
+            "type": "number"
+          },
+          "propertyNames": {
+            "$ref": "#/$defs/HypothesisId"
+          },
+          "title": "Prior",
+          "type": "object"
+        },
+        "probe_no": {
+          "maximum": 15,
+          "minimum": 1,
+          "title": "Probe No",
+          "type": "integer"
+        },
+        "route": {
+          "$ref": "#/$defs/PublicRouteDecision"
+        },
+        "selection_reason": {
+          "$ref": "#/$defs/SelectionReason"
+        }
+      },
+      "required": [
+        "probe_no",
+        "candidate",
+        "prior",
+        "posterior",
+        "likelihood_mismatch",
+        "predictions",
+        "evidence_kind",
+        "exclusion_reason",
+        "candidate_pool_sha256",
+        "selection_reason",
+        "route",
+        "oracle",
+        "base",
+        "head",
+        "confirmation",
+        "confirmation_status",
+        "eig_bits"
+      ],
+      "title": "PublicProbeRecord",
+      "type": "object"
+    },
+    "PublicRevision": {
+      "additionalProperties": false,
+      "description": "Public projection of ``PinnedRevision``: no ``installation_id``.",
+      "properties": {
+        "base_sha": {
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Base Sha",
+          "type": "string"
+        },
+        "head_sha": {
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Head Sha",
+          "type": "string"
+        },
+        "number": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Number",
+          "type": "integer"
+        },
+        "owner": {
+          "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9._-]{1,100}$",
+          "title": "Owner",
+          "type": "string"
+        },
+        "repo": {
+          "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9._-]{1,100}$",
+          "title": "Repo",
+          "type": "string"
+        },
+        "repo_id": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "title": "Repo Id",
+          "type": "integer"
+        },
+        "resolved_at": {
+          "format": "date-time",
+          "title": "Resolved At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "owner",
+        "repo",
+        "number",
+        "repo_id",
+        "base_sha",
+        "head_sha",
+        "resolved_at"
+      ],
+      "title": "PublicRevision",
+      "type": "object"
+    },
+    "PublicRouteDecision": {
+      "additionalProperties": false,
+      "properties": {
+        "choice": {
+          "$ref": "#/$defs/Strategy"
+        },
+        "confidence": {
+          "anyOf": [
+            {
+              "ge": 0.0,
+              "le": 1.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Confidence"
+        },
+        "eligible": {
+          "items": {
+            "$ref": "#/$defs/Strategy"
+          },
+          "maxItems": 3,
+          "minItems": 1,
+          "title": "Eligible",
+          "type": "array"
+        },
+        "latency_ms": {
+          "anyOf": [
+            {
+              "maximum": 9223372036854775807,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Latency Ms"
+        },
+        "mode": {
+          "$ref": "#/$defs/RouteMode"
+        },
+        "model_id": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9._:@/+=-]{1,128}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Model Id"
+        },
+        "probabilities": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "ge": 0.0,
+                "le": 1.0,
+                "type": "number"
+              },
+              "propertyNames": {
+                "$ref": "#/$defs/Strategy"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Probabilities"
+        },
+        "reason_code": {
+          "$ref": "#/$defs/RouteReasonCode"
+        }
+      },
+      "required": [
+        "choice",
+        "eligible",
+        "mode",
+        "model_id",
+        "probabilities",
+        "confidence",
+        "latency_ms",
+        "reason_code"
+      ],
+      "title": "PublicRouteDecision",
+      "type": "object"
+    },
+    "ReasonCode": {
+      "description": "Machine reason codes for errors, stop reasons and verdict reasons.",
+      "enum": [
+        "invalid_pr_url",
+        "repo_not_enrolled",
+        "fork_unsupported",
+        "revision_unavailable",
+        "oracle_unavailable",
+        "isolation_unverified",
+        "provider_unavailable",
+        "budget_exhausted",
+        "nondeterministic",
+        "coverage_insufficient",
+        "stale_event",
+        "conflicting_idempotency_key",
+        "internal_error",
+        "confirmed_evidence",
+        "coverage_complete",
+        "inputs_exhausted",
+        "deadline_exceeded",
+        "trust_failure",
+        "preexisting_mismatch_changed",
+        "unsupported_contract",
+        "source_invalid",
+        "invalid_request",
+        "unauthorized",
+        "forbidden",
+        "not_found",
+        "receipt_pending",
+        "replay_unavailable",
+        "rate_limited",
+        "payload_too_large",
+        "invalid_signature",
+        "feature_disabled",
+        "provider_timeout",
+        "provider_refused",
+        "provider_invalid_response",
+        "receipt_tampered",
+        "lease_lost"
+      ],
+      "title": "ReasonCode",
+      "type": "string"
+    },
+    "Replay": {
+      "additionalProperties": false,
+      "properties": {
+        "base_sha": {
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Base Sha",
+          "type": "string"
+        },
+        "base_source_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Base Source Sha256",
+          "type": "string"
+        },
+        "command": {
+          "maxLength": 256,
+          "title": "Command",
+          "type": "string"
+        },
+        "contract_id": {
+          "const": "checkout-rounding@1",
+          "title": "Contract Id",
+          "type": "string"
+        },
+        "contract_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Contract Sha256",
+          "type": "string"
+        },
+        "execution_mode": {
+          "$ref": "#/$defs/ExecutionMode"
+        },
+        "harness_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Harness Sha256",
+          "type": "string"
+        },
+        "harness_version": {
+          "pattern": "^[A-Za-z0-9._@:+-]{1,64}$",
+          "title": "Harness Version",
+          "type": "string"
+        },
+        "head_sha": {
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Head Sha",
+          "type": "string"
+        },
+        "head_source_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Head Source Sha256",
+          "type": "string"
+        },
+        "image_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Image Digest",
+          "type": "string"
+        },
+        "input": {
+          "$ref": "#/$defs/CandidateInput"
+        },
+        "input_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Input Sha256",
+          "type": "string"
+        },
+        "oracle_version": {
+          "pattern": "^[A-Za-z0-9._@:+-]{1,64}$",
+          "title": "Oracle Version",
+          "type": "string"
+        },
+        "probe_no": {
+          "maximum": 15,
+          "minimum": 1,
+          "title": "Probe No",
+          "type": "integer"
+        },
+        "snapshot_id": {
+          "pattern": "^[A-Za-z0-9._:@/+=-]{1,128}$",
+          "title": "Snapshot Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "probe_no",
+        "input",
+        "input_sha256",
+        "base_sha",
+        "head_sha",
+        "base_source_sha256",
+        "head_source_sha256",
+        "harness_version",
+        "harness_sha256",
+        "contract_id",
+        "contract_sha256",
+        "oracle_version",
+        "snapshot_id",
+        "image_digest",
+        "execution_mode",
+        "command"
+      ],
+      "title": "Replay",
+      "type": "object"
+    },
+    "RetainedHypothesis": {
+      "additionalProperties": false,
+      "properties": {
+        "constraints": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PlanConstraints"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "id": {
+          "$ref": "#/$defs/HypothesisId"
+        },
+        "rationale": {
+          "anyOf": [
+            {
+              "maxLength": 300,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Rationale"
+        },
+        "raw_prior_weight": {
+          "ge": 0.0,
+          "le": 1.0,
+          "title": "Raw Prior Weight",
+          "type": "number"
+        },
+        "source": {
+          "$ref": "#/$defs/HypothesisSource"
+        },
+        "suggested_strategy": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Strategy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "source",
+        "rationale",
+        "suggested_strategy",
+        "constraints",
+        "raw_prior_weight"
+      ],
+      "title": "RetainedHypothesis",
+      "type": "object"
+    },
+    "RouteMode": {
+      "enum": [
+        "live",
+        "stub",
+        "fallback",
+        "policy"
+      ],
+      "title": "RouteMode",
+      "type": "string"
+    },
+    "RouteReasonCode": {
+      "enum": [
+        "provider_choice",
+        "stub_choice",
+        "single_eligible",
+        "call_budget",
+        "provider_unavailable",
+        "provider_timeout",
+        "rate_limited",
+        "preview_unavailable",
+        "invalid_response",
+        "invalid_choice",
+        "invalid_probabilities"
+      ],
+      "title": "RouteReasonCode",
+      "type": "string"
+    },
+    "RunKind": {
+      "enum": [
+        "verification",
+        "replay"
+      ],
+      "title": "RunKind",
+      "type": "string"
+    },
+    "RunnerMode": {
+      "enum": [
+        "daytona",
+        "offline_fixture"
+      ],
+      "title": "RunnerMode",
+      "type": "string"
+    },
+    "SelectionReason": {
+      "enum": [
+        "max_eig",
+        "coverage_guard",
+        "replay"
+      ],
+      "title": "SelectionReason",
+      "type": "string"
+    },
+    "Side": {
+      "enum": [
+        "base",
+        "head",
+        "confirm"
+      ],
+      "title": "Side",
+      "type": "string"
+    },
+    "SourceHashes": {
+      "additionalProperties": false,
+      "properties": {
+        "base": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Base",
+          "type": "string"
+        },
+        "head": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Head",
+          "type": "string"
+        }
+      },
+      "required": [
+        "base",
+        "head"
+      ],
+      "title": "SourceHashes",
+      "type": "object"
+    },
+    "Strategy": {
+      "enum": [
+        "boundary",
+        "constraint",
+        "seeded_fuzz"
+      ],
+      "title": "Strategy",
+      "type": "string"
+    },
+    "TrustTier": {
+      "enum": [
+        "T1",
+        "T2",
+        "T3"
+      ],
+      "title": "TrustTier",
+      "type": "string"
+    },
+    "UnpairedAttemptSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "attempt_id": {
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+          "title": "Attempt Id",
+          "type": "string"
+        },
+        "charged": {
+          "title": "Charged",
+          "type": "boolean"
+        },
+        "input_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Input Sha256",
+          "type": "string"
+        },
+        "outcome": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ObservationOutcome"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reason_code": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReasonCode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "side": {
+          "$ref": "#/$defs/Side"
+        },
+        "status": {
+          "$ref": "#/$defs/AttemptStatus"
+        }
+      },
+      "required": [
+        "attempt_id",
+        "side",
+        "input_sha256",
+        "status",
+        "outcome",
+        "charged",
+        "reason_code"
+      ],
+      "title": "UnpairedAttemptSummary",
+      "type": "object"
+    },
+    "Verdict": {
+      "enum": [
+        "confirmed_regression",
+        "confirmed_existing_defect",
+        "no_defect_found",
+        "inconclusive"
+      ],
+      "title": "Verdict",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Sealed public-safe receipt. Contains no prompts, sources, raw output bytes,\noperator identifiers (installation or sandbox IDs, provider request IDs) or\ncredentials. ``receipt_sha256`` is ``null`` until sealed.",
+  "properties": {
+    "budget": {
+      "$ref": "#/$defs/Budget"
+    },
+    "completed_at": {
+      "format": "date-time",
+      "title": "Completed At",
+      "type": "string"
+    },
+    "counterexample_probe_no": {
+      "anyOf": [
+        {
+          "maximum": 15,
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Counterexample Probe No"
+    },
+    "coverage": {
+      "$ref": "#/$defs/Coverage"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "enrollment_fingerprint": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Enrollment Fingerprint"
+    },
+    "execution_mode": {
+      "$ref": "#/$defs/ExecutionMode"
+    },
+    "hypotheses": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/HypothesisSummary"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "parent_receipt_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Parent Receipt Sha256"
+    },
+    "pinned_revision": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PublicRevision"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "policy_versions": {
+      "$ref": "#/$defs/PolicyVersions"
+    },
+    "probes": {
+      "items": {
+        "$ref": "#/$defs/PublicProbeRecord"
+      },
+      "maxItems": 15,
+      "title": "Probes",
+      "type": "array"
+    },
+    "providers": {
+      "additionalProperties": {
+        "$ref": "#/$defs/ProviderUsage"
+      },
+      "propertyNames": {
+        "$ref": "#/$defs/ProviderName"
+      },
+      "title": "Providers",
+      "type": "object"
+    },
+    "reason_code": {
+      "$ref": "#/$defs/ReasonCode"
+    },
+    "receipt_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Receipt Sha256"
+    },
+    "replay": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Replay"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "run_id": {
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "run_kind": {
+      "$ref": "#/$defs/RunKind"
+    },
+    "schema_version": {
+      "const": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "seed": {
+      "maximum": 4294967295,
+      "minimum": 0,
+      "title": "Seed",
+      "type": "integer"
+    },
+    "source_file_sha256": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SourceHashes"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "unpaired_attempt_summaries": {
+      "items": {
+        "$ref": "#/$defs/UnpairedAttemptSummary"
+      },
+      "maxItems": 15,
+      "title": "Unpaired Attempt Summaries",
+      "type": "array"
+    },
+    "verdict": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Verdict"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "run_id",
+    "run_kind",
+    "parent_receipt_sha256",
+    "pinned_revision",
+    "source_file_sha256",
+    "enrollment_fingerprint",
+    "execution_mode",
+    "providers",
+    "budget",
+    "seed",
+    "policy_versions",
+    "hypotheses",
+    "probes",
+    "unpaired_attempt_summaries",
+    "coverage",
+    "verdict",
+    "reason_code",
+    "counterexample_probe_no",
+    "replay",
+    "created_at",
+    "completed_at",
+    "receipt_sha256"
+  ],
+  "title": "ReceiptV1",
+  "type": "object"
+}

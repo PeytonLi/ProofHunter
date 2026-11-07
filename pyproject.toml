@@ -1,0 +1,87 @@
+[project]
+name = "proofhunter"
+version = "0.1.0"
+description = "Evidence-backed verification of GitHub pull requests through ASI:One (Fetch.ai Agents That Prove Their Work)."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = { text = "Proprietary" }
+dependencies = [
+    "pydantic>=2.11,<3",
+    "fastapi>=0.115,<1",
+    "uvicorn>=0.30.1,<1",
+    "httpx>=0.28.1,<0.29",
+    "pyjwt[crypto]>=2.9,<3",
+    "uagents>=0.26,<0.27",
+    "uagents-core>=0.4.11,<0.5",
+    # Stable v0 Daytona client only. The v2 alpha line (daytona.v2) is out of scope.
+    "daytona>=0.230,<1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3,<10",
+    "pytest-asyncio>=0.24,<2",
+    "respx>=0.22,<0.24",
+    "ruff>=0.8,<0.18",
+    "mypy>=1.13,<3",
+]
+
+[build-system]
+requires = ["hatchling>=1.25,<2"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/proofhunter"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"fixtures" = "fixtures"
+
+[tool.hatch.build]
+# Editable installs expose src/ (the package) and the repo root (fixtures/, bench/, tools/).
+dev-mode-dirs = ["src", "."]
+
+[tool.uv]
+default-groups = ["dev"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "."]
+addopts = "-p no:cacheprovider --strict-markers --import-mode=importlib"
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = [
+    "live: requires live provider credentials; never selected in automation",
+]
+filterwarnings = ["error::pydantic.PydanticDeprecatedSince20"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "."]
+extend-exclude = ["coordinate_proofhunter.py"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "RUF", "PT", "SIM"]
+ignore = ["S101", "RUF001", "RUF002", "RUF003"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S", "PT011"]
+"tools/gate.py" = ["S603", "S607"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+mypy_path = ["src", "."]
+explicit_package_bases = true
+warn_unused_ignores = true
+cache_dir = ".mypy_cache"
+
+[[tool.mypy.overrides]]
+module = ["uagents.*", "uagents_core.*", "daytona.*", "cosmpy.*"]
+ignore_missing_imports = true
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true

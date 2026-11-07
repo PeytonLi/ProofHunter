@@ -1,0 +1,15 @@
+{
+  "contract_id": "checkout-rounding@1",
+  "description": "Return the discounted basket total in integer cents, rounding the discounted subtotal once, half up.",
+  "domain": {
+    "discount_percent": {"maximum": 100, "minimum": 0, "type": "integer"},
+    "prices_cents": {"item_maximum": 10000, "item_minimum": 0, "max_items": 8, "type": "integer[]"}
+  },
+  "entrypoint": "checkout.total_cents",
+  "invalid_input": "Booleans, floats, extra keys and out-of-range values are rejected at the boundary. Invalid-input behavior is outside the contract.",
+  "oracle_version": "checkout-rounding-oracle@1",
+  "rule": "n = sum(prices_cents) * (100 - discount_percent); return (n + 50) // 100",
+  "signature": "total_cents(prices_cents: list[int], discount_percent: int) -> int",
+  "source_path": "checkout.py",
+  "trust_tier": "T1"
+}

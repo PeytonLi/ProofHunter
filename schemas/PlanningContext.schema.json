@@ -1,0 +1,107 @@
+{
+  "$defs": {
+    "ContextFile": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "maxLength": 200,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.?(?:/|$))[A-Za-z0-9._/-]{1,200}$",
+          "title": "Path",
+          "type": "string"
+        },
+        "start_line": {
+          "maximum": 100000,
+          "minimum": 1,
+          "title": "Start Line",
+          "type": "integer"
+        },
+        "text": {
+          "maxLength": 32768,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "start_line",
+        "text"
+      ],
+      "title": "ContextFile",
+      "type": "object"
+    },
+    "HypothesisMode": {
+      "description": "Failure modes a provider may propose (H0 is always implicit).",
+      "enum": [
+        "per_item_rounding",
+        "half_even_rounding",
+        "other"
+      ],
+      "title": "HypothesisMode",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Bounded, sanitized model context. Repo text is data, never instructions.",
+  "properties": {
+    "contract_id": {
+      "const": "checkout-rounding@1",
+      "title": "Contract Id",
+      "type": "string"
+    },
+    "contract_text": {
+      "maxLength": 4096,
+      "title": "Contract Text",
+      "type": "string"
+    },
+    "diff": {
+      "maxLength": 32768,
+      "title": "Diff",
+      "type": "string"
+    },
+    "entrypoint": {
+      "const": "checkout.total_cents",
+      "title": "Entrypoint",
+      "type": "string"
+    },
+    "files": {
+      "items": {
+        "$ref": "#/$defs/ContextFile"
+      },
+      "maxItems": 4,
+      "title": "Files",
+      "type": "array"
+    },
+    "max_hypotheses": {
+      "maximum": 6,
+      "minimum": 1,
+      "title": "Max Hypotheses",
+      "type": "integer"
+    },
+    "run_id": {
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "supported_modes": {
+      "items": {
+        "$ref": "#/$defs/HypothesisMode"
+      },
+      "maxItems": 3,
+      "minItems": 1,
+      "title": "Supported Modes",
+      "type": "array"
+    }
+  },
+  "required": [
+    "run_id",
+    "contract_id",
+    "entrypoint",
+    "contract_text",
+    "files",
+    "diff",
+    "supported_modes",
+    "max_hypotheses"
+  ],
+  "title": "PlanningContext",
+  "type": "object"
+}

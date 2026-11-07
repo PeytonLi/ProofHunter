@@ -1,0 +1,9 @@
+{
+  "attempt_id": "00000000-05e7-4002-8000-000000000002",
+  "charged": true,
+  "input_sha256": "326b2a8732d3411ecd4165eeab7faf0abb8efc089d0b3f333c5ec1264635635a",
+  "outcome": null,
+  "reason_code": "lease_lost",
+  "side": "base",
+  "status": "ambiguous"
+}

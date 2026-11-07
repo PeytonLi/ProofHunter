@@ -1,0 +1,167 @@
+{
+  "$defs": {
+    "ObservationOutcome": {
+      "enum": [
+        "ok",
+        "timeout",
+        "nonzero",
+        "invalid",
+        "denied",
+        "infra_error"
+      ],
+      "title": "ObservationOutcome",
+      "type": "string"
+    },
+    "RunnerMode": {
+      "enum": [
+        "daytona",
+        "offline_fixture"
+      ],
+      "title": "RunnerMode",
+      "type": "string"
+    },
+    "Side": {
+      "enum": [
+        "base",
+        "head",
+        "confirm"
+      ],
+      "title": "Side",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "``SandboxObservation`` without operator identifiers (no ``sandbox_id``).",
+  "properties": {
+    "attempt_id": {
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+      "title": "Attempt Id",
+      "type": "string"
+    },
+    "commit_sha": {
+      "pattern": "^[0-9a-f]{40}$",
+      "title": "Commit Sha",
+      "type": "string"
+    },
+    "duration_ms": {
+      "maximum": 9223372036854775807,
+      "minimum": 0,
+      "title": "Duration Ms",
+      "type": "integer"
+    },
+    "exit_code": {
+      "anyOf": [
+        {
+          "maximum": 9223372036854775807,
+          "minimum": -9223372036854775808,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Exit Code"
+    },
+    "harness_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Harness Sha256",
+      "type": "string"
+    },
+    "image_digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Image Digest",
+      "type": "string"
+    },
+    "input_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Input Sha256",
+      "type": "string"
+    },
+    "outcome": {
+      "$ref": "#/$defs/ObservationOutcome"
+    },
+    "runner_mode": {
+      "$ref": "#/$defs/RunnerMode"
+    },
+    "side": {
+      "$ref": "#/$defs/Side"
+    },
+    "snapshot_id": {
+      "pattern": "^[A-Za-z0-9._:@/+=-]{1,128}$",
+      "title": "Snapshot Id",
+      "type": "string"
+    },
+    "source_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Sha256",
+      "type": "string"
+    },
+    "started_at": {
+      "format": "date-time",
+      "title": "Started At",
+      "type": "string"
+    },
+    "stderr_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Stderr Sha256"
+    },
+    "stdout_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Stdout Sha256"
+    },
+    "truncated": {
+      "title": "Truncated",
+      "type": "boolean"
+    },
+    "value": {
+      "anyOf": [
+        {
+          "maximum": 9223372036854775807,
+          "minimum": -9223372036854775808,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Value"
+    }
+  },
+  "required": [
+    "attempt_id",
+    "side",
+    "commit_sha",
+    "source_sha256",
+    "input_sha256",
+    "runner_mode",
+    "snapshot_id",
+    "image_digest",
+    "harness_sha256",
+    "started_at",
+    "duration_ms",
+    "outcome",
+    "value",
+    "exit_code",
+    "stdout_sha256",
+    "stderr_sha256",
+    "truncated"
+  ],
+  "title": "PublicObservation",
+  "type": "object"
+}

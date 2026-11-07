@@ -1,0 +1,29 @@
+{
+  "cost": {
+    "amount_usd_micros": null,
+    "status": "unknown"
+  },
+  "deadline_at": "2026-11-07T19:03:00.000000Z",
+  "limits": {
+    "deadline_seconds": 180,
+    "invocation_timeout_seconds": 5,
+    "max_candidates": 64,
+    "max_confirmations": 1,
+    "max_context_bytes": 32768,
+    "max_hypotheses": 8,
+    "max_meta_requests": 2,
+    "max_output_bytes": 16384,
+    "max_pairs": 6,
+    "max_sandbox_invocations": 15,
+    "max_snap_requests": 3
+  },
+  "used": {
+    "candidates_generated": 63,
+    "confirmations": 1,
+    "meta_requests": 0,
+    "pairs": 1,
+    "sandbox_invocations": 3,
+    "snap_requests": 1
+  },
+  "wall_clock_ms": 6
+}

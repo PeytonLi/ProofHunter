@@ -1,0 +1,105 @@
+{
+  "$defs": {
+    "ReasonCode": {
+      "description": "Machine reason codes for errors, stop reasons and verdict reasons.",
+      "enum": [
+        "invalid_pr_url",
+        "repo_not_enrolled",
+        "fork_unsupported",
+        "revision_unavailable",
+        "oracle_unavailable",
+        "isolation_unverified",
+        "provider_unavailable",
+        "budget_exhausted",
+        "nondeterministic",
+        "coverage_insufficient",
+        "stale_event",
+        "conflicting_idempotency_key",
+        "internal_error",
+        "confirmed_evidence",
+        "coverage_complete",
+        "inputs_exhausted",
+        "deadline_exceeded",
+        "trust_failure",
+        "preexisting_mismatch_changed",
+        "unsupported_contract",
+        "source_invalid",
+        "invalid_request",
+        "unauthorized",
+        "forbidden",
+        "not_found",
+        "receipt_pending",
+        "replay_unavailable",
+        "rate_limited",
+        "payload_too_large",
+        "invalid_signature",
+        "feature_disabled",
+        "provider_timeout",
+        "provider_refused",
+        "provider_invalid_response",
+        "receipt_tampered",
+        "lease_lost"
+      ],
+      "title": "ReasonCode",
+      "type": "string"
+    },
+    "Verdict": {
+      "enum": [
+        "confirmed_regression",
+        "confirmed_existing_defect",
+        "no_defect_found",
+        "inconclusive"
+      ],
+      "title": "Verdict",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "counterexample_probe_no": {
+      "anyOf": [
+        {
+          "maximum": 15,
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Counterexample Probe No"
+    },
+    "next_requirement": {
+      "anyOf": [
+        {
+          "maxLength": 300,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Next Requirement"
+    },
+    "reason_code": {
+      "$ref": "#/$defs/ReasonCode"
+    },
+    "verdict": {
+      "$ref": "#/$defs/Verdict"
+    },
+    "wording": {
+      "maxLength": 300,
+      "title": "Wording",
+      "type": "string"
+    }
+  },
+  "required": [
+    "verdict",
+    "reason_code",
+    "counterexample_probe_no",
+    "wording",
+    "next_requirement"
+  ],
+  "title": "VerdictResult",
+  "type": "object"
+}

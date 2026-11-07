@@ -1,0 +1,271 @@
+{
+  "$defs": {
+    "Belief": {
+      "additionalProperties": false,
+      "properties": {
+        "likelihood_policy": {
+          "pattern": "^[A-Za-z0-9._@:+-]{1,64}$",
+          "title": "Likelihood Policy",
+          "type": "string"
+        },
+        "prior_policy": {
+          "pattern": "^[A-Za-z0-9._@:+-]{1,64}$",
+          "title": "Prior Policy",
+          "type": "string"
+        },
+        "probabilities": {
+          "additionalProperties": {
+            "ge": 0.0,
+            "le": 1.0,
+            "type": "number"
+          },
+          "propertyNames": {
+            "$ref": "#/$defs/HypothesisId"
+          },
+          "title": "Probabilities",
+          "type": "object"
+        },
+        "updates": {
+          "maximum": 15,
+          "minimum": 0,
+          "title": "Updates",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "probabilities",
+        "prior_policy",
+        "likelihood_policy",
+        "updates"
+      ],
+      "title": "Belief",
+      "type": "object"
+    },
+    "HypothesisId": {
+      "description": "Canonical hypothesis IDs, assigned only by the local app.",
+      "enum": [
+        "H0",
+        "per_item_rounding",
+        "half_even_rounding",
+        "other"
+      ],
+      "title": "HypothesisId",
+      "type": "string"
+    },
+    "HypothesisSource": {
+      "enum": [
+        "meta",
+        "builtin",
+        "mandatory"
+      ],
+      "title": "HypothesisSource",
+      "type": "string"
+    },
+    "HypothesisSummary": {
+      "additionalProperties": false,
+      "description": "Receipt record of retained hypotheses and the persisted initial prior.",
+      "properties": {
+        "initial_prior": {
+          "additionalProperties": {
+            "ge": 0.0,
+            "le": 1.0,
+            "type": "number"
+          },
+          "propertyNames": {
+            "$ref": "#/$defs/HypothesisId"
+          },
+          "title": "Initial Prior",
+          "type": "object"
+        },
+        "plan_source": {
+          "$ref": "#/$defs/PlanSource"
+        },
+        "prior_policy": {
+          "pattern": "^[A-Za-z0-9._@:+-]{1,64}$",
+          "title": "Prior Policy",
+          "type": "string"
+        },
+        "rejected_proposals": {
+          "maximum": 6,
+          "minimum": 0,
+          "title": "Rejected Proposals",
+          "type": "integer"
+        },
+        "retained": {
+          "items": {
+            "$ref": "#/$defs/RetainedHypothesis"
+          },
+          "maxItems": 8,
+          "minItems": 2,
+          "title": "Retained",
+          "type": "array"
+        }
+      },
+      "required": [
+        "plan_source",
+        "prior_policy",
+        "retained",
+        "initial_prior",
+        "rejected_proposals"
+      ],
+      "title": "HypothesisSummary",
+      "type": "object"
+    },
+    "PlanConstraints": {
+      "additionalProperties": false,
+      "properties": {
+        "discount_percent": {
+          "anyOf": [
+            {
+              "maximum": 100,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Discount Percent"
+        },
+        "max_items": {
+          "anyOf": [
+            {
+              "maximum": 8,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Max Items"
+        },
+        "min_items": {
+          "anyOf": [
+            {
+              "maximum": 8,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Min Items"
+        },
+        "require_fractional_cent": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Require Fractional Cent"
+        }
+      },
+      "required": [
+        "min_items",
+        "max_items",
+        "discount_percent",
+        "require_fractional_cent"
+      ],
+      "title": "PlanConstraints",
+      "type": "object"
+    },
+    "PlanSource": {
+      "enum": [
+        "meta",
+        "builtin_fallback",
+        "builtin_restored",
+        "offline_fixture"
+      ],
+      "title": "PlanSource",
+      "type": "string"
+    },
+    "RetainedHypothesis": {
+      "additionalProperties": false,
+      "properties": {
+        "constraints": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PlanConstraints"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "id": {
+          "$ref": "#/$defs/HypothesisId"
+        },
+        "rationale": {
+          "anyOf": [
+            {
+              "maxLength": 300,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Rationale"
+        },
+        "raw_prior_weight": {
+          "ge": 0.0,
+          "le": 1.0,
+          "title": "Raw Prior Weight",
+          "type": "number"
+        },
+        "source": {
+          "$ref": "#/$defs/HypothesisSource"
+        },
+        "suggested_strategy": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Strategy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "source",
+        "rationale",
+        "suggested_strategy",
+        "constraints",
+        "raw_prior_weight"
+      ],
+      "title": "RetainedHypothesis",
+      "type": "object"
+    },
+    "Strategy": {
+      "enum": [
+        "boundary",
+        "constraint",
+        "seeded_fuzz"
+      ],
+      "title": "Strategy",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "belief": {
+      "$ref": "#/$defs/Belief"
+    },
+    "hypotheses": {
+      "$ref": "#/$defs/HypothesisSummary"
+    }
+  },
+  "required": [
+    "belief",
+    "hypotheses"
+  ],
+  "title": "InitialBelief",
+  "type": "object"
+}

@@ -1,0 +1,54 @@
+{
+  "additionalProperties": false,
+  "description": "Public projection of ``PinnedRevision``: no ``installation_id``.",
+  "properties": {
+    "base_sha": {
+      "pattern": "^[0-9a-f]{40}$",
+      "title": "Base Sha",
+      "type": "string"
+    },
+    "head_sha": {
+      "pattern": "^[0-9a-f]{40}$",
+      "title": "Head Sha",
+      "type": "string"
+    },
+    "number": {
+      "maximum": 2147483647,
+      "minimum": 1,
+      "title": "Number",
+      "type": "integer"
+    },
+    "owner": {
+      "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9._-]{1,100}$",
+      "title": "Owner",
+      "type": "string"
+    },
+    "repo": {
+      "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9._-]{1,100}$",
+      "title": "Repo",
+      "type": "string"
+    },
+    "repo_id": {
+      "maximum": 9007199254740991,
+      "minimum": 1,
+      "title": "Repo Id",
+      "type": "integer"
+    },
+    "resolved_at": {
+      "format": "date-time",
+      "title": "Resolved At",
+      "type": "string"
+    }
+  },
+  "required": [
+    "owner",
+    "repo",
+    "number",
+    "repo_id",
+    "base_sha",
+    "head_sha",
+    "resolved_at"
+  ],
+  "title": "PublicRevision",
+  "type": "object"
+}

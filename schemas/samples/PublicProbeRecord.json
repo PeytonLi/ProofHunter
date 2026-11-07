@@ -1,0 +1,133 @@
+{
+  "base": {
+    "attempt_id": "00000000-05e7-4002-8000-000000000002",
+    "commit_sha": "ed3eac4ed8d400e24b716b163c5f281a2ffcf460",
+    "duration_ms": 1,
+    "exit_code": 0,
+    "harness_sha256": "cda5f7321ea14ef6259b3487e1b0b69c14ef4b9b7d1bfc62c9f7dbb3237a0a93",
+    "image_digest": "sha256:f19b56e7023eb77f7882ec2559faf5b031ddda0d4e0721b6fefa92808b3dd6b0",
+    "input_sha256": "326b2a8732d3411ecd4165eeab7faf0abb8efc089d0b3f333c5ec1264635635a",
+    "outcome": "ok",
+    "runner_mode": "offline_fixture",
+    "side": "base",
+    "snapshot_id": "proofhunter-offline-fixture-v1",
+    "source_sha256": "67ad174f81050136a42c6ffe92b823d771c8f9ad530cc5dcc731abea160f42ff",
+    "started_at": "2026-11-07T19:00:00.003000Z",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stdout_sha256": "45f44f40e6120a007460f46ba01ed805d89bdcc9ea2e6e607d5b0610e1f1c425",
+    "truncated": false,
+    "value": 41
+  },
+  "candidate": {
+    "coverage_tags": [
+      "half_cent",
+      "multi_item"
+    ],
+    "discount_percent": 10,
+    "generator_version": "candidate-generator-v1",
+    "input_sha256": "326b2a8732d3411ecd4165eeab7faf0abb8efc089d0b3f333c5ec1264635635a",
+    "is_anchor": true,
+    "prices_cents": [
+      15,
+      15,
+      15
+    ],
+    "strategy": "constraint"
+  },
+  "candidate_pool_sha256": "34ce593f03f398bdf613ce7816eafb4c59537e5234824f1a883ab835f75e9e99",
+  "confirmation": {
+    "attempt_id": "00000000-05e7-4002-8000-000000000004",
+    "commit_sha": "83359b9ff5a9ced05c22ee2feeaaa67e667fe34e",
+    "duration_ms": 1,
+    "exit_code": 0,
+    "harness_sha256": "cda5f7321ea14ef6259b3487e1b0b69c14ef4b9b7d1bfc62c9f7dbb3237a0a93",
+    "image_digest": "sha256:f19b56e7023eb77f7882ec2559faf5b031ddda0d4e0721b6fefa92808b3dd6b0",
+    "input_sha256": "326b2a8732d3411ecd4165eeab7faf0abb8efc089d0b3f333c5ec1264635635a",
+    "outcome": "ok",
+    "runner_mode": "offline_fixture",
+    "side": "confirm",
+    "snapshot_id": "proofhunter-offline-fixture-v1",
+    "source_sha256": "69918784e41323fa70c59d353f1acdfdf50cf6ddde098fee2c44b83d9c3e96b8",
+    "started_at": "2026-11-07T19:00:00.005000Z",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stdout_sha256": "dc60e632a90329ccfd34fbe904d94704dbbb6669575185e26389854ff64139c3",
+    "truncated": false,
+    "value": 42
+  },
+  "confirmation_status": "reproduced",
+  "eig_bits": 0.71129798609,
+  "evidence_kind": "head_mismatch",
+  "exclusion_reason": null,
+  "head": {
+    "attempt_id": "00000000-05e7-4002-8000-000000000003",
+    "commit_sha": "83359b9ff5a9ced05c22ee2feeaaa67e667fe34e",
+    "duration_ms": 1,
+    "exit_code": 0,
+    "harness_sha256": "cda5f7321ea14ef6259b3487e1b0b69c14ef4b9b7d1bfc62c9f7dbb3237a0a93",
+    "image_digest": "sha256:f19b56e7023eb77f7882ec2559faf5b031ddda0d4e0721b6fefa92808b3dd6b0",
+    "input_sha256": "326b2a8732d3411ecd4165eeab7faf0abb8efc089d0b3f333c5ec1264635635a",
+    "outcome": "ok",
+    "runner_mode": "offline_fixture",
+    "side": "head",
+    "snapshot_id": "proofhunter-offline-fixture-v1",
+    "source_sha256": "69918784e41323fa70c59d353f1acdfdf50cf6ddde098fee2c44b83d9c3e96b8",
+    "started_at": "2026-11-07T19:00:00.004000Z",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stdout_sha256": "dc60e632a90329ccfd34fbe904d94704dbbb6669575185e26389854ff64139c3",
+    "truncated": false,
+    "value": 42
+  },
+  "likelihood_mismatch": {
+    "H0": 0.02,
+    "half_even_rounding": 0.98,
+    "other": 0.2,
+    "per_item_rounding": 0.98
+  },
+  "oracle": {
+    "contract_id": "checkout-rounding@1",
+    "contract_sha256": "f608d4b8c47ee74e1ef0fdc1f4d62c54f19d054489d4a5787809ebb1bccdbfa8",
+    "expected_cents": 41,
+    "input_sha256": "326b2a8732d3411ecd4165eeab7faf0abb8efc089d0b3f333c5ec1264635635a",
+    "oracle_version": "checkout-rounding-oracle@1",
+    "status": "ok",
+    "trust_tier": "T1"
+  },
+  "posterior": {
+    "H0": 0.036809815951,
+    "half_even_rounding": 0.450920245399,
+    "other": 0.061349693252,
+    "per_item_rounding": 0.450920245399
+  },
+  "predictions": {
+    "H0": 41,
+    "half_even_rounding": 40,
+    "other": null,
+    "per_item_rounding": 42
+  },
+  "prior": {
+    "H0": 0.6,
+    "half_even_rounding": 0.15,
+    "other": 0.1,
+    "per_item_rounding": 0.15
+  },
+  "probe_no": 1,
+  "route": {
+    "choice": "constraint",
+    "confidence": 0.6,
+    "eligible": [
+      "boundary",
+      "constraint",
+      "seeded_fuzz"
+    ],
+    "latency_ms": 0,
+    "mode": "stub",
+    "model_id": null,
+    "probabilities": {
+      "boundary": 0.2,
+      "constraint": 0.6,
+      "seeded_fuzz": 0.2
+    },
+    "reason_code": "stub_choice"
+  },
+  "selection_reason": "max_eig"
+}

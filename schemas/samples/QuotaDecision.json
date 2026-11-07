@@ -1,0 +1,5 @@
+{
+  "allowed": false,
+  "reason_code": "rate_limited",
+  "retry_after_seconds": 600
+}

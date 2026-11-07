@@ -1,0 +1,16 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "probe_no": {
+      "maximum": 15,
+      "minimum": 1,
+      "title": "Probe No",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "probe_no"
+  ],
+  "title": "ReplayRequest",
+  "type": "object"
+}

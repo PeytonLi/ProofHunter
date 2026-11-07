@@ -1,0 +1,672 @@
+{
+  "$defs": {
+    "Candidate": {
+      "additionalProperties": false,
+      "properties": {
+        "coverage_tags": {
+          "items": {
+            "$ref": "#/$defs/CoverageTag"
+          },
+          "maxItems": 8,
+          "title": "Coverage Tags",
+          "type": "array"
+        },
+        "discount_percent": {
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Discount Percent",
+          "type": "integer"
+        },
+        "generator_version": {
+          "pattern": "^[A-Za-z0-9._@:+-]{1,64}$",
+          "title": "Generator Version",
+          "type": "string"
+        },
+        "input_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Input Sha256",
+          "type": "string"
+        },
+        "is_anchor": {
+          "title": "Is Anchor",
+          "type": "boolean"
+        },
+        "prices_cents": {
+          "items": {
+            "maximum": 10000,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 8,
+          "title": "Prices Cents",
+          "type": "array"
+        },
+        "strategy": {
+          "$ref": "#/$defs/Strategy"
+        }
+      },
+      "required": [
+        "prices_cents",
+        "discount_percent",
+        "input_sha256",
+        "strategy",
+        "is_anchor",
+        "coverage_tags",
+        "generator_version"
+      ],
+      "title": "Candidate",
+      "type": "object"
+    },
+    "ConfirmationStatus": {
+      "enum": [
+        "not_attempted",
+        "reproduced",
+        "disagreed",
+        "unusable"
+      ],
+      "title": "ConfirmationStatus",
+      "type": "string"
+    },
+    "CoverageTag": {
+      "enum": [
+        "empty",
+        "singleton",
+        "multi_item",
+        "zero_discount",
+        "full_discount",
+        "half_cent",
+        "max_items",
+        "max_price"
+      ],
+      "title": "CoverageTag",
+      "type": "string"
+    },
+    "EvidenceKind": {
+      "description": "Classification of one probe pair relative to the T1 oracle.\n\n* ``match``: base = expected and head = expected (usable, Y=match).\n* ``head_mismatch``: base = expected, head != expected (usable, Y=mismatch).\n* ``shared_mismatch``: base = head != expected (pre-existing defect, no update).\n* ``base_mismatch``: base != expected and head != base (no update).\n* ``excluded``: unusable pair (see ``ExclusionReason``), no update.",
+      "enum": [
+        "match",
+        "head_mismatch",
+        "shared_mismatch",
+        "base_mismatch",
+        "excluded"
+      ],
+      "title": "EvidenceKind",
+      "type": "string"
+    },
+    "ExclusionReason": {
+      "enum": [
+        "base_mismatch",
+        "timeout",
+        "nonzero_exit",
+        "invalid_output",
+        "denied",
+        "infra_error",
+        "trust_failure",
+        "duplicate",
+        "oracle_unavailable",
+        "budget_exhausted"
+      ],
+      "title": "ExclusionReason",
+      "type": "string"
+    },
+    "HypothesisId": {
+      "description": "Canonical hypothesis IDs, assigned only by the local app.",
+      "enum": [
+        "H0",
+        "per_item_rounding",
+        "half_even_rounding",
+        "other"
+      ],
+      "title": "HypothesisId",
+      "type": "string"
+    },
+    "ObservationOutcome": {
+      "enum": [
+        "ok",
+        "timeout",
+        "nonzero",
+        "invalid",
+        "denied",
+        "infra_error"
+      ],
+      "title": "ObservationOutcome",
+      "type": "string"
+    },
+    "OracleResult": {
+      "additionalProperties": false,
+      "properties": {
+        "contract_id": {
+          "const": "checkout-rounding@1",
+          "title": "Contract Id",
+          "type": "string"
+        },
+        "contract_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Contract Sha256",
+          "type": "string"
+        },
+        "expected_cents": {
+          "anyOf": [
+            {
+              "maximum": 9223372036854775807,
+              "minimum": -9223372036854775808,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Expected Cents"
+        },
+        "input_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Input Sha256",
+          "type": "string"
+        },
+        "oracle_version": {
+          "pattern": "^[A-Za-z0-9._@:+-]{1,64}$",
+          "title": "Oracle Version",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/OracleStatus"
+        },
+        "trust_tier": {
+          "$ref": "#/$defs/TrustTier"
+        }
+      },
+      "required": [
+        "contract_id",
+        "contract_sha256",
+        "oracle_version",
+        "input_sha256",
+        "trust_tier",
+        "expected_cents",
+        "status"
+      ],
+      "title": "OracleResult",
+      "type": "object"
+    },
+    "OracleStatus": {
+      "enum": [
+        "ok",
+        "unavailable",
+        "invalid"
+      ],
+      "title": "OracleStatus",
+      "type": "string"
+    },
+    "RouteDecision": {
+      "additionalProperties": false,
+      "properties": {
+        "choice": {
+          "$ref": "#/$defs/Strategy"
+        },
+        "confidence": {
+          "anyOf": [
+            {
+              "ge": 0.0,
+              "le": 1.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Confidence"
+        },
+        "eligible": {
+          "items": {
+            "$ref": "#/$defs/Strategy"
+          },
+          "maxItems": 3,
+          "minItems": 1,
+          "title": "Eligible",
+          "type": "array"
+        },
+        "latency_ms": {
+          "anyOf": [
+            {
+              "maximum": 9223372036854775807,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Latency Ms"
+        },
+        "mode": {
+          "$ref": "#/$defs/RouteMode"
+        },
+        "model_id": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9._:@/+=-]{1,128}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Model Id"
+        },
+        "probabilities": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "ge": 0.0,
+                "le": 1.0,
+                "type": "number"
+              },
+              "propertyNames": {
+                "$ref": "#/$defs/Strategy"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Probabilities"
+        },
+        "provider_request_id": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9._:@/+=-]{1,128}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Provider Request Id"
+        },
+        "reason_code": {
+          "$ref": "#/$defs/RouteReasonCode"
+        }
+      },
+      "required": [
+        "choice",
+        "eligible",
+        "mode",
+        "model_id",
+        "probabilities",
+        "confidence",
+        "provider_request_id",
+        "latency_ms",
+        "reason_code"
+      ],
+      "title": "RouteDecision",
+      "type": "object"
+    },
+    "RouteMode": {
+      "enum": [
+        "live",
+        "stub",
+        "fallback",
+        "policy"
+      ],
+      "title": "RouteMode",
+      "type": "string"
+    },
+    "RouteReasonCode": {
+      "enum": [
+        "provider_choice",
+        "stub_choice",
+        "single_eligible",
+        "call_budget",
+        "provider_unavailable",
+        "provider_timeout",
+        "rate_limited",
+        "preview_unavailable",
+        "invalid_response",
+        "invalid_choice",
+        "invalid_probabilities"
+      ],
+      "title": "RouteReasonCode",
+      "type": "string"
+    },
+    "RunnerMode": {
+      "enum": [
+        "daytona",
+        "offline_fixture"
+      ],
+      "title": "RunnerMode",
+      "type": "string"
+    },
+    "SandboxObservation": {
+      "additionalProperties": false,
+      "properties": {
+        "attempt_id": {
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+          "title": "Attempt Id",
+          "type": "string"
+        },
+        "commit_sha": {
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Commit Sha",
+          "type": "string"
+        },
+        "duration_ms": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "title": "Duration Ms",
+          "type": "integer"
+        },
+        "exit_code": {
+          "anyOf": [
+            {
+              "maximum": 9223372036854775807,
+              "minimum": -9223372036854775808,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Exit Code"
+        },
+        "harness_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Harness Sha256",
+          "type": "string"
+        },
+        "image_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Image Digest",
+          "type": "string"
+        },
+        "input_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Input Sha256",
+          "type": "string"
+        },
+        "outcome": {
+          "$ref": "#/$defs/ObservationOutcome"
+        },
+        "runner_mode": {
+          "$ref": "#/$defs/RunnerMode"
+        },
+        "sandbox_id": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9._:@/+=-]{1,128}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Sandbox Id"
+        },
+        "side": {
+          "$ref": "#/$defs/Side"
+        },
+        "snapshot_id": {
+          "pattern": "^[A-Za-z0-9._:@/+=-]{1,128}$",
+          "title": "Snapshot Id",
+          "type": "string"
+        },
+        "source_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Sha256",
+          "type": "string"
+        },
+        "started_at": {
+          "format": "date-time",
+          "title": "Started At",
+          "type": "string"
+        },
+        "stderr_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Stderr Sha256"
+        },
+        "stdout_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Stdout Sha256"
+        },
+        "truncated": {
+          "title": "Truncated",
+          "type": "boolean"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "maximum": 9223372036854775807,
+              "minimum": -9223372036854775808,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "attempt_id",
+        "side",
+        "commit_sha",
+        "source_sha256",
+        "input_sha256",
+        "runner_mode",
+        "snapshot_id",
+        "image_digest",
+        "harness_sha256",
+        "sandbox_id",
+        "started_at",
+        "duration_ms",
+        "outcome",
+        "value",
+        "exit_code",
+        "stdout_sha256",
+        "stderr_sha256",
+        "truncated"
+      ],
+      "title": "SandboxObservation",
+      "type": "object"
+    },
+    "SelectionReason": {
+      "enum": [
+        "max_eig",
+        "coverage_guard",
+        "replay"
+      ],
+      "title": "SelectionReason",
+      "type": "string"
+    },
+    "Side": {
+      "enum": [
+        "base",
+        "head",
+        "confirm"
+      ],
+      "title": "Side",
+      "type": "string"
+    },
+    "Strategy": {
+      "enum": [
+        "boundary",
+        "constraint",
+        "seeded_fuzz"
+      ],
+      "title": "Strategy",
+      "type": "string"
+    },
+    "TrustTier": {
+      "enum": [
+        "T1",
+        "T2",
+        "T3"
+      ],
+      "title": "TrustTier",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One committed logical probe (operator view, includes operator identifiers).",
+  "properties": {
+    "base": {
+      "$ref": "#/$defs/SandboxObservation"
+    },
+    "candidate": {
+      "$ref": "#/$defs/Candidate"
+    },
+    "candidate_pool_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Candidate Pool Sha256",
+      "type": "string"
+    },
+    "confirmation": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SandboxObservation"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "confirmation_status": {
+      "$ref": "#/$defs/ConfirmationStatus"
+    },
+    "eig_bits": {
+      "ge": 0.0,
+      "le": 3.0,
+      "title": "Eig Bits",
+      "type": "number"
+    },
+    "evidence_kind": {
+      "$ref": "#/$defs/EvidenceKind"
+    },
+    "exclusion_reason": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ExclusionReason"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "head": {
+      "$ref": "#/$defs/SandboxObservation"
+    },
+    "likelihood_mismatch": {
+      "additionalProperties": {
+        "ge": 0.0,
+        "le": 1.0,
+        "type": "number"
+      },
+      "propertyNames": {
+        "$ref": "#/$defs/HypothesisId"
+      },
+      "title": "Likelihood Mismatch",
+      "type": "object"
+    },
+    "oracle": {
+      "$ref": "#/$defs/OracleResult"
+    },
+    "posterior": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "ge": 0.0,
+            "le": 1.0,
+            "type": "number"
+          },
+          "propertyNames": {
+            "$ref": "#/$defs/HypothesisId"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Posterior"
+    },
+    "predictions": {
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "maximum": 9223372036854775807,
+            "minimum": -9223372036854775808,
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "propertyNames": {
+        "$ref": "#/$defs/HypothesisId"
+      },
+      "title": "Predictions",
+      "type": "object"
+    },
+    "prior": {
+      "additionalProperties": {
+        "ge": 0.0,
+        "le": 1.0,
+        "type": "number"
+      },
+      "propertyNames": {
+        "$ref": "#/$defs/HypothesisId"
+      },
+      "title": "Prior",
+      "type": "object"
+    },
+    "probe_no": {
+      "maximum": 15,
+      "minimum": 1,
+      "title": "Probe No",
+      "type": "integer"
+    },
+    "route": {
+      "$ref": "#/$defs/RouteDecision"
+    },
+    "selection_reason": {
+      "$ref": "#/$defs/SelectionReason"
+    }
+  },
+  "required": [
+    "probe_no",
+    "candidate",
+    "prior",
+    "posterior",
+    "likelihood_mismatch",
+    "predictions",
+    "evidence_kind",
+    "exclusion_reason",
+    "candidate_pool_sha256",
+    "selection_reason",
+    "route",
+    "oracle",
+    "base",
+    "head",
+    "confirmation",
+    "confirmation_status",
+    "eig_bits"
+  ],
+  "title": "ProbeRecord",
+  "type": "object"
+}

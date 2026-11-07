@@ -1,0 +1,5 @@
+{
+  "accepted_runs_per_hour": 6,
+  "max_active_per_requester": 1,
+  "max_active_runs": 2
+}

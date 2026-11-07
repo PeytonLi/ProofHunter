@@ -1,0 +1,151 @@
+{
+  "$defs": {
+    "IsolationStatus": {
+      "enum": [
+        "verified",
+        "unverified",
+        "failed",
+        "offline_fixture"
+      ],
+      "title": "IsolationStatus",
+      "type": "string"
+    },
+    "ReasonCode": {
+      "description": "Machine reason codes for errors, stop reasons and verdict reasons.",
+      "enum": [
+        "invalid_pr_url",
+        "repo_not_enrolled",
+        "fork_unsupported",
+        "revision_unavailable",
+        "oracle_unavailable",
+        "isolation_unverified",
+        "provider_unavailable",
+        "budget_exhausted",
+        "nondeterministic",
+        "coverage_insufficient",
+        "stale_event",
+        "conflicting_idempotency_key",
+        "internal_error",
+        "confirmed_evidence",
+        "coverage_complete",
+        "inputs_exhausted",
+        "deadline_exceeded",
+        "trust_failure",
+        "preexisting_mismatch_changed",
+        "unsupported_contract",
+        "source_invalid",
+        "invalid_request",
+        "unauthorized",
+        "forbidden",
+        "not_found",
+        "receipt_pending",
+        "replay_unavailable",
+        "rate_limited",
+        "payload_too_large",
+        "invalid_signature",
+        "feature_disabled",
+        "provider_timeout",
+        "provider_refused",
+        "provider_invalid_response",
+        "receipt_tampered",
+        "lease_lost"
+      ],
+      "title": "ReasonCode",
+      "type": "string"
+    },
+    "RunnerMode": {
+      "enum": [
+        "daytona",
+        "offline_fixture"
+      ],
+      "title": "RunnerMode",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Runner preflight result; live untrusted execution requires ``verified``.",
+  "properties": {
+    "checked_at": {
+      "format": "date-time",
+      "title": "Checked At",
+      "type": "string"
+    },
+    "config_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Config Fingerprint",
+      "type": "string"
+    },
+    "egress_denied": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Egress Denied"
+    },
+    "harness_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Harness Sha256",
+      "type": "string"
+    },
+    "image_digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Image Digest",
+      "type": "string"
+    },
+    "metadata_denied": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Metadata Denied"
+    },
+    "network_block_all": {
+      "title": "Network Block All",
+      "type": "boolean"
+    },
+    "reason_code": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ReasonCode"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "runner_mode": {
+      "$ref": "#/$defs/RunnerMode"
+    },
+    "snapshot_id": {
+      "pattern": "^[A-Za-z0-9._:@/+=-]{1,128}$",
+      "title": "Snapshot Id",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/IsolationStatus"
+    }
+  },
+  "required": [
+    "runner_mode",
+    "status",
+    "snapshot_id",
+    "image_digest",
+    "harness_sha256",
+    "network_block_all",
+    "egress_denied",
+    "metadata_denied",
+    "checked_at",
+    "config_fingerprint",
+    "reason_code"
+  ],
+  "title": "IsolationAttestation",
+  "type": "object"
+}

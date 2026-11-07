@@ -1,0 +1,43 @@
+{
+  "additionalProperties": false,
+  "description": "PR plus immutable IDs assigned server-side from trusted enrollment.",
+  "properties": {
+    "installation_id": {
+      "maximum": 9007199254740991,
+      "minimum": 1,
+      "title": "Installation Id",
+      "type": "integer"
+    },
+    "number": {
+      "maximum": 2147483647,
+      "minimum": 1,
+      "title": "Number",
+      "type": "integer"
+    },
+    "owner": {
+      "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9._-]{1,100}$",
+      "title": "Owner",
+      "type": "string"
+    },
+    "repo": {
+      "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9._-]{1,100}$",
+      "title": "Repo",
+      "type": "string"
+    },
+    "repo_id": {
+      "maximum": 9007199254740991,
+      "minimum": 1,
+      "title": "Repo Id",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "owner",
+    "repo",
+    "number",
+    "repo_id",
+    "installation_id"
+  ],
+  "title": "PrTarget",
+  "type": "object"
+}

@@ -1,0 +1,106 @@
+{
+  "$defs": {
+    "CheckConclusion": {
+      "enum": [
+        "success",
+        "failure",
+        "neutral"
+      ],
+      "title": "CheckConclusion",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Advisory Check Run intent stored transactionally with the receipt (outbox).",
+  "properties": {
+    "conclusion": {
+      "$ref": "#/$defs/CheckConclusion"
+    },
+    "execution_mode": {
+      "const": "live",
+      "title": "Execution Mode",
+      "type": "string"
+    },
+    "external_id": {
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+      "title": "External Id",
+      "type": "string"
+    },
+    "head_sha": {
+      "pattern": "^[0-9a-f]{40}$",
+      "title": "Head Sha",
+      "type": "string"
+    },
+    "installation_id": {
+      "maximum": 9007199254740991,
+      "minimum": 1,
+      "title": "Installation Id",
+      "type": "integer"
+    },
+    "name": {
+      "const": "ProofHunter",
+      "title": "Name",
+      "type": "string"
+    },
+    "owner": {
+      "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9._-]{1,100}$",
+      "title": "Owner",
+      "type": "string"
+    },
+    "receipt_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Receipt Sha256",
+      "type": "string"
+    },
+    "repo": {
+      "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9._-]{1,100}$",
+      "title": "Repo",
+      "type": "string"
+    },
+    "repo_id": {
+      "maximum": 9007199254740991,
+      "minimum": 1,
+      "title": "Repo Id",
+      "type": "integer"
+    },
+    "run_id": {
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "status": {
+      "const": "completed",
+      "title": "Status",
+      "type": "string"
+    },
+    "summary": {
+      "maxLength": 4000,
+      "title": "Summary",
+      "type": "string"
+    },
+    "title": {
+      "maxLength": 255,
+      "minLength": 1,
+      "title": "Title",
+      "type": "string"
+    }
+  },
+  "required": [
+    "run_id",
+    "owner",
+    "repo",
+    "repo_id",
+    "installation_id",
+    "head_sha",
+    "external_id",
+    "name",
+    "status",
+    "conclusion",
+    "title",
+    "summary",
+    "receipt_sha256",
+    "execution_mode"
+  ],
+  "title": "CheckIntent",
+  "type": "object"
+}

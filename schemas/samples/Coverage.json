@@ -1,0 +1,20 @@
+{
+  "coverage_guard_used": true,
+  "distinct_usable_pairs": 6,
+  "missing": [],
+  "observed": [
+    "empty",
+    "full_discount",
+    "half_cent",
+    "multi_item",
+    "singleton",
+    "zero_discount"
+  ],
+  "required": [
+    "empty",
+    "full_discount",
+    "half_cent",
+    "multi_item",
+    "zero_discount"
+  ]
+}

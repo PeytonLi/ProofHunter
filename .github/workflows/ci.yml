@@ -1,0 +1,28 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    env:
+      PROOFHUNTER_PROFILE: offline
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.13.7"
+      - run: uv python install 3.12
+      - run: uv sync --locked
+      - name: Setup gate (offline contracts)
+        run: UV_OFFLINE=1 python3 tools/gate.py setup
+      - name: Integrated gate (after G1 join)
+        if: hashFiles('src/proofhunter/pipeline.py') != ''
+        run: UV_OFFLINE=1 python3 tools/gate.py integrated

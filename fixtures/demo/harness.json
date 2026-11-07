@@ -1,0 +1,8 @@
+{
+  "description": "Offline fixture harness: executes only reviewed first-party fixture revisions in-process, keyed by exact source SHA-256. Never executes request bytes.",
+  "harness_version": "proofhunter-harness@1",
+  "image": "proofhunter-offline-fixture-image-v1",
+  "output_envelope": {"value": "signed 64-bit integer"},
+  "runner_mode": "offline_fixture",
+  "snapshot_id": "proofhunter-offline-fixture-v1"
+}

@@ -1,0 +1,28 @@
+{
+  "additionalProperties": false,
+  "description": "Legal input of ``checkout-rounding@1``.",
+  "properties": {
+    "discount_percent": {
+      "maximum": 100,
+      "minimum": 0,
+      "title": "Discount Percent",
+      "type": "integer"
+    },
+    "prices_cents": {
+      "items": {
+        "maximum": 10000,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "maxItems": 8,
+      "title": "Prices Cents",
+      "type": "array"
+    }
+  },
+  "required": [
+    "prices_cents",
+    "discount_percent"
+  ],
+  "title": "CandidateInput",
+  "type": "object"
+}

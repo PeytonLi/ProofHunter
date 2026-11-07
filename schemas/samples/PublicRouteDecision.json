@@ -1,0 +1,18 @@
+{
+  "choice": "constraint",
+  "confidence": 0.6,
+  "eligible": [
+    "boundary",
+    "constraint",
+    "seeded_fuzz"
+  ],
+  "latency_ms": 0,
+  "mode": "stub",
+  "model_id": null,
+  "probabilities": {
+    "boundary": 0.2,
+    "constraint": 0.6,
+    "seeded_fuzz": 0.2
+  },
+  "reason_code": "stub_choice"
+}
