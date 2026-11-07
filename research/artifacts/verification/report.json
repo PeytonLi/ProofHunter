@@ -1,0 +1,70 @@
+[
+  {
+    "gate": "production_frozen",
+    "passed": true,
+    "stats": {},
+    "findings": []
+  },
+  {
+    "gate": "schemas_frozen",
+    "passed": true,
+    "stats": {
+      "models": 11
+    },
+    "findings": []
+  },
+  {
+    "gate": "schema:ProtocolV1:protocol-v1.json",
+    "passed": true,
+    "stats": {
+      "rows": 1,
+      "invalid": 0
+    },
+    "findings": []
+  },
+  {
+    "gate": "schema:SpendPolicy:spend-policy.json",
+    "passed": true,
+    "stats": {
+      "rows": 1,
+      "invalid": 0
+    },
+    "findings": []
+  },
+  {
+    "gate": "split_leakage",
+    "passed": false,
+    "stats": {},
+    "findings": [
+      {
+        "code": "no_manifest",
+        "message": "no CaseManifest found",
+        "severity": "error",
+        "subject": null
+      }
+    ]
+  },
+  {
+    "gate": "cost_ledger",
+    "passed": true,
+    "stats": {
+      "entries": 0,
+      "usd_by_status": {},
+      "unknown_cost_entries": 0,
+      "usd_by_category": {},
+      "paid_jobs": 0,
+      "raw_rows": 0,
+      "raw_rows_unknown_cost": 0
+    },
+    "findings": []
+  },
+  {
+    "gate": "teardown_ledger",
+    "passed": true,
+    "stats": {
+      "paid_providers": [],
+      "resources": 0
+    },
+    "findings": []
+  }
+]
