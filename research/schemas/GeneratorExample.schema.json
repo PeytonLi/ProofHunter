@@ -1,0 +1,356 @@
+{
+  "$defs": {
+    "ContextFile": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "maxLength": 65536,
+          "title": "Content",
+          "type": "string"
+        },
+        "path": {
+          "const": "checkout.py",
+          "title": "Path",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "side": {
+          "enum": [
+            "base",
+            "head"
+          ],
+          "title": "Side",
+          "type": "string"
+        }
+      },
+      "required": [
+        "side",
+        "path",
+        "sha256",
+        "content"
+      ],
+      "title": "ContextFile",
+      "type": "object"
+    },
+    "GeneratorInput": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_test_interface": {
+          "const": "checkout.total_cents(prices_cents, discount_percent)",
+          "title": "Allowed Test Interface",
+          "type": "string"
+        },
+        "behavior_spec_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Behavior Spec Sha256",
+          "type": "string"
+        },
+        "context_files": {
+          "items": {
+            "$ref": "#/$defs/ContextFile"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "title": "Context Files",
+          "type": "array"
+        },
+        "contract_id": {
+          "const": "checkout-rounding@1",
+          "title": "Contract Id",
+          "type": "string"
+        },
+        "prompt_format_version": {
+          "pattern": "^[A-Za-z0-9._:@/+-]{1,128}$",
+          "title": "Prompt Format Version",
+          "type": "string"
+        },
+        "unified_diff": {
+          "maxLength": 32768,
+          "title": "Unified Diff",
+          "type": "string"
+        }
+      },
+      "required": [
+        "prompt_format_version",
+        "contract_id",
+        "behavior_spec_sha256",
+        "allowed_test_interface",
+        "context_files",
+        "unified_diff"
+      ],
+      "title": "GeneratorInput",
+      "type": "object"
+    },
+    "HypothesisMode": {
+      "description": "Failure modes a provider may propose (H0 is always implicit).",
+      "enum": [
+        "per_item_rounding",
+        "half_even_rounding",
+        "other"
+      ],
+      "title": "HypothesisMode",
+      "type": "string"
+    },
+    "PlanConstraints": {
+      "additionalProperties": false,
+      "properties": {
+        "discount_percent": {
+          "anyOf": [
+            {
+              "maximum": 100,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Discount Percent"
+        },
+        "max_items": {
+          "anyOf": [
+            {
+              "maximum": 8,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Max Items"
+        },
+        "min_items": {
+          "anyOf": [
+            {
+              "maximum": 8,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Min Items"
+        },
+        "require_fractional_cent": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Require Fractional Cent"
+        }
+      },
+      "required": [
+        "min_items",
+        "max_items",
+        "discount_percent",
+        "require_fractional_cent"
+      ],
+      "title": "PlanConstraints",
+      "type": "object"
+    },
+    "SourceRef": {
+      "additionalProperties": false,
+      "properties": {
+        "line": {
+          "maximum": 100000,
+          "minimum": 1,
+          "title": "Line",
+          "type": "integer"
+        },
+        "path": {
+          "maxLength": 200,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.?(?:/|$))[A-Za-z0-9._/-]{1,200}$",
+          "title": "Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "line"
+      ],
+      "title": "SourceRef",
+      "type": "object"
+    },
+    "Strategy": {
+      "enum": [
+        "boundary",
+        "constraint",
+        "seeded_fuzz"
+      ],
+      "title": "Strategy",
+      "type": "string"
+    },
+    "TargetHypothesis": {
+      "additionalProperties": false,
+      "properties": {
+        "constraints": {
+          "$ref": "#/$defs/PlanConstraints"
+        },
+        "grounding_witness_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Grounding Witness Sha256"
+        },
+        "mode": {
+          "$ref": "#/$defs/HypothesisMode"
+        },
+        "rationale": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Rationale",
+          "type": "string"
+        },
+        "source_refs": {
+          "items": {
+            "$ref": "#/$defs/SourceRef"
+          },
+          "maxItems": 4,
+          "title": "Source Refs",
+          "type": "array"
+        },
+        "suggested_strategy": {
+          "$ref": "#/$defs/Strategy"
+        },
+        "triggering_conditions": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Triggering Conditions",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mode",
+        "rationale",
+        "source_refs",
+        "suggested_strategy",
+        "constraints",
+        "triggering_conditions",
+        "grounding_witness_sha256"
+      ],
+      "title": "TargetHypothesis",
+      "type": "object"
+    },
+    "TeacherRef": {
+      "additionalProperties": false,
+      "properties": {
+        "model_id": {
+          "pattern": "^[A-Za-z0-9._:@/+-]{1,128}$",
+          "title": "Model Id",
+          "type": "string"
+        },
+        "provider": {
+          "pattern": "^[A-Za-z0-9._:@/+-]{1,128}$",
+          "title": "Provider",
+          "type": "string"
+        },
+        "reviewed": {
+          "title": "Reviewed",
+          "type": "boolean"
+        },
+        "validated_against_execution": {
+          "const": true,
+          "title": "Validated Against Execution",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "model_id",
+        "provider",
+        "validated_against_execution",
+        "reviewed"
+      ],
+      "title": "TeacherRef",
+      "type": "object"
+    }
+  },
+  "$id": "https://proofhunter.research/schemas/v1/GeneratorExample.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "case_id": {
+      "pattern": "^[A-Za-z0-9._:@/+-]{1,128}$",
+      "title": "Case Id",
+      "type": "string"
+    },
+    "contains_fix_patch": {
+      "const": false,
+      "title": "Contains Fix Patch",
+      "type": "boolean"
+    },
+    "contains_template_params": {
+      "const": false,
+      "title": "Contains Template Params",
+      "type": "boolean"
+    },
+    "example_id": {
+      "pattern": "^[A-Za-z0-9._:@/+-]{1,128}$",
+      "title": "Example Id",
+      "type": "string"
+    },
+    "input": {
+      "$ref": "#/$defs/GeneratorInput"
+    },
+    "schema_version": {
+      "const": "research-generator-example-v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "split": {
+      "enum": [
+        "train",
+        "validation"
+      ],
+      "title": "Split",
+      "type": "string"
+    },
+    "target": {
+      "items": {
+        "$ref": "#/$defs/TargetHypothesis"
+      },
+      "maxItems": 6,
+      "minItems": 1,
+      "title": "Target",
+      "type": "array"
+    },
+    "teacher": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TeacherRef"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "example_id",
+    "case_id",
+    "split",
+    "input",
+    "target",
+    "teacher",
+    "contains_template_params",
+    "contains_fix_patch"
+  ],
+  "title": "GeneratorExample",
+  "type": "object"
+}

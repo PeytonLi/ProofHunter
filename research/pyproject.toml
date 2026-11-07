@@ -1,0 +1,39 @@
+[project]
+name = "proofhunter-research"
+version = "0.1.0"
+description = "Versioned ProofHunter research track (Track A ranking/generator benchmark, Track B design). Separate from the production lock."
+requires-python = ">=3.12,<3.13"
+license = { text = "Proprietary" }
+dependencies = [
+    # Production package, used read-only (EIG selector, oracle, contracts).
+    "proofhunter",
+    "pydantic>=2.11,<3",
+    "jsonschema>=4.23,<5",
+    "numpy>=2.1,<3",
+    "lightgbm>=4.5,<5",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3,<10",
+    "pytest-asyncio>=0.24,<2",
+    "ruff>=0.8,<0.18",
+    "mypy>=1.13,<3",
+]
+# Installed only inside the reviewed, pinned GPU training container (generator lane).
+generator = [
+    "torch>=2.5,<3",
+    "transformers>=4.46,<5",
+    "peft>=0.13,<1",
+    "bitsandbytes>=0.44,<1",
+    "accelerate>=1.0,<2",
+    "datasets>=3.0,<5",
+]
+
+[tool.uv]
+package = false
+default-groups = ["dev"]
+environments = ["sys_platform == 'linux' and platform_machine == 'x86_64'"]
+
+[tool.uv.sources]
+proofhunter = { path = "..", editable = true }

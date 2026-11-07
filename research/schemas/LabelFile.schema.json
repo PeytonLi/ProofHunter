@@ -1,0 +1,203 @@
+{
+  "$defs": {
+    "CaseLabel": {
+      "additionalProperties": false,
+      "properties": {
+        "case_id": {
+          "pattern": "^[A-Za-z0-9._:@/+-]{1,128}$",
+          "title": "Case Id",
+          "type": "string"
+        },
+        "defect_family": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9_]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Defect Family"
+        },
+        "expected_verdict": {
+          "$ref": "#/$defs/Verdict"
+        },
+        "kind": {
+          "$ref": "#/$defs/LabelKind"
+        },
+        "review_rationale": {
+          "anyOf": [
+            {
+              "maxLength": 2000,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Review Rationale"
+        },
+        "witness": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Witness"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "case_id",
+        "kind",
+        "defect_family",
+        "expected_verdict",
+        "witness",
+        "review_rationale"
+      ],
+      "title": "CaseLabel",
+      "type": "object"
+    },
+    "CheckoutInput": {
+      "additionalProperties": false,
+      "properties": {
+        "discount_percent": {
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Discount Percent",
+          "type": "integer"
+        },
+        "prices_cents": {
+          "items": {
+            "maximum": 10000,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 8,
+          "title": "Prices Cents",
+          "type": "array"
+        }
+      },
+      "required": [
+        "prices_cents",
+        "discount_percent"
+      ],
+      "title": "CheckoutInput",
+      "type": "object"
+    },
+    "LabelKind": {
+      "enum": [
+        "introduced_regression",
+        "existing_defect",
+        "clean"
+      ],
+      "title": "LabelKind",
+      "type": "string"
+    },
+    "Split": {
+      "enum": [
+        "train",
+        "validation",
+        "test"
+      ],
+      "title": "Split",
+      "type": "string"
+    },
+    "Verdict": {
+      "enum": [
+        "confirmed_regression",
+        "confirmed_existing_defect",
+        "no_defect_found",
+        "inconclusive"
+      ],
+      "title": "Verdict",
+      "type": "string"
+    },
+    "Witness": {
+      "additionalProperties": false,
+      "properties": {
+        "base_cents": {
+          "minimum": 0,
+          "title": "Base Cents",
+          "type": "integer"
+        },
+        "expected_cents": {
+          "minimum": 0,
+          "title": "Expected Cents",
+          "type": "integer"
+        },
+        "head_cents": {
+          "minimum": 0,
+          "title": "Head Cents",
+          "type": "integer"
+        },
+        "input": {
+          "$ref": "#/$defs/CheckoutInput"
+        },
+        "input_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Input Sha256",
+          "type": "string"
+        },
+        "reproduced_by": {
+          "const": "reviewed_template_execution",
+          "title": "Reproduced By",
+          "type": "string"
+        }
+      },
+      "required": [
+        "input",
+        "input_sha256",
+        "expected_cents",
+        "base_cents",
+        "head_cents",
+        "reproduced_by"
+      ],
+      "title": "Witness",
+      "type": "object"
+    }
+  },
+  "$id": "https://proofhunter.research/schemas/v1/LabelFile.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Labels for one split. The test-split file is sealed (verification lane only).",
+  "properties": {
+    "labels": {
+      "items": {
+        "$ref": "#/$defs/CaseLabel"
+      },
+      "minItems": 1,
+      "title": "Labels",
+      "type": "array"
+    },
+    "manifest_cases_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Manifest Cases Sha256",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "research-labels-v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "sealed": {
+      "title": "Sealed",
+      "type": "boolean"
+    },
+    "split": {
+      "$ref": "#/$defs/Split"
+    }
+  },
+  "required": [
+    "schema_version",
+    "split",
+    "sealed",
+    "manifest_cases_sha256",
+    "labels"
+  ],
+  "title": "LabelFile",
+  "type": "object"
+}

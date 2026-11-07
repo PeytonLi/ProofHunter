@@ -1,0 +1,279 @@
+{
+  "$defs": {
+    "CostStatus": {
+      "enum": [
+        "measured",
+        "estimated",
+        "unknown"
+      ],
+      "title": "CostStatus",
+      "type": "string"
+    },
+    "LedgerCategory": {
+      "enum": [
+        "data_collection",
+        "training_gpu",
+        "model_inference",
+        "execution_infra",
+        "storage_idle",
+        "labeling"
+      ],
+      "title": "LedgerCategory",
+      "type": "string"
+    },
+    "LedgerPhase": {
+      "enum": [
+        "pilot",
+        "training",
+        "evaluation",
+        "contingency"
+      ],
+      "title": "LedgerPhase",
+      "type": "string"
+    },
+    "MeasurementMode": {
+      "enum": [
+        "offline",
+        "recorded",
+        "live"
+      ],
+      "title": "MeasurementMode",
+      "type": "string"
+    }
+  },
+  "$id": "https://proofhunter.research/schemas/v1/LedgerEntry.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "case_id": {
+      "anyOf": [
+        {
+          "pattern": "^[A-Za-z0-9._:@/+-]{1,128}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Case Id"
+    },
+    "category": {
+      "$ref": "#/$defs/LedgerCategory"
+    },
+    "coordinator_checkin_ref": {
+      "anyOf": [
+        {
+          "pattern": "^[A-Za-z0-9._:@/+-]{1,128}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Coordinator Checkin Ref"
+    },
+    "cost_status": {
+      "$ref": "#/$defs/CostStatus"
+    },
+    "cost_usd": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Cost Usd"
+    },
+    "entry_id": {
+      "pattern": "^[A-Za-z0-9._:@/+-]{1,128}$",
+      "title": "Entry Id",
+      "type": "string"
+    },
+    "estimated_job_usd": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Estimated Job Usd"
+    },
+    "lane": {
+      "enum": [
+        "dataset",
+        "ranker",
+        "generator",
+        "baselines",
+        "measurement",
+        "integration",
+        "verification"
+      ],
+      "title": "Lane",
+      "type": "string"
+    },
+    "measurement_mode": {
+      "$ref": "#/$defs/MeasurementMode"
+    },
+    "paid": {
+      "title": "Paid",
+      "type": "boolean"
+    },
+    "phase": {
+      "$ref": "#/$defs/LedgerPhase"
+    },
+    "pricing_date": {
+      "anyOf": [
+        {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Pricing Date"
+    },
+    "pricing_reference": {
+      "anyOf": [
+        {
+          "maxLength": 500,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Pricing Reference"
+    },
+    "provider": {
+      "pattern": "^[A-Za-z0-9._:@/+-]{1,128}$",
+      "title": "Provider",
+      "type": "string"
+    },
+    "quantity": {
+      "minimum": 0,
+      "title": "Quantity",
+      "type": "number"
+    },
+    "queue_ms": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Queue Ms"
+    },
+    "recorded_at": {
+      "format": "date-time",
+      "title": "Recorded At",
+      "type": "string"
+    },
+    "resource_id": {
+      "anyOf": [
+        {
+          "pattern": "^[A-Za-z0-9._:@/+-]{1,128}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Resource Id"
+    },
+    "run_id": {
+      "anyOf": [
+        {
+          "pattern": "^[A-Za-z0-9._:@/+-]{1,128}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Run Id"
+    },
+    "schema_version": {
+      "const": "research-ledger-v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "teardown_verified": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Teardown Verified"
+    },
+    "unit": {
+      "pattern": "^[A-Za-z0-9._:@/+-]{1,128}$",
+      "title": "Unit",
+      "type": "string"
+    },
+    "unit_price_usd": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Unit Price Usd"
+    },
+    "wall_ms": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Wall Ms"
+    }
+  },
+  "required": [
+    "schema_version",
+    "entry_id",
+    "recorded_at",
+    "lane",
+    "provider",
+    "category",
+    "phase",
+    "resource_id",
+    "run_id",
+    "case_id",
+    "quantity",
+    "unit",
+    "unit_price_usd",
+    "cost_usd",
+    "cost_status",
+    "pricing_reference",
+    "pricing_date",
+    "wall_ms",
+    "queue_ms",
+    "measurement_mode",
+    "paid",
+    "estimated_job_usd",
+    "coordinator_checkin_ref",
+    "teardown_verified"
+  ],
+  "title": "LedgerEntry",
+  "type": "object"
+}

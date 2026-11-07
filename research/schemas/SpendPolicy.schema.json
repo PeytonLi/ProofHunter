@@ -1,0 +1,140 @@
+{
+  "$defs": {
+    "ProviderGuard": {
+      "additionalProperties": false,
+      "properties": {
+        "hard_stop": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Hard Stop",
+          "type": "string"
+        },
+        "idle_shutdown_minutes": {
+          "anyOf": [
+            {
+              "maximum": 120,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Idle Shutdown Minutes"
+        },
+        "keys": {
+          "items": {
+            "pattern": "^[A-Z][A-Z0-9_]{1,63}$",
+            "type": "string"
+          },
+          "title": "Keys",
+          "type": "array"
+        },
+        "provider": {
+          "pattern": "^[A-Za-z0-9._:@/+-]{1,128}$",
+          "title": "Provider",
+          "type": "string"
+        },
+        "teardown_check": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Teardown Check",
+          "type": "string"
+        },
+        "use": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Use",
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "keys",
+        "use",
+        "hard_stop",
+        "idle_shutdown_minutes",
+        "teardown_check"
+      ],
+      "title": "ProviderGuard",
+      "type": "object"
+    }
+  },
+  "$id": "https://proofhunter.research/schemas/v1/SpendPolicy.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "approval_quote": {
+      "maxLength": 2000,
+      "minLength": 1,
+      "title": "Approval Quote",
+      "type": "string"
+    },
+    "mandatory_guards": {
+      "items": {
+        "maxLength": 2000,
+        "minLength": 1,
+        "type": "string"
+      },
+      "minItems": 3,
+      "title": "Mandatory Guards",
+      "type": "array"
+    },
+    "providers": {
+      "items": {
+        "$ref": "#/$defs/ProviderGuard"
+      },
+      "minItems": 1,
+      "title": "Providers",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "research-spend-policy-v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "single_job_checkin_usd": {
+      "maximum": 50.0,
+      "minimum": 50.0,
+      "title": "Single Job Checkin Usd",
+      "type": "number"
+    },
+    "status": {
+      "const": "user_approved_uncapped",
+      "title": "Status",
+      "type": "string"
+    },
+    "superseded_proposal": {
+      "patternProperties": {
+        "^[a-z][a-z0-9_]{0,63}$": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            }
+          ]
+        }
+      },
+      "title": "Superseded Proposal",
+      "type": "object"
+    },
+    "total_cap_usd": {
+      "title": "Total Cap Usd",
+      "type": "null"
+    }
+  },
+  "required": [
+    "schema_version",
+    "status",
+    "approval_quote",
+    "total_cap_usd",
+    "single_job_checkin_usd",
+    "mandatory_guards",
+    "superseded_proposal",
+    "providers"
+  ],
+  "title": "SpendPolicy",
+  "type": "object"
+}
