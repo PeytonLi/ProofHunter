@@ -21,8 +21,69 @@ Install with `uv sync --locked`, then run everything with `UV_OFFLINE=1 uv run -
 
 ## Mode boundaries
 
+### Live service role API
+
+```python
+from proofhunter.config import (
+    ServiceRole, load_settings, github_private_key_pem,
+    public_mode_config, mode_config_fingerprint,
+)
+from proofhunter.ports import ConfigError
+```
+
+`load_settings(environ: Mapping[str, str] | None = None, *,
+role: ServiceRole = ServiceRole.ALL) -> Settings` accepts an explicit mapping
+or the process environment. `ServiceRole` is defined alongside `Profile` in
+`proofhunter.contracts` and re-exported from `proofhunter.config`.
+Unknown roles raise `ConfigError`; there is no environment variable for role.
+
+| Role | Required live variables | Additional secret variables read |
+|---|---|---|
+| `all` (default) | `PROOFHUNTER_API_TOKEN`, `PROOFHUNTER_OPERATOR_TOKEN`, `MODEL_API_KEY`, `SUBQ_API_KEY`, `GITHUB_APP_ID`, one GitHub key source | `DAYTONA_API_KEY`, `GITHUB_WEBHOOK_SECRET`, `AGENT_SEED_PHRASE` (legacy behavior) |
+| `api` | `PROOFHUNTER_API_TOKEN`, `PROOFHUNTER_OPERATOR_TOKEN` | `GITHUB_WEBHOOK_SECRET` only when webhook enabled |
+| `worker` | `MODEL_API_KEY`, `SUBQ_API_KEY`, `GITHUB_APP_ID`, one GitHub key source | `DAYTONA_API_KEY` |
+| `agent` | `PROOFHUNTER_API_TOKEN`, `AGENT_SEED_PHRASE` | None |
+
+Both API tokens must differ wherever both are loaded. Worker/pipeline currently
+use neither control token, so worker reads neither. Other roles' secrets and
+GitHub App ID are never read and become `None`, even if present or malformed.
+Nonsecret configuration (including Daytona URL/snapshot/digest) remains shared
+to keep public configuration consistent between processes.
+
+Strict flag rules: `all` permits all three live flags; `api` permits only
+`PROOFHUNTER_ENABLE_GITHUB_WEBHOOK`; `worker` permits only
+`PROOFHUNTER_ENABLE_LIVE_RUNNER` and `PROOFHUNTER_ENABLE_GITHUB_CHECKS`;
+`agent` permits none. An enabled flag outside the role is a `ConfigError`, not
+silently ignored. Offline ignores all secrets and rejects all three live flags
+in every role. `PROOFHUNTER_ENABLE_INTAKE` is not a live feature flag.
+The enabled live runner additionally requires `DAYTONA_API_KEY`,
+`DAYTONA_SNAPSHOT`, `DAYTONA_IMAGE_DIGEST`; `DAYTONA_API_URL` is optional.
+An enabled webhook requires `GITHUB_WEBHOOK_SECRET`. Missing-variable errors
+contain variable names only, never values.
+
+GitHub key sources are `GITHUB_PRIVATE_KEY` (in-memory PEM) or
+`GITHUB_PRIVATE_KEY_PATH` (file fallback). For roles reading GitHub keys, setting
+both is an error; either satisfies the live requirement. Literal `\n` escapes
+are normalized to newlines. PEM BEGIN/END PRIVATE KEY shape is validated, not
+cryptographic usability. `github_private_key_pem(settings) -> SecretStr`
+returns validated material or reads/validates the fallback file on demand;
+missing/unreadable/malformed keys raise sanitized `ConfigError` without key or
+path contents. Offline never reads either source. Never log unwrapped secrets.
+
+`public_mode_config` and `mode_config_fingerprint` exclude role, key source,
+secrets, secret hashes and local paths. Identical public configuration has the
+same fingerprint across roles and PEM/path choices; the default fingerprint
+and public receipt schemas remain unchanged. Role-incompatible flags must be
+removed explicitly before loading; roles with differing public flags are not
+the same configuration.
+
+These contract tests do **not** exercise live calls. Service owners must opt
+into the role at their load sites; the GitHub factory must adopt the accessor
+before in-memory PEM can be used by the live adapter. CLI live execution is
+still gated independently.
+
 - `PROOFHUNTER_PROFILE=offline` is the default and the only profile used in automation. `proofhunter.config.load_settings` never reads provider credentials in this profile and raises `ConfigError` if any `PROOFHUNTER_ENABLE_*` live flag is true.
-- `live` requires the service token, a different operator token, `MODEL_API_KEY`, `SUBQ_API_KEY`, `GITHUB_APP_ID` and `GITHUB_PRIVATE_KEY_PATH`; the live runner additionally needs `DAYTONA_API_KEY`, `DAYTONA_SNAPSHOT`, `DAYTONA_IMAGE_DIGEST`; webhooks need `GITHUB_WEBHOOK_SECRET`.
+- `live` requirements are scoped by the explicit service role below; the default `all` retains the original required set (with an additional in-memory GitHub key alternative).
 - Provider origins are constants in `proofhunter.config` (`META_CHAT_COMPLETIONS_URL`, `SUBQ_DECISIONS_URL`, `SUBQ_MODELS_URL`, `GITHUB_API_ORIGIN`). They are not configurable and never user-supplied.
 - Live features default off: `PROOFHUNTER_ENABLE_LIVE_RUNNER`, `PROOFHUNTER_ENABLE_GITHUB_WEBHOOK`, `PROOFHUNTER_ENABLE_GITHUB_CHECKS`. The API binds to `127.0.0.1` by default.
 - Offline results are labeled `offline_fixture` everywhere. `ReceiptV1` rejects offline receipts that claim live provider modes or non-fixture observations, and `CheckIntent` only accepts `execution_mode="live"`, so an offline result can never become a GitHub check.

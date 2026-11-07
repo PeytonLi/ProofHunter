@@ -117,6 +117,13 @@ class Profile(StrEnum):
     LIVE = "live"
 
 
+class ServiceRole(StrEnum):
+    ALL = "all"
+    API = "api"
+    WORKER = "worker"
+    AGENT = "agent"
+
+
 class RunState(StrEnum):
     QUEUED = "queued"
     FETCHING = "fetching"
