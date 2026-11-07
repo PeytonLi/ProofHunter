@@ -233,3 +233,34 @@ def test_compare_reports_spec_arms(rows: dict[str, list[M.RankingObservation]],
     ci = report["paired_vs_primary"]["uniform_random"]
     assert ci["ci95_low"] <= ci["mrr_diff"] <= ci["ci95_high"]
     assert report["checkpoints"]["ranker"]["checkpoint_sha256"] == checkpoint[1]
+
+
+def test_v1_augment_matches_v2_extractor(rows: dict[str, list[M.RankingObservation]]) -> None:
+    from research.ranker.relabel import augment_v1
+
+    heur = set(features.GROUPS["heuristic"])
+    v1 = [r.model_copy(update={"feature_set_version": features.V1,
+                               "features": {k: v for k, v in r.features.items()
+                                            if k not in heur}})
+          for r in rows["train"]]
+    assert augment_v1(v1) == rows["train"]
+
+
+def test_heuristic_rank_matches_spec_arm(rows: dict[str, list[M.RankingObservation]]) -> None:
+    from research.ranker.compare import heuristic_key
+
+    group: dict[tuple[str, int, int], list[M.RankingObservation]] = {}
+    for r in rows["validation"]:
+        group.setdefault((r.case_id, r.episode_seed, r.decision_step), []).append(r)
+    for g in group.values():
+        top = min(g, key=lambda r: heuristic_key(r.candidate))
+        assert top.features["heuristic_rank"] == 0.0
+        assert top.features["heuristic_is_top"] == 1.0
+
+
+def test_selector_loads_frozen_real_v1() -> None:
+    ckpt = Path("research/artifacts/ranker/real-v1/checkpoints/dense_full")
+    if not ckpt.exists():
+        pytest.skip("real-v1 artifacts not present")
+    sel = load_ranker_selector(ckpt, arm_id="builtin_ranker")
+    assert getattr(sel, "_names", None) == features.feature_names("full", features.V1)

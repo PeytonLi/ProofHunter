@@ -15,9 +15,40 @@ from collections.abc import Iterable, Iterator
 from proofhunter import bayes
 from proofhunter import contracts as c
 from research.ranker.collect import context_for
-from research.ranker.features import FEATURE_SET_VERSION, CheckoutFeatures, builtin_plan
+from research.ranker.features import (
+    FEATURE_SET_VERSION,
+    V1,
+    CheckoutFeatures,
+    builtin_plan,
+    heuristic_group,
+)
 from research.schemas import interfaces as I
 from research.schemas import models as M
+
+
+def augment_v1(rows: Iterable[M.RankingObservation]) -> list[M.RankingObservation]:
+    """Upgrade dense ``ranker-features-v1`` rows to v2 by adding the heuristic group.
+
+    Dense collection logs every available candidate of a decision point (including unknown
+    rows), so a decision group's candidates are exactly ``state.available``; the added features
+    equal what ``CheckoutFeatures`` computes at collection time.
+    """
+    rows = list(rows)
+    groups: dict[tuple[str, int, str, int], list[M.CheckoutCandidate]] = {}
+    for r in rows:
+        if r.feature_set_version != V1:
+            raise ValueError(f"row {r.observation_id} is not {V1}")
+        if r.split not in (M.Split.TRAIN, M.Split.VALIDATION):
+            raise PermissionError(f"row {r.observation_id} is from split {r.split}")
+        key = (r.case_id, r.episode_seed, r.collection_policy, r.decision_step)
+        groups.setdefault(key, []).append(r.candidate)
+    heur = {k: heuristic_group([(x.input.prices_cents, x.input.discount_percent,
+                                 x.input_sha256) for x in v]) for k, v in groups.items()}
+    return [r.model_copy(update={
+        "feature_set_version": FEATURE_SET_VERSION,
+        "features": {**r.features, **heur[(r.case_id, r.episode_seed, r.collection_policy,
+                                            r.decision_step)][r.candidate.input_sha256]}})
+            for r in rows]
 
 
 def dataset_pool_seed(candidate_seed: int, replicate_seed: int) -> int:
@@ -65,3 +96,8 @@ def refeaturize(store: I.CaseStore,
                 step=row.decision_step, candidate_input_sha256=cand.input_sha256,
                 outcome=row.outcome, expected_cents=row.expected_cents,
                 base_cents=row.base_cents, head_cents=row.head_cents))
+
+
+def upgrade(rows: list[M.RankingObservation]) -> list[M.RankingObservation]:
+    """Dense v1 rows -> v2; anything else is returned unchanged."""
+    return augment_v1(rows) if rows and all(r.feature_set_version == V1 for r in rows) else rows

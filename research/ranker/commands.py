@@ -18,7 +18,8 @@ if TYPE_CHECKING:
     from research.ranker.executor import Reviewer
 
 # Heavy (lightgbm/numpy) imports stay inside handlers so research.cli resolves in any env.
-ABLATION_CHOICES = ("full", "no_belief", "no_belief_no_predictor")
+ABLATION_CHOICES = ("full", "no_belief", "no_belief_no_predictor", "no_heuristic",
+                    "no_diff")
 
 
 def _store(name: str, root: Path | None) -> tuple[I.CaseStore, Reviewer]:
@@ -94,11 +95,14 @@ def train_ranker(argv: Sequence[str]) -> int:
     ap.add_argument("--store", choices=("fixture", "dataset"),
                     help="re-featurize logged rows from another feature set via this store")
     ap.add_argument("--root", type=Path)
+    ap.add_argument("--grid", choices=("v1", "v2"), default="v1")
+    ap.add_argument("--jobs", type=int, default=1)
     a = ap.parse_args(list(argv))
     from research.ranker.features import FEATURE_SET_VERSION
-    from research.ranker.train import LambdaRankTrainer
+    from research.ranker.relabel import upgrade
+    from research.ranker.train import GRIDS, LambdaRankTrainer
 
-    train, validation = read_rows(a.train), read_rows(a.validation)
+    train, validation = upgrade(read_rows(a.train)), upgrade(read_rows(a.validation))
     if any(r.feature_set_version != FEATURE_SET_VERSION for r in train):
         if a.store is None:
             raise SystemExit("train rows use another feature set; pass --store/--root")
@@ -107,7 +111,8 @@ def train_ranker(argv: Sequence[str]) -> int:
         train = list(refeaturize(_store(a.store, a.root)[0], train))
     result = {}
     for ablation in a.ablation or ["full", "no_belief"]:
-        trainer = LambdaRankTrainer(ablation, group_by=a.group_by, weighting=a.weighting)
+        trainer = LambdaRankTrainer(ablation, group_by=a.group_by, weighting=a.weighting,
+                                    grid=GRIDS[a.grid], jobs=a.jobs)
         result[ablation] = {"checkpoint_sha256": trainer.train(train, validation,
                                                                 a.out / ablation),
                             "validation": trainer.report["validation_metrics"]}

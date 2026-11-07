@@ -102,3 +102,72 @@ ablation (peak RSS 6.1 GB), < 1 min per logged run; comparison < 1 min.
   `oracle.compute_coverage`; the integration runner should confirm equivalence.
 - Logged episode grouping leaks the stopping rule through `step`/history features (see FEATURES.md).
 - Fixture artifacts from the first handoff remain in `fixture-v1/` (unchanged).
+
+---
+
+# Real-v2 (bounded improvement round, validation only)
+
+real-v1 above is unchanged (`real-v1/SHA256SUMS` verifies). v2 artifacts are in `real-v2/`.
+
+## Diagnosis
+- The heuristic key is `(-n_distinct_predictions, |residue-50|, -n_items, input_sha256)`.
+  v1 lacked `n_distinct_predictions` (it had `n_predictors_differ`), the folded residue
+  distance, the combined key and any pool-relative rank. v2 adds all of them plus the heuristic
+  score/rank (`ranker-features-v2`, see `research/ranker/FEATURES.md`).
+- Adding them did not help. Top gain in v2_full is still `max_price`, `total_cents`, `diff_added_*`
+  and `discount_percent`; `heuristic_score` ranks 13th. Train MRR is 0.81 and validation MRR is 0.35:
+  LambdaRank fits cues that identify the train defect families, and those cues do not carry over
+  to the disjoint validation families. The heuristic's family-agnostic ordering generalizes better.
+- Dropping the diff group (`no_diff`) makes it worse (0.320), so removing features alone does not fix it.
+
+## Sweep
+`GRID_V2`: num_leaves {7,15,31,63} x min_data_in_leaf {20,100} x learning_rate {0.03,0.1} x
+num_boost_round {100,300} x label_gain {[0,1],[0,3],[0,10]} = 96 configs per ablation, 3 ablations
+(full, no_belief, no_diff) = **288 configs**, selected by validation MRR only. label_gain has no effect
+because relevance is binary (identical results across the three gains).
+
+## Checkpoints (sha256 of checkpoint.json)
+| name | params | sha256 |
+|---|---|---|
+| v2_full (primary, pre-declared) | leaves 31, min_data 100, lr 0.03, 300 rounds | `acf11ccb8215862a307092a7c5a8c4281826b0d985fc1590f0c33a6ce5557753` |
+| v2_no_belief | leaves 7, min_data 100, lr 0.03, 300 rounds | `4d1ef67da46d1a808504e7c316d009372e408bb347776d1ed382ac5fb5955b0e` |
+| v2_no_diff | leaves 31, min_data 100, lr 0.1, 100 rounds | `f8c0e82d52ce0e2dbf5675a1f119522fbf404802955e9333789cadb0d8bfe458` |
+
+## Validation (`real-v2/validation-comparison.json`, 747 groups, same bootstrap as v1)
+| arm | MRR | hit@1 |
+|---|---|---|
+| simple_heuristic | 0.557 | 0.452 |
+| v2_no_belief | 0.366 | 0.260 |
+| v1_dense_full (frozen) | 0.358 | 0.245 |
+| v2_full | 0.352 | 0.249 |
+| uniform_random | 0.343 | 0.174 |
+| v2_no_diff | 0.320 | 0.122 |
+| builtin_eig | 0.316 | 0.170 |
+
+v2_full minus arm, MRR, case-clustered bootstrap 95% CI (2,000 resamples, seed 20261107,
+243 cases with a positive group):
+- heuristic: −0.204 [−0.271, −0.139]
+- random: +0.009 [−0.048, +0.066]
+- EIG: +0.036 [−0.027, +0.099]
+- v1_dense_full: −0.006 [−0.035, +0.023]
+- v2_no_belief: −0.014 [−0.042, +0.013]
+
+**v2 does not beat the heuristic; it is frozen anyway.** No learned ranker beats random, EIG or v1
+with a CI that excludes zero. Validation stable hash `70fd1e20…fff80` (v2 view of the same dense
+validation rows). Correction to v1 text: the bootstrap is over the 243 validation cases with a
+positive decision group, not 360.
+
+## Regenerate
+```
+UV_OFFLINE=1 uv run --project research --locked python -m research.cli train-ranker \
+  --train dense/train.jsonl --validation dense/validation.jsonl --out v2/ckpt \
+  --grid v2 --jobs 7 --ablation full --ablation no_belief --ablation no_diff
+UV_OFFLINE=1 uv run --project research --locked python -m research.ranker.compare \
+  --validation dense/validation.jsonl --primary v2_full --out validation-comparison.json \
+  --checkpoint v2_full=... --checkpoint v2_no_belief=... --checkpoint v2_no_diff=... \
+  --checkpoint v1_dense_full=real-v1/checkpoints/dense_full --checkpoint v1_dense_no_belief=...
+```
+Dense v1 rows are upgraded to v2 features in memory (`relabel.upgrade`), with no recollection or execution.
+
+## Cost
+No paid calls. Local CPU about 30 min of wall time (sweep: 14m40s for full+no_belief, plus about 10 min for no_diff).

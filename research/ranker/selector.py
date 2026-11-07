@@ -8,7 +8,7 @@ from pathlib import Path
 import lightgbm as lgb
 import numpy as np
 
-from research.ranker.features import FEATURE_SET_VERSION, CheckoutFeatures, feature_names
+from research.ranker.features import SUPPORTED_VERSIONS, CheckoutFeatures, feature_names
 from research.ranker.train import CHECKPOINT_VERSION, sha256_file
 from research.schemas import interfaces as I
 
@@ -49,9 +49,9 @@ def load_ranker_selector(checkpoint: Path, *, arm_id: str) -> I.Selector:
     meta = json.loads((directory / "checkpoint.json").read_text())
     if meta["checkpoint_version"] != CHECKPOINT_VERSION:
         raise ValueError("unsupported checkpoint version")
-    if meta["feature_set_version"] != FEATURE_SET_VERSION:
+    if meta["feature_set_version"] not in SUPPORTED_VERSIONS:
         raise ValueError("checkpoint feature set does not match extractor")
-    names = feature_names(meta["ablation"])
+    names = feature_names(meta["ablation"], meta["feature_set_version"])
     if list(names) != meta["feature_names"]:
         raise ValueError("checkpoint feature names do not match extractor")
     model = directory / "model.txt"
