@@ -2,6 +2,69 @@ VERDICT: PASS
 
 # GitHub lane handoff
 
+## Live staging update (in-memory PEM factory and real demo PR pins)
+
+Branch `devin/1794083400-proofhunter-live/live-github`, from exact base
+`4140bf0dfab8d090181b6aea37cbb7e574eb75a6`. Only GitHub-owned paths changed.
+
+What changed:
+
+- `_session` now loads the App key through `proofhunter.config.github_private_key_pem`,
+  so `GITHUB_PRIVATE_KEY` (in memory) and the `GITHUB_PRIVATE_KEY_PATH` fallback both
+  work. Errors never echo key or path. Load sites should use
+  `load_settings(role=ServiceRole.WORKER)`; agent and API roles get no App ID or key, so
+  the factory refuses them. Disabled checks never build a session or read the key.
+- `GithubHTTP` takes an optional `observer`. Each call yields a `CallRecord` with method,
+  a route template (installation ID, PR number and SHAs replaced by placeholders), HTTP
+  status, latency in ms, sanitized `x-github-request-id` and UTC time. No headers, bodies
+  or credentials are kept. `create_source_port(..., observer=...)` is keyword-only and
+  optional, so the frozen signature still works.
+- `python -m proofhunter.github.smoke` is the operator smoke. It needs
+  `PROOFHUNTER_PROFILE=live`, worker-role settings and checks/webhooks off. It uses
+  the production factory, takes 1 to 4 `--case PR_URL BASE_SHA HEAD_SHA` cases, resolves
+  each through `GithubRepositoryValidator.resolve`, and stops on a SHA mismatch. Limits:
+  1 token call plus 7 calls per case, and 120 s total. The public report has no operator
+  IDs, token, key or source text. `--private-out` gets repo ID, installation ID and the
+  enrollment fingerprint.
+
+Live result, 2026-11-07 20:40:59Z to 20:41:02Z UTC, API version 2026-03-10: PASS. There
+were 15 calls in a budget of 15, all 200/201, with latencies of 143 to 390 ms. Config
+fingerprint `0b0129f0352c17f1da59266e8bd15bd9ebdcd0b2c338feb3801b972656fb01b4`. Token
+permissions were exactly contents, pull_requests and metadata read, with no checks.
+
+| PR | Pinned base | Pinned head | base blob / sha256 | head blob / sha256 |
+|---|---|---|---|---|
+| #1 buggy | aa8cfe2b3ec9f438363bc7de3e6aed6b4fce5db4 | d9d6443c5b3266cc8087b5fb30e5fe5c5198fdf6 | 8f0b603c / 07de083d...968f (387 B) | c9b75248 / 69918784...96b8 (283 B) |
+| #2 fixed | b2c8b83c9c150e6d85aeb5771290a95bb5410fcd | 9e4ed8d954edc6573cc3e592cadb64c5becb4efb | f903e7aa / 67ad174f...42ff (229 B) | 8f0b603c / 07de083d...968f (387 B) |
+
+Both PRs are merged, and GitHub still returned the original base and head SHAs. Every
+`checkout.py` was a `100644 blob` and matched its tree blob ID and recomputed Git blob
+SHA-1. As an independent check, a plain `git fetch` of the public demo repo at those
+four commits gave the same blob IDs, SHA-256 values and sizes. No code was executed and
+the demo repo was not modified.
+
+Known gaps:
+
+- Setup/config: the saved `PROOFHUNTER_GITHUB_APP_PRIVATE_KEY` is one line, with
+  newlines collapsed to spaces. `config._validated_pem` rejects it. For this smoke the
+  operator rebuilt the newlines in process memory before binding `GITHUB_PRIVATE_KEY`.
+  Either re-save the secret with real or `\n` newlines, or have setup accept
+  whitespace-separated single-line PEM.
+- Setup/config: worker role also requires `MODEL_API_KEY` and `SUBQ_API_KEY`, so a
+  GitHub-only smoke has to load them even though it never uses them. A scoped GitHub
+  role or per-provider check would be tighter.
+- Integration: the staging enrollment for `PeytonLi/ProofHunter-Demo` lives only on the
+  operator host, not in git. Its snapshot and image digest fields are still the offline
+  example values until the runner gate passes.
+- Checks and webhooks stay off. No checks permission was requested.
+
+Commands (offline, `UV_OFFLINE=1 PROOFHUNTER_PROFILE=offline`): `uv sync --locked`,
+`pytest -q tests/github` (135 passed), full `pytest -q` (908 passed), `ruff check .`,
+`mypy src bench tools tests/integration`, `tools/gate.py setup` and `integrated`
+(PASSED). No pre-commit config exists.
+
+## Original offline handoff
+
 Branch: `devin/1794078900-proofhunter/github`
 
 Starting G0 SHA: `5c3aecd0ec98eb7ad1a91c43d85bf940d52d67cf` (not current main).

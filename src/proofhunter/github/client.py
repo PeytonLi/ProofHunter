@@ -2,7 +2,10 @@
 
 import asyncio
 import json
+import re
+import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -40,10 +43,58 @@ def unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return result
 
 
+_REQUEST_ID = re.compile(r"[0-9A-Fa-f:]{1,80}")
+
+
+def route_template(path: str) -> str:
+    """Public-safe route: no installation ID, PR number, SHA or query values."""
+    path = re.sub(r"^/app/installations/[0-9]+/", "/app/installations/{installation_id}/", path)
+    path = re.sub(r"/pulls/[0-9]+$", "/pulls/{number}", path)
+    return re.sub(r"/[0-9a-f]{40}$", "/{sha}", path)
+
+
+@dataclass(frozen=True)
+class CallRecord:
+    """Sanitized live-call evidence. Never holds bodies, headers or credentials."""
+
+    method: str
+    route: str
+    status: int | None
+    latency_ms: int
+    request_id: str | None
+    utc: datetime
+
+
 class GithubHTTP:
-    def __init__(self, client: httpx.AsyncClient, api_version: str = "2026-03-10") -> None:
+    def __init__(
+        self,
+        client: httpx.AsyncClient,
+        api_version: str = "2026-03-10",
+        *,
+        observer: Callable[[CallRecord], None] | None = None,
+    ) -> None:
         self.client = client
         self.api_version = api_version
+        self.observer = observer
+
+    def _observe(self, method: str, path: str, started: float, response: Any) -> None:
+        if self.observer is None:
+            return
+        status = request_id = None
+        if isinstance(response, httpx.Response):
+            status = response.status_code
+            raw = response.headers.get("x-github-request-id", "")
+            request_id = raw if _REQUEST_ID.fullmatch(raw) else None
+        self.observer(
+            CallRecord(
+                method=method,
+                route=route_template(path),
+                status=status,
+                latency_ms=round((time.monotonic() - started) * 1000),
+                request_id=request_id,
+                utc=utcnow(),
+            )
+        )
 
     async def request(
         self,
@@ -56,6 +107,8 @@ class GithubHTTP:
     ) -> Any:
         if not path.startswith("/") or path.startswith("//") or any(c in path for c in "?#%\\"):
             raise ValueError("invalid internal GitHub API path")
+        started = time.monotonic()
+        observed: httpx.Response | None = None
         try:
             async with (
                 asyncio.timeout(15),
@@ -73,6 +126,7 @@ class GithubHTTP:
                     timeout=15,
                 ) as response,
             ):
+                observed = response
                 if response.status_code != (201 if method == "POST" else 200):
                     retryable = response.status_code in {408, 429} or response.status_code >= 500
                     code = (
@@ -99,6 +153,8 @@ class GithubHTTP:
             ) from None
         except (ValueError, UnicodeError, RecursionError):
             raise failure(ReasonCode.PROVIDER_INVALID_RESPONSE, "invalid GitHub JSON") from None
+        finally:
+            self._observe(method, path, started, observed)
 
 
 class InstallationTokens:
