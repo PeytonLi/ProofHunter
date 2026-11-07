@@ -23,9 +23,10 @@ from fixtures import catalog
 from fixtures.reference import oracle_expected
 from proofhunter import bayes
 from proofhunter import contracts as c
-from research.baselines import frontier, meta, selectors
+from proofhunter.meta import build_request
+from research.baselines import frontier, grid, meta, selectors
 from research.baselines.config import load_models
-from research.baselines.ledger import JsonlLedger, model_call_entry
+from research.baselines.ledger import JsonlLedger, Usage, model_call_entry
 from research.schemas.interfaces import (
     EpisodeContext,
     EpisodeState,
@@ -37,6 +38,7 @@ from research.schemas.models import (
     ContextFile,
     CostStatus,
     GeneratorInput,
+    LedgerEntry,
     LedgerPhase,
     MeasurementMode,
     Outcome,
@@ -130,24 +132,68 @@ def run_episode(selector: Selector, ctx: EpisodeContext, case: str) -> dict[str,
             "episode_wall_ms": round((time.monotonic() - start) * 1000, 1)}
 
 
-def _usage(sel: Selector) -> dict[str, Any]:
-    client = getattr(sel, "client", None)
-    if client is None:
+def _usage(u: Usage | None) -> dict[str, Any]:
+    if u is None:
         return {}
-    u = client.usage
     return {"model_calls": u.calls, "input_tokens": u.input_tokens,
             "cached_tokens": u.cached_tokens, "output_tokens": u.output_tokens,
             "cost_usd": round(u.cost_usd, 6), "provider_wall_ms": round(u.wall_ms, 1)}
 
 
+def summarize(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Per grid arm: cases, cost, provider latency, calls and degraded reasons."""
+    out: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        if "role" not in row:
+            continue
+        s = out.setdefault(row["arm_id"], {"cases": 0, "cost_usd": 0.0, "model_calls": 0,
+                                           "provider_wall_ms": [], "pairs": [],
+                                           "degraded": {}})
+        s["cases"] += 1
+        s["cost_usd"] += row.get("cost_usd", 0.0)
+        s["model_calls"] += row.get("model_calls", 0)
+        s["provider_wall_ms"].append(row.get("provider_wall_ms", 0.0))
+        s["pairs"].append(row["pairs"])
+        if row.get("degraded"):
+            s["degraded"][row["degraded"]] = s["degraded"].get(row["degraded"], 0) + 1
+    for s in out.values():
+        walls = s.pop("provider_wall_ms")
+        s["cost_usd"] = round(s["cost_usd"], 6)
+        s["mean_cost_usd_per_case"] = round(s["cost_usd"] / s["cases"], 6)
+        s["provider_wall_ms_min_mean_max"] = [round(min(walls), 1),
+                                              round(sum(walls) / len(walls), 1),
+                                              round(max(walls), 1)]
+    return out
+
+
+def grid_row(arm: str, case: str, seed: int, ctx: EpisodeContext,
+             common: dict[str, Any]) -> dict[str, Any]:
+    role, model = grid.parse_arm(arm)
+    kw = {"case_id": ctx.case_id, "estimated_job_usd": ESTIMATED_JOB_USD, **common}
+    tags = {"role": role, "model_id": model, "provider": frontier.provider_of(model)}
+    if role == "generator":
+        gen = grid.make_generator(arm, **kw)
+        plan = gen.propose(generator_input(ctx))
+        sel = grid.make_arm_selector(arm, seed=seed)
+        row = run_episode(sel, make_context(case, seed, plan), case)
+        row["degraded"] = getattr(gen, "degraded", None)
+        row["hypotheses"] = [h.mode.value for h in plan.hypotheses]
+        return row | _usage(getattr(gen, "usage", None)) | tags
+    sel = grid.make_arm_selector(arm, seed=seed, **kw)
+    assert isinstance(sel, frontier.FrontierReviewer | frontier.FrontierAgent)
+    return run_episode(sel, ctx, case) | _usage(sel.client.usage) | tags
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--live", action="store_true")
-    parser.add_argument("--model", default=load_models()["frontier"]["primary_model_id"])
     parser.add_argument("--out", type=Path, default=ARTIFACTS)
     parser.add_argument("--case", action="append", choices=sorted({x for x, _ in CASES}))
     parser.add_argument("--tag", default="")
     parser.add_argument("--max-cases", type=int, default=len(CASES))
+    parser.add_argument("--arm", action="append", default=[],
+                        help="grid arms <role>:<model> (default: every non-skipped cell)")
+    parser.add_argument("--no-deterministic", action="store_true")
     args = parser.parse_args(argv)
     args.out.mkdir(parents=True, exist_ok=True)
     ledger: Ledger = JsonlLedger(args.out / "ledger.jsonl")
@@ -156,40 +202,21 @@ def main(argv: list[str] | None = None) -> int:
     rows: list[dict[str, Any]] = []
     builtin = c.builtin_hypothesis_payload()
     cases = [x for x in CASES if not args.case or x[0] in args.case][: args.max_cases]
+    arms = args.arm or list(grid.grid_arms())
     for case, seed in cases:
         ctx = make_context(case, seed, builtin)
-        arms: list[tuple[Selector, EpisodeContext]] = [
-            (selectors.make_selector(a, seed=seed), ctx) for a in
+        batch = [] if args.no_deterministic else [
+            run_episode(selectors.make_selector(a, seed=seed), ctx, case) for a in
             ("fixed_order", "uniform_random", "simple_heuristic", "builtin_eig")]
-        meta_row: dict[str, Any] = {}
         if args.live:
-            gen = meta.meta_generator(ledger=ledger)
-            assert isinstance(gen, meta.MetaGenerator)
-            gen.case_id, gen.estimated_job_usd = ctx.case_id, ESTIMATED_JOB_USD
-            t0 = time.monotonic()
-            plan = gen.propose(generator_input(ctx))
-            last = gen.last
-            meta_row = {"meta_wall_ms": round((time.monotonic() - t0) * 1000, 1),
-                        "meta_mode": last.mode.value if last else None,
-                        "meta_attempts": last.attempts if last else 0,
-                        "meta_reason": last.reason_code.value if last and last.reason_code
-                        else None, "meta_hypotheses": [h.mode.value for h in plan.hypotheses]}
-            arms.append((selectors.make_selector("meta_muse_spark_eig", seed=seed),
-                         make_context(case, seed, plan)))
-            for factory in (frontier.frontier_reviewer, frontier.frontier_agent):
-                sel = factory(args.model, estimated_job_usd=ESTIMATED_JOB_USD, **common)
-                arms.append((sel, ctx))
-        for sel, sctx in arms:
-            row = run_episode(sel, sctx, case) | _usage(sel)
-            if sel.arm_id == "meta_muse_spark_eig":
-                row |= meta_row
-            if sel.arm_id.startswith("frontier"):
-                row["frontier_model_id"] = args.model
+            batch += [grid_row(arm, case, seed, ctx, common) for arm in arms]
+        for row in batch:
             rows.append(row)
-            print(json.dumps(row, sort_keys=True))
+            print(json.dumps(row, sort_keys=True), flush=True)
     report = {"generated_at": datetime.now(UTC).isoformat(), "measurement_mode": mode.value,
-              "phase": "pilot", "frontier_model_id": args.model, "cases": [list(x) for x in cases],
-              "rows": rows}
+              "phase": "pilot", "grid_arms": arms if args.live else [],
+              "skipped_cells": grid.skipped(), "cases": [list(x) for x in cases],
+              "per_arm": summarize(rows), "rows": rows}
     out = args.out / f"smoke-{mode.value}{args.tag}.json"
     out.write_text(json.dumps(report, indent=2) + "\n")
     return 0
@@ -204,6 +231,40 @@ def record_exploratory_call(ledger: Ledger, cost_usd: float, model_id: str) -> N
         pricing_reference=f"{cfg['pricing_reference']}; model={model_id}; upper bound, usage "
         "not retained", pricing_date=cfg["pricing_date"], wall_ms=None, estimated_job_usd=0.01,
         phase=LedgerPhase.PILOT, mode=MeasurementMode.LIVE, run_id=None, case_id=None))
+
+
+def reprice_meta_rows(path: Path) -> int:
+    """Price legacy Meta rows recorded as ``unknown`` (no usage kept) at the upper bound.
+
+    Rewrites ``path`` in place (same entry ids); returns the number of rows repriced.
+    """
+    cfg = load_models()["meta"]
+    builtin = c.builtin_hypothesis_payload()
+    entries = [LedgerEntry.model_validate_json(line)
+               for line in path.read_text().splitlines() if line.strip()]
+    repriced = 0
+    out = []
+    for entry in entries:
+        if (entry.provider == "meta" and entry.cost_status is CostStatus.UNKNOWN
+                and entry.unit == "http_attempts" and entry.case_id):
+            _, case, seed = entry.case_id.split("-")
+            ctx = make_context(case, int(seed), builtin)
+            body = build_request(meta.planning_context(generator_input(ctx)), cfg["model_id"])
+            usage = meta.AttemptUsage(request_bytes=len(json.dumps(body).encode()))
+            price = cfg["pricing_usd_per_1m_tokens"][cfg["model_id"]]
+            entry = entry.model_copy(update={
+                "cost_usd": entry.quantity * meta.attempt_cost(usage, price),
+                "cost_status": CostStatus.ESTIMATED,
+                "pricing_reference": f"{cfg['pricing_reference']}; model={cfg['model_id']}; "
+                "repriced 2026-11-07, no usage recorded: upper bound per attempt "
+                "(input=ceil(request_bytes/3), output=max_completion_tokens)"})
+            entry = LedgerEntry.model_validate_json(entry.model_dump_json())
+            repriced += 1
+        out.append(entry.model_dump_json())
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text("".join(line + "\n" for line in out))
+    tmp.replace(path)
+    return repriced
 
 
 Main = Callable[[list[str] | None], int]
