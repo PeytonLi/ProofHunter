@@ -1,0 +1,196 @@
+{
+ "artifact_sha256": {
+  "case-manifest.json": "1f626d3eb695a80992586ea168bb26fac7cce3c7b5dd576810e73c4ee99590e0",
+  "exclusions.jsonl": "da6f86f8d2a4f2e29c315b6c39b365b844b1c9a785d6508ca8f93f623b865b0d",
+  "labels/test.sealed.json": "f9033e8a7be8bdd1aea06ff1e5a75842d214d1a7888ff0c9426c04c1c8dce676",
+  "labels/train.json": "3905f2041c4726d0054b54685bbd10446bb9a8266bf037fe9309cb922d49c395",
+  "labels/validation.json": "bddd8d213dc6958f8a4282b2164a8a34ac0908be855edda960491519c71546cc",
+  "reports/exclusion-report.json": "faeb9f6f71c1fa21e79fad22cd0b52831e2120477029941fb74961e3f7cda353",
+  "reports/split-audit.json": "fa2772ec3ea8554d2ad8b75d9146548fd6c95a37778b13845af806790e6b9f7f"
+ },
+ "clean_rule": "base and head equal the oracle on every probe; reviewed cosmetic refactor",
+ "dataset_commit": "cadc5b4d91828fec1adcb5341a11c2c466e57c1f",
+ "families": {
+  "bulk_discount_extra": {
+   "description": "unspecified extra discount",
+   "split": "train"
+  },
+  "ceil_rounding": {
+   "description": "round every fraction up",
+   "split": "validation"
+  },
+  "dedupe_prices": {
+   "description": "equal-priced lines merged",
+   "split": "train"
+  },
+  "discount_clamp_max": {
+   "description": "discount silently capped",
+   "split": "train"
+  },
+  "discount_floor_min": {
+   "description": "minimum discount forced",
+   "split": "validation"
+  },
+  "discount_ignored": {
+   "description": "discount dropped",
+   "split": "train"
+  },
+  "discount_off_by_one": {
+   "description": "discount shifted by one point",
+   "split": "train"
+  },
+  "discount_step": {
+   "description": "discount truncated to a step",
+   "split": "test"
+  },
+  "drop_max_item": {
+   "description": "most expensive line dropped",
+   "split": "validation"
+  },
+  "empty_basket_charge": {
+   "description": "empty basket charged",
+   "split": "train"
+  },
+  "floor_rounding": {
+   "description": "truncate instead of half-up",
+   "split": "train"
+  },
+  "full_discount_special": {
+   "description": "full discount special-cased (-1 means undiscounted subtotal)",
+   "split": "train"
+  },
+  "half_down_rounding": {
+   "description": "round half-cent ties down",
+   "split": "train"
+  },
+  "half_even_rounding": {
+   "description": "banker's rounding",
+   "split": "test"
+  },
+  "item_cap": {
+   "description": "only the first k lines counted",
+   "split": "test"
+  },
+  "min_charge": {
+   "description": "minimum charge applied",
+   "split": "train"
+  },
+  "offset_high_rounding": {
+   "description": "rounding threshold above the half cent",
+   "split": "test"
+  },
+  "offset_low_rounding": {
+   "description": "rounding threshold below the half cent",
+   "split": "train"
+  },
+  "per_line_rounding": {
+   "description": "discount and round each line separately, then sum",
+   "split": "train"
+  },
+  "price_cap": {
+   "description": "line prices capped",
+   "split": "train"
+  },
+  "skip_index": {
+   "description": "one line index skipped",
+   "split": "validation"
+  },
+  "small_price_dropped": {
+   "description": "cheap lines dropped",
+   "split": "train"
+  },
+  "subtotal_residue_glitch": {
+   "description": "off-by-one cent when subtotal % m == r (value = m*1000 + r*10 + sign)",
+   "split": "test"
+  },
+  "total_cap": {
+   "description": "total capped",
+   "split": "test"
+  }
+ },
+ "label_rule": "defect: base equals oracle on every probe (introduced) or base == head everywhere (existing); witness = first probe where head != oracle; fresh head re-execution in a new namespace must return the same value",
+ "manifest_cases_sha256": "ba3d927d994c4c54944ab42a03b2b253ac97bbfa0193fca37e28b22c87b21520",
+ "master_seed": 20261107,
+ "oracle": "proofhunter.oracle.rounding.rounding_half_up_once",
+ "probe_inputs": 3200,
+ "probe_set_sha256": "6d7510ce63db9046565e55afa797de25134e9d912ab12d51524312b2746df0f2",
+ "probe_set_version": "probe-set-v1",
+ "schema": "track-a-provenance-v1",
+ "shapes": {
+  "s01": {
+   "numerator": "mul",
+   "rounding": "addfloor",
+   "split": "train",
+   "subtotal": "sum"
+  },
+  "s02": {
+   "numerator": "mul",
+   "rounding": "divmod",
+   "split": "train",
+   "subtotal": "loop"
+  },
+  "s03": {
+   "numerator": "commuted",
+   "rounding": "float",
+   "split": "train",
+   "subtotal": "sum"
+  },
+  "s04": {
+   "numerator": "mul",
+   "rounding": "fraction",
+   "split": "train",
+   "subtotal": "reduce"
+  },
+  "s05": {
+   "numerator": "split",
+   "rounding": "splitmod",
+   "split": "train",
+   "subtotal": "while"
+  },
+  "s06": {
+   "numerator": "split",
+   "rounding": "addfloor",
+   "split": "train",
+   "subtotal": "loop"
+  },
+  "s07": {
+   "numerator": "mul",
+   "rounding": "decimal",
+   "split": "train",
+   "subtotal": "listcomp"
+  },
+  "s08": {
+   "numerator": "commuted",
+   "rounding": "divmod",
+   "split": "validation",
+   "subtotal": "reduce"
+  },
+  "s09": {
+   "numerator": "commuted",
+   "rounding": "addfloor",
+   "split": "validation",
+   "subtotal": "while"
+  },
+  "s10": {
+   "numerator": "split",
+   "rounding": "fraction",
+   "split": "test",
+   "subtotal": "loop"
+  },
+  "s11": {
+   "numerator": "commuted",
+   "rounding": "decimal",
+   "split": "test",
+   "subtotal": "while"
+  },
+  "s12": {
+   "numerator": "split",
+   "rounding": "float",
+   "split": "test",
+   "subtotal": "reduce"
+  }
+ },
+ "source_files": 3820,
+ "template_module_sha256": "e616b5abbc488ffc378e79edf89bdd3fd424d9b1cb00f9617a22f09deb78416b",
+ "template_registry_version": "checkout-templates-v1"
+}

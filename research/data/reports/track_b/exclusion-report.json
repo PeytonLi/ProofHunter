@@ -1,0 +1,73 @@
+{
+ "candidate_tests_cap": 200,
+ "dataset": "SWE-bench/SWE-smith-py@77cab9055d42ab4a5c25c89a8f937096db13558e",
+ "dataset_file_sha256": "a95685c667ca8fa0f6e819b328567c3bcb390e4eced81e291b546f3033ed248f",
+ "executed": false,
+ "metadata_survivors": 28671,
+ "pass_to_pass_ids_dropped_by_pattern": 95184,
+ "proposal_ids_not_reproduced": 130,
+ "proposal_ids_not_reproduced_examples": [
+  "PyCQA__flake8.cf1542ce.func_basic__crbjz0lr",
+  "PyCQA__flake8.cf1542ce.func_pm_ctrl_invert_if__4s0sjs67",
+  "andialbrecht__sqlparse.e57923b3.func_basic__es0exs2h",
+  "benoitc__gunicorn.bacbf8aa.combine_module__zhznem0c",
+  "benoitc__gunicorn.bacbf8aa.func_basic__h0sb0ym8",
+  "benoitc__gunicorn.bacbf8aa.func_basic__kkozefzi",
+  "benoitc__gunicorn.bacbf8aa.func_pm_class_rm_funcs__sev1ks3v",
+  "benoitc__gunicorn.bacbf8aa.func_pm_class_rm_funcs__won6d4n7",
+  "benoitc__gunicorn.bacbf8aa.func_pm_ctrl_shuffle__h0wtc2ne",
+  "benoitc__gunicorn.bacbf8aa.func_pm_ctrl_shuffle__nsdp2tf6"
+ ],
+ "proposal_rejections": {
+  "duplicate_patch": 46,
+  "f2p_gt_20": 10769,
+  "f2p_not_allowlistable_pytest_nodeid": 6381,
+  "lm_rewrite_label_noise": 3283,
+  "non_py_file_in_patch": 29,
+  "patch_touches_tests": 19,
+  "upstream_no_license": 700
+ },
+ "rejections": {
+  "duplicate_patch": 24,
+  "f2p_gt_20": 15002,
+  "f2p_not_allowlistable_pytest_nodeid": 3285,
+  "lm_rewrite_label_noise": 3185,
+  "non_py_file_in_patch": 35,
+  "patch_touches_tests": 6,
+  "survivor_not_selected_by_split_cap": 25191,
+  "upstream_no_license": 700
+ },
+ "repo_commit_source": "pins.json swe_smith_py_repos[*].mirror_main_sha",
+ "repos": {
+  "test": 30,
+  "train": 79,
+  "validation": 17
+ },
+ "repos_in_multiple_splits": [],
+ "rows": 50908,
+ "schema": "track-b-exclusion-report-v1",
+ "schema_gaps": [
+  "SweSmithTask.dataset_id is Literal['SWE-bench/SWE-smith'] but the pinned dataset is SWE-bench/SWE-smith-py; rows carry the schema literal and this report records the true id. Setup must widen the literal in a new schema version.",
+  "license_verified=True means a GitHub SPDX id was recorded by the assessment (not a manual LICENSE review); NOASSERTION repos are unverified/unknown."
+ ],
+ "shards": {
+  "train-00000-of-00011.parquet": "302a383bb9229c42063ff2364b2ea637e9e7a20d82e0d566614d3aba9234833d",
+  "train-00001-of-00011.parquet": "f15e5b8ab49866e93245a736056fab680d6dde8fb5c2ba89c06241cf12a32afe",
+  "train-00002-of-00011.parquet": "67512898124c03132ae5bbf78866610571a565724dcb6a2064009db8a6825613",
+  "train-00003-of-00011.parquet": "cc4c9812480faac2bc2de49e78a271d17cc8dcd89a8af2268246c3c8632fd27d",
+  "train-00004-of-00011.parquet": "6110c76e568c0ee03eb1c86d208887154c6406237f532436cf72ed2c265073ca",
+  "train-00005-of-00011.parquet": "517420b48132eda3c073e6b9bc5fecbaf34c3dea7f3fec49a46f8615584f8200",
+  "train-00006-of-00011.parquet": "8e55de0daa541c031779f17d6ef04ebc3a4e2caad708d3137edb4587d89e60f3",
+  "train-00007-of-00011.parquet": "c558fc3b6507f36ae520a8b23ac0cd71be7d7c8bb15c0b09060fe18d83d21045",
+  "train-00008-of-00011.parquet": "b861958c450293ee717c00659958d2f334a697edf804f33c10c75bd05b8787e7",
+  "train-00009-of-00011.parquet": "20923272dab2706c1e07e9e11a19373c5c642efbb594a3b1c104440cf8cfc132",
+  "train-00010-of-00011.parquet": "3b7c09dfa07209f550f210344caac267c2ac5ea9c6eefa84c67845ecdff0b6df"
+ },
+ "survivor_repos": 126,
+ "tasks": {
+  "test": 491,
+  "train": 2714,
+  "validation": 275
+ },
+ "trusted_tests": "candidate test ids come from FAIL_TO_PASS/PASS_TO_PASS and must be run from the clean mirror commit (repo_commit = mirror main sha); defective instance branches delete the failing tests"
+}
