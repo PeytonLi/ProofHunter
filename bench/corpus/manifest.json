@@ -1,0 +1,305 @@
+{
+  "version": "checkout-dev-v1",
+  "manifest_sha256": "fe7283035d129331e74024d81942dcd6738ffb63ab832e8813716761d0cac77c",
+  "sample": [
+    "per_line",
+    "half_even",
+    "item_count",
+    "existing",
+    "clean_divmod",
+    "clean_split"
+  ],
+  "cases": [
+    {
+      "case_id": "per_line",
+      "split": "dev",
+      "template_group": "per_line",
+      "base_path": "per_line/base.py",
+      "head_path": "per_line/checkout.py",
+      "base_revision": "62296292d9814f98870d23bcdc8f22206a5adeb3",
+      "head_revision": "475269d4baa44df8e238281aa74882e2906e7eee",
+      "base_sha256": "67ad174f81050136a42c6ffe92b823d771c8f9ad530cc5dcc731abea160f42ff",
+      "head_sha256": "d13dd6eb8c68b9cafa071366f7a3d9b0221aee3608b40a2da628f0d61828c2bd",
+      "contract_id": "checkout-rounding@1",
+      "contract_sha256": "f608d4b8c47ee74e1ef0fdc1f4d62c54f19d054489d4a5787809ebb1bccdbfa8",
+      "label": "defective",
+      "expected_verdict": "confirmed_regression",
+      "defect_family": "per_line",
+      "witness": {
+        "prices_cents": [
+          15,
+          15,
+          15
+        ],
+        "discount_percent": 10,
+        "expected": 41,
+        "head": 42
+      },
+      "review_rationale": null
+    },
+    {
+      "case_id": "half_even",
+      "split": "dev",
+      "template_group": "half_even",
+      "base_path": "half_even/base.py",
+      "head_path": "half_even/checkout.py",
+      "base_revision": "7e7996f6dc81f82a2a0ff9ad9b3812aeee381d54",
+      "head_revision": "171f7f941c7b1c908a57a45f00633541f8f27fea",
+      "base_sha256": "67ad174f81050136a42c6ffe92b823d771c8f9ad530cc5dcc731abea160f42ff",
+      "head_sha256": "480dc2d1c2f551ecd687cdaee8bb0ce2e3698bf3c6633e3703eeaf8025527df0",
+      "contract_id": "checkout-rounding@1",
+      "contract_sha256": "f608d4b8c47ee74e1ef0fdc1f4d62c54f19d054489d4a5787809ebb1bccdbfa8",
+      "label": "defective",
+      "expected_verdict": "confirmed_regression",
+      "defect_family": "half_even",
+      "witness": {
+        "prices_cents": [
+          1
+        ],
+        "discount_percent": 50,
+        "expected": 1,
+        "head": 0
+      },
+      "review_rationale": null
+    },
+    {
+      "case_id": "floor",
+      "split": "dev",
+      "template_group": "floor",
+      "base_path": "floor/base.py",
+      "head_path": "floor/checkout.py",
+      "base_revision": "dd2805bda3631aef825b510dab50c7e1e3dcda3b",
+      "head_revision": "1ae63da4f9275ce3ca93a93f4ac9a52d121d5fde",
+      "base_sha256": "67ad174f81050136a42c6ffe92b823d771c8f9ad530cc5dcc731abea160f42ff",
+      "head_sha256": "cc8738f1f1f015fcc5ab7a22ccf5bf2adb00f6a8fb30c271c1f9d9e6053a3d0d",
+      "contract_id": "checkout-rounding@1",
+      "contract_sha256": "f608d4b8c47ee74e1ef0fdc1f4d62c54f19d054489d4a5787809ebb1bccdbfa8",
+      "label": "defective",
+      "expected_verdict": "confirmed_regression",
+      "defect_family": "floor",
+      "witness": {
+        "prices_cents": [
+          1
+        ],
+        "discount_percent": 50,
+        "expected": 1,
+        "head": 0
+      },
+      "review_rationale": null
+    },
+    {
+      "case_id": "aggregate_order",
+      "split": "dev",
+      "template_group": "aggregate_order",
+      "base_path": "aggregate_order/base.py",
+      "head_path": "aggregate_order/checkout.py",
+      "base_revision": "fe013408410af6626f06abaf1b944d3ef952b846",
+      "head_revision": "273b5cf8deafedcbe490faa99e7104d03736b8b5",
+      "base_sha256": "67ad174f81050136a42c6ffe92b823d771c8f9ad530cc5dcc731abea160f42ff",
+      "head_sha256": "b1f08ca7e2daaa8644a6c1694f7d93d380eaf6450149ea66e0a5e9fea356b121",
+      "contract_id": "checkout-rounding@1",
+      "contract_sha256": "f608d4b8c47ee74e1ef0fdc1f4d62c54f19d054489d4a5787809ebb1bccdbfa8",
+      "label": "defective",
+      "expected_verdict": "confirmed_regression",
+      "defect_family": "aggregate_order",
+      "witness": {
+        "prices_cents": [
+          1
+        ],
+        "discount_percent": 50,
+        "expected": 1,
+        "head": 0
+      },
+      "review_rationale": null
+    },
+    {
+      "case_id": "ignored_discount",
+      "split": "dev",
+      "template_group": "ignored_discount",
+      "base_path": "ignored_discount/base.py",
+      "head_path": "ignored_discount/checkout.py",
+      "base_revision": "c8e0c1180dbd81ab36090d28a4d3bf426cec6dde",
+      "head_revision": "d352a85550c5ecd70f910c3e802dedf614753114",
+      "base_sha256": "67ad174f81050136a42c6ffe92b823d771c8f9ad530cc5dcc731abea160f42ff",
+      "head_sha256": "b1b7fd19c25cef2d94a3782666257411eb1e522d9cc33300d02b3ee7cea7476e",
+      "contract_id": "checkout-rounding@1",
+      "contract_sha256": "f608d4b8c47ee74e1ef0fdc1f4d62c54f19d054489d4a5787809ebb1bccdbfa8",
+      "label": "defective",
+      "expected_verdict": "confirmed_regression",
+      "defect_family": "ignored_discount",
+      "witness": {
+        "prices_cents": [
+          100
+        ],
+        "discount_percent": 50,
+        "expected": 50,
+        "head": 100
+      },
+      "review_rationale": null
+    },
+    {
+      "case_id": "clamped_discount",
+      "split": "dev",
+      "template_group": "clamped_discount",
+      "base_path": "clamped_discount/base.py",
+      "head_path": "clamped_discount/checkout.py",
+      "base_revision": "8033de5a4cc935711c74c7140505d411e30891d5",
+      "head_revision": "5537e86f4a3ef6d19be0e5ae97fb0dd47e608c96",
+      "base_sha256": "67ad174f81050136a42c6ffe92b823d771c8f9ad530cc5dcc731abea160f42ff",
+      "head_sha256": "b2a57e53724a43559f997c88774ad23a3eef0073e3a193203330f13bd96efa14",
+      "contract_id": "checkout-rounding@1",
+      "contract_sha256": "f608d4b8c47ee74e1ef0fdc1f4d62c54f19d054489d4a5787809ebb1bccdbfa8",
+      "label": "defective",
+      "expected_verdict": "confirmed_regression",
+      "defect_family": "clamped_discount",
+      "witness": {
+        "prices_cents": [
+          100
+        ],
+        "discount_percent": 99,
+        "expected": 1,
+        "head": 50
+      },
+      "review_rationale": null
+    },
+    {
+      "case_id": "item_count",
+      "split": "dev",
+      "template_group": "item_count",
+      "base_path": "item_count/base.py",
+      "head_path": "item_count/checkout.py",
+      "base_revision": "0b7f8c20c9d860c52b75c24e1aea8273b2944c57",
+      "head_revision": "1b50780cf2f75c646646048b455738715f0e5cef",
+      "base_sha256": "67ad174f81050136a42c6ffe92b823d771c8f9ad530cc5dcc731abea160f42ff",
+      "head_sha256": "7f78dbb326ecfaac82b5659ea6c0bddb065533ad44bf18fd1c66122685524bcc",
+      "contract_id": "checkout-rounding@1",
+      "contract_sha256": "f608d4b8c47ee74e1ef0fdc1f4d62c54f19d054489d4a5787809ebb1bccdbfa8",
+      "label": "defective",
+      "expected_verdict": "confirmed_regression",
+      "defect_family": "item_count",
+      "witness": {
+        "prices_cents": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "discount_percent": 0,
+        "expected": 9,
+        "head": 8
+      },
+      "review_rationale": null
+    },
+    {
+      "case_id": "full_discount",
+      "split": "dev",
+      "template_group": "full_discount",
+      "base_path": "full_discount/base.py",
+      "head_path": "full_discount/checkout.py",
+      "base_revision": "4d4772ccb916f839b083e56caf9966a7e9b51c56",
+      "head_revision": "21b34d8793dea830841bcfcad06dd9cd4113dbe6",
+      "base_sha256": "67ad174f81050136a42c6ffe92b823d771c8f9ad530cc5dcc731abea160f42ff",
+      "head_sha256": "554440c741a37a4cc1b797fdd46061c127773bc187979de28a2e366e8c1a5c3d",
+      "contract_id": "checkout-rounding@1",
+      "contract_sha256": "f608d4b8c47ee74e1ef0fdc1f4d62c54f19d054489d4a5787809ebb1bccdbfa8",
+      "label": "defective",
+      "expected_verdict": "confirmed_regression",
+      "defect_family": "full_discount",
+      "witness": {
+        "prices_cents": [
+          99
+        ],
+        "discount_percent": 100,
+        "expected": 0,
+        "head": 99
+      },
+      "review_rationale": null
+    },
+    {
+      "case_id": "clean_divmod",
+      "split": "dev",
+      "template_group": "clean_divmod",
+      "base_path": "clean_divmod/base.py",
+      "head_path": "clean_divmod/checkout.py",
+      "base_revision": "47dec79016f1a43cf2349e0693e522b4570f7baf",
+      "head_revision": "b0d0fcf37fe96756ff41c9956863a2de860e9734",
+      "base_sha256": "67ad174f81050136a42c6ffe92b823d771c8f9ad530cc5dcc731abea160f42ff",
+      "head_sha256": "2b43df6edbf25cc79eb7f187e07399fcc51c4781a3df9a243653195c750750c3",
+      "contract_id": "checkout-rounding@1",
+      "contract_sha256": "f608d4b8c47ee74e1ef0fdc1f4d62c54f19d054489d4a5787809ebb1bccdbfa8",
+      "label": "clean",
+      "expected_verdict": "no_defect_found",
+      "defect_family": "clean",
+      "witness": null,
+      "review_rationale": "Equivalent nonnegative integer half-up expression; divmod quotient, residue threshold, or commuted multiplication."
+    },
+    {
+      "case_id": "clean_split",
+      "split": "dev",
+      "template_group": "clean_split",
+      "base_path": "clean_split/base.py",
+      "head_path": "clean_split/checkout.py",
+      "base_revision": "d014336995a444ea864945580e8d797d11c3b58c",
+      "head_revision": "7fe9d4207eaaafe2da4835e72235512ef800c783",
+      "base_sha256": "67ad174f81050136a42c6ffe92b823d771c8f9ad530cc5dcc731abea160f42ff",
+      "head_sha256": "8acd28a50adcfa67e891e3d756cd26801220edfad0b83c5fce5b6d62bbf278d4",
+      "contract_id": "checkout-rounding@1",
+      "contract_sha256": "f608d4b8c47ee74e1ef0fdc1f4d62c54f19d054489d4a5787809ebb1bccdbfa8",
+      "label": "clean",
+      "expected_verdict": "no_defect_found",
+      "defect_family": "clean",
+      "witness": null,
+      "review_rationale": "Equivalent nonnegative integer half-up expression; divmod quotient, residue threshold, or commuted multiplication."
+    },
+    {
+      "case_id": "clean_commute",
+      "split": "dev",
+      "template_group": "clean_commute",
+      "base_path": "clean_commute/base.py",
+      "head_path": "clean_commute/checkout.py",
+      "base_revision": "d37a20d0b9d0f0a817bd8c4f3dd801025af6a495",
+      "head_revision": "fafa168ff37e6ef5e011e94617d51244ef04fff2",
+      "base_sha256": "67ad174f81050136a42c6ffe92b823d771c8f9ad530cc5dcc731abea160f42ff",
+      "head_sha256": "18d7f10f12a9e1a2f8336c2a6b577654d75a626db3489df0690369e9aac3f935",
+      "contract_id": "checkout-rounding@1",
+      "contract_sha256": "f608d4b8c47ee74e1ef0fdc1f4d62c54f19d054489d4a5787809ebb1bccdbfa8",
+      "label": "clean",
+      "expected_verdict": "no_defect_found",
+      "defect_family": "clean",
+      "witness": null,
+      "review_rationale": "Equivalent nonnegative integer half-up expression; divmod quotient, residue threshold, or commuted multiplication."
+    },
+    {
+      "case_id": "existing",
+      "split": "dev",
+      "template_group": "per_line",
+      "base_path": "existing/base.py",
+      "head_path": "existing/checkout.py",
+      "base_revision": "0c53b08a840e91be04930e01abaa9f23a1a71fcf",
+      "head_revision": "338bed100b316779ee39e77d1beff4cd675b8a71",
+      "base_sha256": "d13dd6eb8c68b9cafa071366f7a3d9b0221aee3608b40a2da628f0d61828c2bd",
+      "head_sha256": "d13dd6eb8c68b9cafa071366f7a3d9b0221aee3608b40a2da628f0d61828c2bd",
+      "contract_id": "checkout-rounding@1",
+      "contract_sha256": "f608d4b8c47ee74e1ef0fdc1f4d62c54f19d054489d4a5787809ebb1bccdbfa8",
+      "label": "defective",
+      "expected_verdict": "confirmed_existing_defect",
+      "defect_family": "existing",
+      "witness": {
+        "prices_cents": [
+          15,
+          15,
+          15
+        ],
+        "discount_percent": 10,
+        "expected": 41,
+        "head": 42
+      },
+      "review_rationale": null
+    }
+  ]
+}
