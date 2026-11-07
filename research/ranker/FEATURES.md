@@ -28,3 +28,20 @@ The chosen candidate's feedback advances the episode, which stops at the first r
 mismatch or after 6 steps. A LambdaRank group is one decision point `(case, seed, policy, step)`;
 `unknown` rows are dropped (never zero), groups with < 2 labelled rows are dropped, metrics use
 groups that contain a positive. `wall_ms` is the batch wall time amortised per invocation.
+
+## Real-data designs (dataset `ba3d927d…1520`)
+
+- **dense** (primary): `collect-observations --store dataset` with policy `eig_eps0.3` and replicate
+  seed 1633385816 executes the whole guarded pool at each step of every train/validation case
+  (reviewed template renderings only). Groups are decision points, as above. Train 439,377 rows
+  (10,415 groups); validation 68,482 rows (1,642 groups, 747 with a positive).
+- **logged**: the dataset lane's `eps0.3-heuristic-v1` log has one executed row per decision step,
+  so decision-point groups are singletons. `relabel.refeaturize` replays each logged episode
+  (pool `bayes.generate(builtin plan, pool_seed(candidate_seed, seed))`, pool hash checked, no
+  guard, recorded feedback) and recomputes `ranker-features-v1` without executing anything.
+  `train-ranker --group-by episode` groups one episode's picks; `--weighting ips` weights each
+  row by `min(1/selection_probability, 50)` normalised to mean 1. Caveat: episodes stop at the
+  first positive, so a positive is always the last pick and `step`/history features leak the
+  stopping rule inside an episode group (top gain feature is `step`). Use dense as primary.
+- Tuning and every reported comparison use dense **validation** decision points only
+  (`python -m research.ranker.compare`). Test rows and test labels are never read.

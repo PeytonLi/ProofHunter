@@ -36,7 +36,8 @@ def sha256_file(path: Path) -> str:
 
 def _fit(groups: metrics.Groups, params: dict[str, Any]) -> lgb.Booster:
     p = {**FIXED, **{k: v for k, v in params.items() if k != "num_boost_round"}}
-    data = lgb.Dataset(groups.x, label=groups.y, group=groups.sizes, free_raw_data=False,
+    data = lgb.Dataset(groups.x, label=groups.y, group=groups.sizes, weight=groups.w,
+                       free_raw_data=False,
                        params={"verbosity": -1})
     return lgb.train(p, data, num_boost_round=int(params["num_boost_round"]))
 
@@ -48,14 +49,18 @@ def _predict(booster: lgb.Booster, x: np.ndarray) -> np.ndarray:
 class LambdaRankTrainer:
     """``RankerTrainer``: writes model.txt and checkpoint.json; returns the checkpoint hash."""
 
-    def __init__(self, ablation: str = "full") -> None:
+    def __init__(self, ablation: str = "full", *, group_by: metrics.GroupBy = "decision",
+                 weighting: metrics.Weighting = "none") -> None:
         self.ablation = ablation
+        self.group_by: metrics.GroupBy = group_by
+        self.weighting: metrics.Weighting = weighting
         self.names = feature_names(ablation)
         self.report: dict[str, Any] = {}
 
     def train(self, train: Iterable[M.RankingObservation],
               validation: Iterable[M.RankingObservation], out_dir: Path) -> str:
-        tr = metrics.build(train, self.names, FEATURE_SET_VERSION, allowed=(M.Split.TRAIN,))
+        tr = metrics.build(train, self.names, FEATURE_SET_VERSION, allowed=(M.Split.TRAIN,),
+                           group_by=self.group_by, weighting=self.weighting)
         va = metrics.build(validation, self.names, FEATURE_SET_VERSION,
                            allowed=(M.Split.VALIDATION,))
         if not tr.sizes or not va.sizes or not tr.y.any():
@@ -80,6 +85,8 @@ class LambdaRankTrainer:
         meta = {
             "checkpoint_version": CHECKPOINT_VERSION, "feature_set_version": FEATURE_SET_VERSION,
             "ablation": self.ablation, "feature_names": list(self.names),
+            "train_group_by": self.group_by, "train_weighting": self.weighting,
+            "ips_clip": metrics.IPS_CLIP if self.weighting == "ips" else None,
             "lightgbm_version": lgb.__version__, "fixed_params": FIXED, "params": params,
             "model_sha256": sha256_file(model), "train_sha256": tr.sha256,
             "validation_sha256": va.sha256,

@@ -178,12 +178,20 @@ def collect_observations(store: I.CaseStore, split: M.Split, seeds: Sequence[int
         allowed = M.Split.VALIDATION
     else:
         raise PermissionError("collection is limited to train and validation")
+    yield from collect_cases(store, [c.case_id for c in store.manifest().cases
+                                     if c.split is allowed], allowed, seeds, policy,
+                             reviewer=reviewer, runner=runner)
+
+
+def collect_cases(store: I.CaseStore, case_ids: Sequence[str], split: TrainOrValidation,
+                  seeds: Sequence[int], policy: str, *, reviewer: Reviewer = verify_reviewed,
+                  runner: Runner = run_batch) -> Iterator[M.RankingObservation]:
     eps = epsilon(policy)
     extractor = CheckoutFeatures()
-    for case in store.manifest().cases:
-        if case.split is not allowed:
-            continue
-        sources = store.sources(case.case_id)
+    for case_id in case_ids:
+        sources = store.sources(case_id)
+        if sources.case.split is not split:
+            raise PermissionError(f"{case_id} is not in split {split}")
         reviewer(sources)
         for seed in seeds:
-            yield from _episode(sources, allowed, seed, policy, eps, runner, extractor)
+            yield from _episode(sources, split, seed, policy, eps, runner, extractor)
