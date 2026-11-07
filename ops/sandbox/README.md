@@ -4,6 +4,121 @@ Do **not** run the wrapper/canary on the worker or development machine. No live
 commands in this directory are part of CI. The adapter uses daytona **0.231.0**
 stable v0, not v2. Live mode and `PROOFHUNTER_ENABLE_LIVE_RUNNER` must both be on.
 
+Authorization for the proposed shared-key diagnostic was withdrawn before any
+Daytona API call. No sandbox or snapshot was created. The procedure below is
+documentation only, **not authorization to execute**. Keep the live runner disabled
+until a new, explicit provisioning/canary authorization and all gates below pass.
+
+## Official policy findings
+
+The [network limits documentation](https://www.daytona.io/docs/en/network-limits)
+states for Tier 1/2: "Organization-level network restrictions take precedence over
+sandbox-level settings" and "Essential services remain reachable."
+For Tier 3/4: "Essential services do not bypass a sandbox allow list or block-all
+setting." These statements explain why returned flags are not enforcement proof;
+they do not establish this account's actual tier or observed network behavior.
+
+The [Python SDK documentation](https://www.daytona.io/docs/en/python-sdk/sync/daytona/)
+documents default-snapshot creation, `network_block_all`, private `public=False`,
+custom `labels`, minute-based `auto_stop_interval`, and
+`auto_delete_interval=0` as "delete immediately upon stopping."
+`delete(..., wait=True)` waits for destruction. Default snapshots are suitable
+only for a separately authorized diagnostic, not the reviewed runner image gate.
+
+## Operator provisioning sequence (new authorization required)
+
+1. Disable intake and live runner execution. Obtain separate authorization for
+   the exact image registry, account/region, snapshot name, sandbox count and
+   cleanup budget. Do not reuse or modify ForkSafe/TrueForge resources. Create a
+   dedicated ProofHunter organization/project and minimal-permission key with
+   only the required sandbox create/read/exec/delete access. Use a separately
+   scoped provisioning identity if snapshot/image creation requires broader
+   privileges. If the provider cannot scope the existing shared account safely,
+   stop rather than reuse its key. Inject keys only into the operator process
+   environment; never into image layers, build args, files, sandbox env or logs.
+2. Verify account tier >= 3 and effective strict network policy using independent
+   operator evidence. Stop on Tier 1/2, uncertain tier, public ingress, or any
+   essential-service exception. Record evidence without credentials. Confirm a
+   real operator-owned HTTPS canary host resolves and accepts connections from
+   outside Daytona. This is not permission to run the canary locally.
+3. In an approved isolated build environment, use a team-owned,
+   Daytona-compatible Python 3.12 Linux base pinned as `registry/base@sha256:...`.
+   Review its pinned dependency inventory: it must already contain
+   `/usr/bin/python3`, `/usr/bin/sudo`, `/usr/bin/setpriv`, the `daytona` user,
+   nobody UID/GID 65534, and provider-required runtime support. No runtime package
+   installation, hooks, secrets or background processes sharing UID 65534.
+   Use only the reviewed wrapper/canary bytes and controlled-host file in the
+   build context. A derived Dockerfile must perform the equivalent of:
+
+   ```dockerfile
+   FROM <reviewed-team-base>@sha256:<verified-base-digest>
+   USER root
+   COPY --chown=0:0 wrapper.py canary.py canary-host /opt/proofhunter/
+   RUN chmod 0755 /opt/proofhunter && chmod 0444 /opt/proofhunter/* \
+       && install -d -o daytona -g daytona -m 0700 /var/proofhunter \
+       && test ! -e /tmp/proofhunter-target
+   COPY --chown=0:0 proofhunter-sudoers /etc/sudoers.d/proofhunter
+   RUN chmod 0440 /etc/sudoers.d/proofhunter \
+       && /usr/sbin/visudo -cf /etc/sudoers.d/proofhunter
+   USER daytona
+   ```
+
+   `proofhunter-sudoers` must contain exactly these grants (no broader inherited
+   grants may remain for `daytona`):
+
+   ```text
+   daytona ALL=(root) NOPASSWD: /usr/bin/python3 -I /opt/proofhunter/wrapper.py
+   daytona ALL=(root) NOPASSWD: /usr/bin/python3 -I /opt/proofhunter/canary.py
+   ```
+
+   Build and publish only through approved team infrastructure; retain the
+   registry's immutable manifest digest, build provenance and file hashes.
+   Never pass a mutable tag to the snapshot API. The Dockerfile above is a
+   required layout example, not a tested image builder shipped by this repo.
+4. With the newly authorized provisioning identity, register one uniquely named
+   reviewed snapshot (the earlier cancelled diagnostic authorized **zero**):
+
+   ```python
+   from daytona import CreateSnapshotParams, Resources
+
+   snapshot = client.snapshot.create(
+       CreateSnapshotParams(
+           name=reviewed_unique_snapshot_name,
+           image=reviewed_registry_reference_at_sha256_digest,
+           resources=Resources(cpu=1, memory=1, disk=3),
+       ),
+       timeout=120,
+   )
+   ```
+
+   Resources use whole CPU/GiB units. Confirm this disk size meets the image's
+   actual requirements before provisioning; stop if the reviewed image does not
+   fit. Do not silently resize/fallback. Wait for readiness and independently
+   verify the immutable name-to-image-digest mapping. Do not replace an existing
+   snapshot alias. Snapshot creation is a separate authorized operation, never a
+   side effect of sandbox creation via `CreateSandboxFromImageParams`.
+5. Configure the worker's exact snapshot, image digest, persistent private state
+   directory and reviewed harness hash. Instantiate the runner with dedicated
+   credentials in a controlled operator process with intake still disabled.
+   Before any approval file exists, run the bootstrap canary lifecycle below;
+   never bypass it by writing a speculative approval. Review exit status,
+   bounded exact JSON, returned resources/private ingress and all probe results.
+   Always delete and verify absence using labels plus the exact allocated ID/name
+   in the ledger. Any incomplete probe, exception or cleanup failure blocks release.
+6. Independently verify CPU/memory/time limits, child UID/no-new-privileges,
+   surviving-descendant cleanup, no secret injection, private ingress, bounded
+   output and source-upload binding with separately authorized benign tests.
+   Do not upload repository/target code as part of the network bootstrap.
+   Only then atomically install the exact approval JSON documented below in the
+   operator-private state directory (file mode 0600). Record the actual tier and
+   actual successful canary output; no unknown keys or truthy substitutes.
+7. Run `await runner.attest()` for a second fresh canary with approval in place;
+   require verified status and successful deletion. Only after this gate, source
+   enrollment/provenance and the independent isolation checks may intake/live
+   observations be enabled. Refresh within 15 minutes. Revoke approval and disable
+   intake on policy/image/harness/tier change or any cleanup/isolation failure.
+   Keep credentials off the sandbox and drain lifecycle threads before shutdown.
+
 ## Reviewed snapshot
 
 Build a team-owned Python 3.12 image with no secrets, host mounts, volumes, shared
@@ -111,6 +226,34 @@ environment and the labels below. `_delete` calls
 After approval, public `await runner.attest()` repeats this fresh lifecycle; it
 will not launch a bootstrap canary without approval. Never upload target source
 for the bootstrap or preflight.
+
+For clarity, `_create("preflight", 15)` uses the equivalent stable SDK parameters
+below and durably records its random allocation name before calling the API:
+
+```python
+CreateSandboxFromSnapshotParams(
+    name=ledger_recorded_unique_name,
+    snapshot=reviewed_unique_snapshot_name,
+    public=False,
+    network_block_all=True,
+    env_vars=ENV.copy(),
+    labels={"proofhunter.deployment": runner.deployment, "proofhunter.run": "preflight"},
+    volumes=[], secrets={}, os_user="daytona",
+    auto_stop_interval=1, auto_delete_interval=0, ttl_minutes=2,
+)
+```
+
+The bootstrap must check `_policy` before `exec`, require exit code zero, parse
+at most 4096 bytes using `strict_json`, and require `valid_canary(result)`.
+Use `try/finally` around the whole allocation/execution lifecycle and do not let
+an execution/parse failure skip deletion. Retain ambiguous allocations in the
+ledger; never retry create blindly. After deletion, fully consume
+`client.list(ListSandboxesQuery(labels={"proofhunter.deployment": runner.deployment,
+"proofhunter.run": "preflight"}), request_timeout=15)` and confirm that the exact
+allocated sandbox is absent. Do not delete other matching resources merely
+because their labels match. Keep only timestamp, sanitized operation/status,
+latency, exposed request IDs and short hashed sandbox identity in diagnostic
+evidence, never headers, provider bodies or raw credentials.
 
 ## Tagged orphan cleanup recipe
 
