@@ -7,16 +7,28 @@ import shutil
 from pathlib import Path
 from types import ModuleType
 from typing import Any
+from unittest.mock import Mock
 
 import pytest
 
 from bench.arms import ARMS, ArmInput, run_arm
 from bench.corpus import ROOT, load, oracle
+from bench.freeze import POLICY_PATH, load_policy
 from bench.harness import BenchRunner
 from bench.holdout import validate
 from bench.run import adversarial, enrolled, execute, main, prepare, seeds
 from bench.scoring import bootstrap, paired, score, summary
-from proofhunter.contracts import canonical_sha256
+from proofhunter import bayes
+from proofhunter import oracle as production_oracle
+from proofhunter.contracts import (
+    REQUIRED_COVERAGE_TAGS,
+    OracleStatus,
+    SandboxObservation,
+    Side,
+    TrustTier,
+    canonical_sha256,
+    sha256_hex,
+)
 from proofhunter.ports import RunnerPort
 
 
@@ -104,8 +116,15 @@ async def test_same_budget_bank_and_determinism() -> None:
         assert all(r["base_invocations"] <= 6 and r["head_invocations"] <= 6 and
                    r["confirm_invocations"] <= 1 for r in rows)
     assert not any(r["false_positive"] for r in first)
-    misses = [r for r in first if r["case_id"] == "item_count"]
-    assert all(r["censored"] and r["pairs_to_first_confirmed_witness"] is None for r in misses)
+    misses = [r for r in first if r["label"] == "defective" and r["censored"]]
+    assert misses
+    assert all(r["pairs_to_first_confirmed_witness"] is None for r in misses)
+    clean_verdicts = [r for r in first if r["verdict"] == "no_defect_found"]
+    assert clean_verdicts
+    assert all(not r["coverage"]["missing"] and
+               r["coverage"]["distinct_usable_pairs"] >= 3 and
+               set(REQUIRED_COVERAGE_TAGS) <= set(r["coverage"]["observed"])
+               for r in clean_verdicts)
     existing = [r for r in first if r["case_id"] == "existing" and not r["censored"]]
     assert existing
     assert all(r["verdict"] == "confirmed_existing_defect" for r in existing)
@@ -121,6 +140,11 @@ def test_bootstrap_and_accounting() -> None:
              "pairs_to_first_confirmed_witness": first}
             for arm, first in (("eig_deterministic", 1), ("random", None))]
     assert paired(rows, "eig_deterministic", "random", 3) == (1.0, 1.0, 1.0)
+    other = [{"case_id": "b", "label": "defective", "arm": arm,
+              "pairs_to_first_confirmed_witness": first}
+             for arm, first in (("eig_deterministic", None), ("random", 1))]
+    assert paired(rows * 20 + other, "eig_deterministic", "random", 3) == (
+        paired(rows + other, "eig_deterministic", "random", 3))
     assert "Misses are right-censored" in summary([])
 
 
@@ -142,22 +166,112 @@ def test_cli_valid_jsonl(tmp_path: Path) -> None:
     assert len(rows) == 120
     assert path.with_suffix(".summary.md").is_file()
     assert path.with_suffix(".csv").is_file()
+    assert b"\r\n" not in path.with_suffix(".csv").read_bytes()
     assert path.with_suffix(".adversarial.jsonl").is_file()
     with pytest.raises(SystemExit):
         main(["--output", str(path)])
 
 
-def test_holdout_overlap_refusal(tmp_path: Path) -> None:
-    root = tmp_path / "holdout"
-    shutil.copytree(ROOT, root)
-    data = json.loads((root / "manifest.json").read_text())
-    for case in data["cases"]:
-        case["split"] = "holdout"
-    data["manifest_sha256"] = canonical_sha256(
-        {k: v for k, v in data.items() if k != "manifest_sha256"})
-    (root / "manifest.json").write_text(json.dumps(data))
-    with pytest.raises(ValueError, match="overlaps dev/sample"):
-        validate(root)
+def test_holdout_refuses_dev_without_creating_labels() -> None:
+    with pytest.raises(ValueError, match="holdout split required"):
+        validate(ROOT)
+
+
+async def test_production_functions_not_setup_reference(monkeypatch: pytest.MonkeyPatch) -> None:
+    from fixtures import reference
+
+    def forbidden(*args: object, **kwargs: object) -> None:
+        pytest.fail("setup reference scoring was called")
+
+    for name in ("initialize", "generate", "select", "update", "evaluate", "classify_pair",
+                 "confirmation_status", "classify", "compute_coverage"):
+        monkeypatch.setattr(reference, name, forbidden)
+    calls = {}
+    for module, names in (
+        (bayes, ("initialize", "generate", "select", "update")),
+        (production_oracle, ("evaluate", "assess_probe", "compute_coverage", "classify")),
+    ):
+        for name in names:
+            spy = Mock(wraps=getattr(module, name))
+            monkeypatch.setattr(module, name, spy)
+            calls[name] = spy
+    rows, faults = await execute("sample", 17, ROOT)
+    assert all(spy.call_count > 0 for spy in calls.values())
+    sentinel = next(r["probes"][0] for r in rows
+                    if r["case_id"] == "per_line" and r["arm"] == "eig_deterministic")
+    assert [sentinel["oracle"]["expected_cents"], sentinel["base"]["value"],
+            sentinel["head"]["value"], sentinel["confirmation"]["value"]] == [41, 41, 42, 42]
+    assert {r["scenario"] for r in faults} >= {"unknown_source", "flaky_confirmation"}
+
+
+async def test_production_oracle_unavailable_prevents_execution(
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    inputs = await prepare(load(), ROOT, "per_line", 17)
+    evaluate = production_oracle.evaluate
+
+    def unavailable(*args: Any) -> Any:
+        return evaluate(*args).model_copy(update={"status": OracleStatus.UNAVAILABLE,
+                                                  "trust_tier": TrustTier.T3,
+                                                  "expected_cents": None})
+
+    monkeypatch.setattr(production_oracle, "evaluate", unavailable)
+    runner = BenchRunner(enrolled(load(), ROOT), inputs.enrollment)
+    row = await run_arm(inputs, "eig_deterministic", 17, runner)
+    assert row["reason_code"] == "oracle_unavailable"
+    assert row["verdict"] == "inconclusive"
+    assert runner.requests == []
+
+
+async def test_unreviewed_hash_is_not_executable() -> None:
+    inputs = await prepare(load(), ROOT, "per_line", 17)
+    content = "def total_cents(prices_cents, discount_percent):\n    return 123456\n"
+    runner = BenchRunner({sha256_hex(content.encode()): content.encode()}, inputs.enrollment)
+    assert runner.enrolled == {}
+
+
+async def test_production_assessment_binds_requested_source(
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    inputs = await prepare(load(), ROOT, "per_line", 17)
+    runner = BenchRunner(enrolled(load(), ROOT), inputs.enrollment)
+    observe = runner.observe
+
+    async def substituted(request: Any) -> SandboxObservation:
+        observation = await observe(request)
+        if request.side is Side.HEAD:
+            return observation.model_copy(update={"source_sha256": "0" * 64})
+        return observation
+
+    monkeypatch.setattr(runner, "observe", substituted)
+    row = await run_arm(inputs, "eig_deterministic", 17, runner)
+    assert row["reason_code"] == "trust_failure"
+    assert row["verdict"] == "inconclusive"
+    assert row["confirm_invocations"] == 0
+    probes = row["probes"]
+    assert isinstance(probes, list)
+    assert all(p["posterior"] is None for p in probes)
+
+
+async def test_policy_freeze_and_seed_refusal(tmp_path: Path) -> None:
+    policy = load_policy()
+    assert policy.master_seed == 17
+    assert policy.replicate_seeds == seeds(17)
+    assert policy.reviewed_first_party
+    with pytest.raises(ValueError, match="differ from frozen policy"):
+        await execute("sample", 18, ROOT)
+    data = json.loads(POLICY_PATH.read_text())
+    data["version"] = "tampered"
+    path = tmp_path / "policy.json"
+    path.write_text(json.dumps(data))
+    with pytest.raises(ValueError, match="policy hash drift"):
+        load_policy(path)
+    data["policy_sha256"] = canonical_sha256(
+        {k: v for k, v in data.items() if k != "policy_sha256"})
+    data["source_sha256"]["bench/arms.py"] = "0" * 64
+    data["policy_sha256"] = canonical_sha256(
+        {k: v for k, v in data.items() if k != "policy_sha256"})
+    path.write_text(json.dumps(data))
+    with pytest.raises(ValueError, match="implementation hash drift"):
+        load_policy(path)
 
 
 def test_no_network_imports() -> None:

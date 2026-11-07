@@ -10,7 +10,13 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 
 from fixtures import catalog
-from proofhunter.contracts import SourceFile, canonical_sha256, git_blob_sha1, sha256_hex
+from proofhunter.contracts import (
+    CandidateInput,
+    SourceFile,
+    canonical_sha256,
+    git_blob_sha1,
+    sha256_hex,
+)
 
 ROOT = Path(__file__).parent
 
@@ -19,9 +25,7 @@ def oracle(prices_cents: list[int], discount_percent: int) -> int:
     return (sum(prices_cents) * (100 - discount_percent) + 50) // 100
 
 
-class Witness(BaseModel):
-    prices_cents: list[int]
-    discount_percent: int
+class Witness(CandidateInput):
     expected: int
     head: int
 

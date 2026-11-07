@@ -7,16 +7,14 @@ from collections import Counter
 from dataclasses import dataclass
 from time import perf_counter_ns
 
-from fixtures import reference
 from fixtures.adapters import FixtureRoute, SequentialIds, initial_budget
+from proofhunter import bayes, oracle
 from proofhunter.contracts import (
-    BinaryOutcome,
     CandidateBank,
     CandidateInput,
     ConfirmationStatus,
     DecisionState,
     Enrollment,
-    EvidenceKind,
     ExecutionMode,
     ExecutionRequest,
     HypothesisPlan,
@@ -60,7 +58,12 @@ async def run_arm(inputs: ArmInput, arm: str, seed: int, runner: RunnerPort) -> 
     run_id = ids.new_run_id()
     attestation = await runner.attest()
     limits = initial_budget(attestation.checked_at).limits
-    belief = reference.initialize(inputs.plan).belief
+    belief = bayes.initialize(inputs.plan).belief
+    binding = oracle.ProvenanceBinding.for_run(
+        base_sha=inputs.base.commit_sha, head_sha=inputs.head.commit_sha,
+        base_source_sha256=inputs.base.content_sha256,
+        head_source_sha256=inputs.head.content_sha256, enrollment=inputs.enrollment,
+        execution_mode=ExecutionMode.OFFLINE_FIXTURE)
     route = FixtureRoute()
     used: set[str] = set()
     probes: list[ProbeRecord] = []
@@ -94,7 +97,7 @@ async def run_arm(inputs: ArmInput, arm: str, seed: int, runner: RunnerPort) -> 
         if not pool:
             stop = ReasonCode.INPUTS_EXHAUSTED
             break
-        coverage = reference.compute_coverage(probes, guard)
+        coverage = oracle.compute_coverage(probes, guard)
         decision = None
         if arm == "meta_snap_eig":
             eligible = inputs.bank.eligible_strategies(used)
@@ -111,14 +114,13 @@ async def run_arm(inputs: ArmInput, arm: str, seed: int, runner: RunnerPort) -> 
                 belief=belief.probabilities)
             decision = await route.choose(state, eligible)
             modes[decision.mode.value] += 1
-            modes["fallback"] += int(decision.mode is RouteMode.FALLBACK)
             pool = inputs.bank.pool_for(decision.choice, used)
         elif arm == "fixed_boundary":
             pool = [min(pool, key=lambda c: (not c.is_anchor,
                                              FIXED_ORDER.index(c.strategy), c.input_sha256))]
         elif arm == "random":
             pool = [rng.choice(pool)]
-        selection = reference.select(belief, pool, SelectionPolicy(
+        selection = bayes.select(belief, pool, SelectionPolicy(
             remaining_pairs=limits.max_pairs - len(probes), missing_coverage=coverage.missing))
         guard = guard or selection.reason is SelectionReason.COVERAGE_GUARD
         candidate = selection.candidate
@@ -128,25 +130,32 @@ async def run_arm(inputs: ArmInput, arm: str, seed: int, runner: RunnerPort) -> 
                 model_id=None, probabilities=None, confidence=None, provider_request_id=None,
                 latency_ms=None, reason_code=RouteReasonCode.SINGLE_ELIGIBLE)
         used.add(candidate.input_sha256)
-        oracle = reference.evaluate(inputs.enrollment, candidate)
+        expected = oracle.evaluate(inputs.enrollment, candidate)
+        if oracle.trusted_expected(expected) is None:
+            stop = ReasonCode.ORACLE_UNAVAILABLE
+            break
         base = await observe(Side.BASE, candidate.as_input())
         head = await observe(Side.HEAD, candidate.as_input())
-        kind, exclusion = reference.classify_pair(oracle, base, head)
+        assessment = oracle.assess_probe(expected, base, head,
+                                        input_digest=candidate.input_sha256, binding=binding)
         confirmation = None
-        if kind in (EvidenceKind.HEAD_MISMATCH, EvidenceKind.SHARED_MISMATCH) and (
+        if assessment.needs_confirmation and (
                 counts["confirm"] < limits.max_confirmations):
             confirmation = await observe(Side.CONFIRM, candidate.as_input())
-        status = reference.confirmation_status(head, confirmation)
+        assessment = oracle.assess_probe(expected, base, head, confirmation,
+                                        input_digest=candidate.input_sha256, binding=binding)
+        kind, exclusion = assessment.evidence_kind, assessment.exclusion_reason
+        status = assessment.confirmation_status
         posterior = None
         updated = belief
-        if exclusion is None:
-            outcome = BinaryOutcome.MATCH if kind is EvidenceKind.MATCH else BinaryOutcome.MISMATCH
-            updated = reference.update(belief, selection, outcome)
+        if assessment.outcome is not None:
+            updated = bayes.update(belief, selection, assessment.outcome)
             posterior = updated.probabilities
         probes.append(ProbeRecord(
             probe_no=len(probes) + 1, candidate=candidate,
             candidate_pool_sha256=selection.candidate_pool_sha256,
-            selection_reason=selection.reason, route=decision, oracle=oracle, base=base, head=head,
+            selection_reason=selection.reason, route=decision, oracle=expected,
+            base=base, head=head,
             confirmation=confirmation, confirmation_status=status, prior=belief.probabilities,
             posterior=posterior, likelihood_mismatch=selection.likelihood_mismatch,
             predictions=selection.predictions, eig_bits=selection.eig_bits,
@@ -156,21 +165,24 @@ async def run_arm(inputs: ArmInput, arm: str, seed: int, runner: RunnerPort) -> 
         if status is ConfirmationStatus.REPRODUCED:
             stop = ReasonCode.CONFIRMED_EVIDENCE
             break
-    verdict = reference.classify(probes, reference.compute_coverage(probes, guard), stop)
+    coverage = oracle.compute_coverage(probes, guard)
+    verdict = oracle.classify(probes, coverage, stop)
     first = verdict.counterexample_probe_no
     unusable = Counter(p.exclusion_reason.value for p in probes if p.exclusion_reason is not None)
     return {
         "arm": arm, "seed": seed, "bank_seed": inputs.bank.seed,
         "bank_sha256": inputs.bank.bank_sha256, "policy_versions": PolicyVersions().model_dump(),
-        "bench_policy": "bench-v1-anchor-boundary-constraint-fuzz-hash",
+        "bench_policy": "bench-v2-production-anchor-boundary-constraint-fuzz-hash",
         "budget": {"max_pairs": limits.max_pairs, "max_confirmations": limits.max_confirmations},
         "runner_mode": "offline_fixture", "provider_mode": "recorded/offline_fixture",
         "attempted_mode": "stub" if arm == "meta_snap_eig" else "none",
-        "provider_usage": dict(modes), "fallback_rate": modes["fallback"] / max(1, len(probes)),
+        "provider_usage": dict(modes),
+        "fallback_rate": modes["fallback"] / max(1, sum(modes.values())),
         "base_invocations": counts["base"], "head_invocations": counts["head"],
         "confirm_invocations": counts["confirm"],
         "pairs_to_first_confirmed_witness": first, "censored": first is None,
         "verdict": verdict.verdict.value, "reason_code": verdict.reason_code.value,
+        "coverage": coverage.model_dump(mode="json"),
         "unusable_by_reason": dict(unusable), "failures_by_reason": dict(failures),
         "wall_ms": (perf_counter_ns() - start) / 1_000_000,
         "replay_command": build_replay_command(ExecutionMode.OFFLINE_FIXTURE, run_id, first)
