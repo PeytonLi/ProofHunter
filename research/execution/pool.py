@@ -32,8 +32,14 @@ def pool_seed(candidate_seed: int, replicate_seed: int) -> int:
     return int(digest[:8], 16)
 
 
-def shared_pool(case: CaseRecord, protocol: ProtocolV1, replicate_seed: int | None = None
-                ) -> CandidateBank:
+def shared_pool(case: CaseRecord, protocol: ProtocolV1) -> CandidateBank:
+    """Frozen OWNERSHIP signature: the pool at ``case.candidate_seed``."""
+    return seeded_pool(case, protocol, None)
+
+
+def seeded_pool(
+    case: CaseRecord, protocol: ProtocolV1, replicate_seed: int | None
+) -> CandidateBank:
     """Production generator over the built-in plan; never depends on the arm."""
     if protocol.candidate_pool.get("generator") != "proofhunter.bayes.generate":
         raise ValueError("protocol names an unsupported candidate generator")
