@@ -1,3 +1,13 @@
+# Live CLI staging prerequisites
+
+The live-capable CLI is covered with offline fakes only. No provider smoke was
+performed by the integration-entrypoint change. Follow `docs/integration.md` for
+commands. Enroll real public GitHub identities to an external mode-0600 registry;
+never use `config/enrollments.example.json` for live startup. Keep checks and
+webhooks off. Until independent runner provisioning is approved, enroll with
+`--unprovisioned-runner`, keep live runner off, and expect honest live
+`inconclusive / isolation_unverified` receipts with no target upload.
+
 # Provider smoke steps
 
 ProofHunter defaults to offline mode. Nothing in this file runs in automation. An authorized operator runs these steps from a separate staging host with production credentials, then records sanitized evidence in the table at the end. Fallbacks count as failed provider gates in live smoke.

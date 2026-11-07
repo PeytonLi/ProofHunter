@@ -49,8 +49,18 @@ class VerificationPipeline:
     meta_request_allowance: int = 2
     route_requests_per_call: int = 2
     route_request_limit: int | None = None
+    expected_pins: tuple[str, str] | None = None
 
     async def run(self, record: RunRecord, lease: c.RunLease) -> c.ReceiptV1:
+        if not self.settings.offline:
+            from proofhunter.github import create_repository_validator
+
+            target, enrollment = create_repository_validator(
+                self.settings, load_enrollments(self.settings.enrollments_path)
+            ).resolve(record.target.canonical_url)
+            if target != record.target:
+                raise ValueError("enrollment identity mismatch")
+            self.enrollment = enrollment
         mode = c.ExecutionMode.OFFLINE_FIXTURE if self.settings.offline else c.ExecutionMode.LIVE
         budget = record.status.budget
         usage = budget.used.model_dump()
@@ -158,6 +168,13 @@ class VerificationPipeline:
                         }
                     )
                 reserve(usage["meta_requests"], usage["snap_requests"])
+            if self.expected_pins is not None and (
+                revision.base_sha, revision.head_sha
+            ) != self.expected_pins:
+                raise AdapterError(
+                    c.ProviderName.GITHUB, c.ReasonCode.REVISION_UNAVAILABLE,
+                    "expected pins differ", retryable=False,
+                )
             bundle = await external(self.source.fetch(revision, self.enrollment))
             sources = c.SourceHashes(
                 base=bundle.base.content_sha256, head=bundle.head.content_sha256
@@ -246,21 +263,26 @@ class VerificationPipeline:
                     retryable=False,
                 )
             attestation = await external(self.runner.attest())
-            if (
+            isolation_failed = (
                 attestation.reason_code is not None
                 or attestation.status
                 not in (c.IsolationStatus.VERIFIED, c.IsolationStatus.OFFLINE_FIXTURE)
                 or attestation.snapshot_id != self.enrollment.snapshot_id
                 or attestation.image_digest != self.enrollment.image_digest
                 or attestation.harness_sha256 != self.enrollment.harness_sha256
-            ):
+            )
+            disabled_live_runner = not self.settings.offline and not (
+                self.settings.daytona.enable_live_runner
+            )
+            if isolation_failed and not disabled_live_runner:
                 raise AdapterError(
                     c.ProviderName.RUNNER,
                     c.ReasonCode.ISOLATION_UNVERIFIED,
                     "isolation unverified",
                     retryable=False,
                 )
-            stage(c.RunState.TESTING)
+            if not isolation_failed:
+                stage(c.RunState.TESTING)
 
             async def observe(
                 side: c.Side, candidate: c.Candidate, number: int
@@ -385,6 +407,11 @@ class VerificationPipeline:
                     fallbacks=previous.fallbacks + int(decision.mode is c.RouteMode.FALLBACK),
                     reason_code=None,
                 )
+                if isolation_failed:
+                    raise AdapterError(
+                        c.ProviderName.RUNNER, c.ReasonCode.ISOLATION_UNVERIFIED,
+                        "isolation unverified", retryable=False,
+                    )
                 pool = bank.pool_for(decision.choice, used)
                 if record.replay is not None:
                     pool = [

@@ -1,5 +1,15 @@
 # Deployment examples, not deployed
 
+For a single persistent-disk live service, use `proofhunter stack --profile live`
+instead of two services. Bind privately through `PROOFHUNTER_BIND_HOST` and
+`PROOFHUNTER_BIND_PORT`; configure a shared persistent `PROOFHUNTER_DB_PATH` and
+external trusted `PROOFHUNTER_ENROLLMENTS`. The supervisor exits nonzero when
+either API or worker stops. Keep runner, checks and webhooks off for this lane.
+Live tokens and in-memory PEM belong only in the hosting secret environment.
+See `docs/integration.md` for enrollment and explicit retention flags; scheduling
+is off by default. The offline unit examples below are unchanged and are not
+live deployment manifests. No service was created or started.
+
 All examples are offline and private. Create the unprivileged service user,
 install the reviewed checkout at `/opt/proofhunter`, and provision a writable
 `/var/lib/proofhunter` before use. Set the same database and enrollment paths for

@@ -2,7 +2,10 @@
 
 ProofHunter checks whether an authorized GitHub pull request changes behavior that matters. A maintainer asks inside ASI:One, ProofHunter pins the PR to exact base and head commits, tests a small budget of informative inputs against a trusted oracle, and returns a verdict with a reproducible evidence receipt. The full specification is [ProofHunter-PRD.md](ProofHunter-PRD.md).
 
-Status: offline integration implemented. Live release remains operator-gated.
+Status: offline integration implemented; live-capable CLI entrypoints are offline-tested.
+Live provider execution and release still require operator provisioning and approval.
+See [live entrypoints](docs/integration.md#live-integration-entrypoints-offline-tested-only)
+for enrollment, serve/worker/stack, pinned demo, replay and retention commands.
 
 ## Quickstart (offline)
 

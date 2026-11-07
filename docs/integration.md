@@ -10,7 +10,75 @@ VerificationPipeline injects SourcePort, MetaPort, RoutePort, RunnerPort,
 CheckPort, RunStore and Clock. compose is the explicit profile boundary:
 offline binds FixtureSource/Meta/Route/Checks and the production
 ReviewedFixtureRunner; live binds validated GitHub/Meta/Snap/runner factories.
-The CLI refuses live in this build. Offline settings read no live credentials.
+The CLI now supports explicitly selected live entrypoints. Offline settings read no live credentials.
+
+## Live integration entrypoints (offline-tested only)
+
+All commands below use the same `PROOFHUNTER_DB_PATH` and trusted
+`PROOFHUNTER_ENROLLMENTS`. Keys, including `GITHUB_PRIVATE_KEY`, remain in memory.
+No live provider calls, deployment or sandbox approval were performed for this change.
+
+```
+proofhunter serve --profile live
+proofhunter worker --profile live
+proofhunter stack --profile live
+proofhunter enroll --profile live --repo-url https://github.com/OWNER/REPO --out /private/enrollment.json --unprovisioned-runner
+proofhunter enroll --profile live --repo-url https://github.com/OWNER/REPO --out /private/enrollment.json --snapshot-id PROVEN_SNAPSHOT --image-digest sha256:DIGEST
+proofhunter demo --profile live --pr-url https://github.com/OWNER/REPO/pull/N --base BASE_SHA --head HEAD_SHA --receipt /private/receipt.json --seed 17
+proofhunter replay --profile live --receipt /private/receipt.json
+proofhunter retention --profile live
+proofhunter retention --profile live --apply
+proofhunter worker --profile live --retention-dry-run --retention-hours 24
+proofhunter stack --profile live --retention-apply --retention-hours 24
+```
+
+Serve loads API-role settings (control tokens, no GitHub/provider secrets); its
+validator is a local trusted enrollment lookup, not a network discovery service.
+Worker, enrollment, demo, replay and retention load worker-role settings. Stack
+loads each half separately, shares the DB, and exits nonzero when either half
+stops. API and worker fingerprints match with identical public configuration;
+credentials and role do not affect the fingerprint. Stack checks this explicitly.
+Keep checks, webhooks and runner disabled in this lane. API role itself rejects
+the live-runner flag, so runner-enabled separate API/stack hosting requires a
+config-owner decision; no role restrictions were bypassed here.
+
+Startup rejects any enabled fixture identity, snapshot or image. The known
+offline catalog identifiers are explicit denylist constants; no fixture module
+is imported on a live path. Unprovisioned enrollment uses
+`runner-unprovisioned` / `sha256:` followed by 64 zeros. Runner-enabled startup
+rejects these or settings/enrollment runner-pin mismatches. Explicit pins are an
+operator assertion of provisioning, not proof by this CLI; Daytona's independent
+approval/canary gates still apply. Enrollment refuses existing outputs and paths
+inside this checkout (including symlink-resolved paths), writes mode 0600 and
+prints only public metadata plus enrollment fingerprint.
+
+Enrollment discovery uses the production GitHub HTTP/session factory: App-auth
+installation lookup, a repository-name-restricted bootstrap token, then a
+repository-ID-restricted token and public metadata verification. The existing
+repository validator cannot discover unenrolled repositories (it only looks up
+the registry), so discovery lives in the owned CLI. Missing production contract
+hash constant is worked around by an owned reviewed `CONTRACT_SHA256` constant;
+all other contract/version identifiers come from production contracts and the
+harness hash comes from the checked-in runner wrapper. No fixture read is used.
+
+Demo requires exact lowercase 40-character SHAs. The pipeline compares them
+against the durable pin after persistence and before source fetch or Meta/Snap;
+mismatches produce revision_unavailable and a nonzero CLI exit. It never replaces
+the actual PR pin with caller-supplied SHAs. Use an idle dedicated demo DB to
+ensure run_once claims the new run, not an older queued request.
+
+With runner disabled, real pin/fetch and Meta/Snap preparation still run, but
+Daytona has no client and attestation is unverified. The pipeline stops before
+TESTING, ExecutionRequest construction or observe/upload. Receipts retain live
+execution mode and report isolation_unverified honestly. Replay first verifies
+the sealed receipt, refuses isolation_unverified or missing counterexample/replay
+bindings, then checks fetched source hashes, fresh attestation and observations.
+
+Retention defaults to dry-run, bounded to 500 rows per category per invocation.
+Worker scheduling is off unless either retention flag is explicit, accepts
+intervals 1–168 hours, and runs only after an idle claim (never during its own
+work lease). Errors are sanitized, logged once and suppressed. Other workers may
+still be active; store retention predicates and transactions remain authoritative.
 
 Inference/evidence use production proofhunter.bayes and proofhunter.oracle.
 Oracle evaluation and provenance binding precede execution; isolation attestation

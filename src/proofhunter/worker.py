@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import time
 from contextlib import suppress
 from datetime import timedelta
 from uuid import uuid4
@@ -23,6 +24,8 @@ class VerificationWorker:
         heartbeat_store: HeartbeatStore | None = None,
         config_fingerprint: str | None = None,
         profile: c.Profile | None = None,
+        retention_dry_run: bool | None = None,
+        retention_hours: int = 24,
     ) -> None:
         self.pipeline = pipeline
         self.worker_id = TypeAdapter(c.SafeToken).validate_python(
@@ -34,6 +37,12 @@ class VerificationWorker:
             c.Profile.OFFLINE if pipeline.settings.offline else c.Profile.LIVE
         )
         self._heartbeat_failed = False
+        if not 1 <= retention_hours <= 168:
+            raise ValueError("retention interval out of bounds")
+        self.retention_dry_run = retention_dry_run
+        self.retention_seconds = retention_hours * 3600
+        self._retention_at = 0.0
+        self._retention_failed = False
 
     def heartbeat(self) -> None:
         if self.heartbeat_store is None or self.config_fingerprint is None:
@@ -125,4 +134,20 @@ class VerificationWorker:
     async def poll(self, interval: float = 1.0) -> None:
         while True:
             if not await self.run_once():
+                if self.retention_dry_run is not None and time.monotonic() >= self._retention_at:
+                    self._retention_at = time.monotonic() + self.retention_seconds
+                    try:
+                        from proofhunter.api import _RetentionStore
+
+                        store = self.pipeline.store
+                        if isinstance(store, _RetentionStore):
+                            store.purge_expired(
+                                self.pipeline.clock.now(),
+                                batch_limit=500,
+                                dry_run=self.retention_dry_run,
+                            )
+                    except Exception:
+                        if not self._retention_failed:
+                            logging.getLogger(__name__).warning("Worker retention failed")
+                            self._retention_failed = True
                 await asyncio.sleep(min(interval, c.HEARTBEAT_INTERVAL_SECONDS / 2))
