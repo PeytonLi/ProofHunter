@@ -1,193 +1,173 @@
 VERDICT: PASS
 
-# Offline benchmark handoff (G0)
+# Production-scored offline benchmark handoff
 
-## Built
+## Base and scope
 
-- `bench/corpus/`: 12 reviewed first-party dev variants, three clean integer
-  refactors, one shared/pre-existing defect, nine defective cases total. Each
-  directory has exact base/head source bytes; most bases copy the correct fixture
-  base. The versioned manifest freezes source/contract hashes, synthetic revision
-  IDs, template groups, expected verdicts and independently hand-prepared witnesses
-  or clean review rationales. `sample` explicitly lists six dev cases, including
-  the item-count family that the frozen bank cannot reach. No holdout is present.
-- `bench.harness.BenchRunner`: `RunnerPort`-compatible allowlisted local harness;
-  request bytes must exactly match enrolled source hashes. Fresh in-process
-  modules per invocation, real local durations, fault map, offline attestation.
-  Unknown bytes are denied. This is **not** isolation for arbitrary untrusted code.
-- `bench.arms`: label-free `ArmInput` accepts only source DTOs, enrollment, fixed
-  recorded plan and precomputed bank. Four controlled policies, six distinct
-  paired probes and at most one fresh head confirmation. Random samples uniformly
-  without replacement; fixed order is anchors, boundary, constraint, seeded fuzz,
-  with SHA ties. EIG uses all unused candidates; recorded Snap restricts its pool
-  through `pool_for`. Only usable evidence updates adaptive beliefs. Baselines
-  compute audit posteriors to satisfy `ProbeRecord` but never feed them forward.
-- `bench.run`: required `main(argv: Sequence[str] | None = None) -> int` and CLI.
-  JSONL has full probe DTOs, evidence/exclusions, separate invocation counts,
-  right-censoring, replay command, hashes, versions and preregistered seeds. CSV,
-  Markdown and a separate adversarial JSONL accompany it. Labels are joined only
-  through `bench.scoring.score`, after arm execution.
-- `bench.scoring`: recall at budgets 1..6, clean confirmed false positives,
-  detected-only median with censored misses separate, inconclusive reasons,
-  invocation counts and local p50/p95. Paired seed means and 2000 percentile
-  bootstrap resamples **by defective case**, fixed bootstrap seed 2000.
-- `bench.holdout`: external-only holdout validation, disjoint source hashes and
-  template groups, minimum size/composition checks. Dev policies stay frozen.
+Started the isolated `devin/1794078900-proofhunter/bench-production` branch at
+exactly `e504f140e20eb74ad7f2847206ad4b289a6e5482`, after fetching origin and
+reading the entire root PRD and current `docs/setup.md`. Changes are confined to
+`bench/`, `tests/bench/` and this handoff. Shared contracts, schemas, setup
+fixtures, production modules and `uv.lock` are unchanged.
+
+Offline only: no provider credentials read, provider calls, PR code execution,
+deployment, agent publication, checks/webhooks, main merge or PR. Local target
+execution is limited to reviewed first-party benchmark fixtures.
+
+## Production scoring and retained controls
+
+`bench.run.prepare` uses `proofhunter.bayes.generate`. `bench.arms.run_arm` calls
+production `initialize/select/update` and production oracle
+`evaluate/assess_probe/compute_coverage/classify`. No benchmark scoring imports
+or calls `fixtures.reference`. Evidence binds requested input, base/head
+commit/source, mode, image, snapshot and harness. Missing trusted oracle stops
+before execution. Only usable matched-base evidence updates beliefs;
+confirmation never creates a second update and shared defects are excluded.
+
+Remaining fixture use: fixed recorded `FixtureMeta` plan shared across arms;
+`FixtureRoute` stub choices then policy; deterministic IDs/clock/budget;
+enrollment metadata; and `BenchRunner` fixture attestation/fault plumbing.
+The local transport intersects source bytes with a separate reviewed hash
+allowlist and checks exact bytes plus enrolled image/harness before execution.
+A request/hash alone cannot enroll code. This is not isolation for arbitrary
+source and injected timeouts are not OS-enforced. No live Meta/Snap claim.
+
+All four arms remain: fixed anchor/boundary/constraint/fuzz/hash order, uniform
+random without replacement, EIG over the full shared bank, and recorded
+Meta/Snap/EIG over strategy-restricted pools from that bank. Fixed/random compute
+production audit posteriors without adapting selection beliefs. Each run gets
+six distinct pairs plus one fresh head replay (at most 13 invocations, within
+the shared cap of 15). Clean verdicts require production coverage gates.
+
+Master/bank seed 17 preregisters five replicate seeds:
+`989287554, 181211149, 710491588, 1880716672, 1319078602`. All arms/cases get
+paired seeds, bank and plan. Raw rows retain probes, coverage, failures,
+exclusions, censored misses, invocation counts, local timings, replay command,
+policy/implementation and source hashes. Fallbacks count once per decision.
+
+## Explicit refreeze and corrected dev label
+
+`bench/policy.json` freezes reviewed dev sources, manifest, seeds, budgets,
+and scoring/transport plus shipped Bayes/oracle/shared-interface source hashes.
+Evaluation refuses implementation, manifest, source-review or seed drift;
+it never regenerates a policy automatically.
+
+- Policy version: `bench-v2-production-anchor-boundary-constraint-fuzz-hash`
+- Policy SHA: `472c181a8b4db9ab799a8c2a177401283b8bde8dec6626b55cb72165ac924c13`
+- Dev manifest: `checkout-dev-v2`, 12 cases (9 defective, 3 clean), sample 6.
+- Manifest SHA: `da58e11fe99e6dd2f841f5e71865fe5505a02b548b54698f5a4bb67c19d1f03a`
+
+The old item-count case dropped a ninth item, outside the legal 0..8 domain:
+its defective label was invalid. A legal seven-item off-by-one replaces it:
+seven ones, 0% discount, expected 7/head 6. Its bytes, synthetic head revision
+and manifest changed; all other dev source bytes remain. Witnesses now inherit
+strict `CandidateInput` domain validation. The production generator was not
+changed or tuned. EIG detects this legal case; fixed and recorded routing miss
+it. Do not attribute v1/v2 metric differences solely to production scoring:
+the generator implementation and invalid dev case both changed.
 
 ## Commands and results
 
-Ran `uv sync --locked` first (dependency network only); installation succeeded.
-All commands below used `UV_OFFLINE=1 PROOFHUNTER_PROFILE=offline` and
-`uv run --locked`. No provider was called and no API keys were read.
+`PROOFHUNTER_PROFILE=offline uv sync --locked` succeeded; only pinned dependency
+downloads used network. Every check below used `UV_OFFLINE=1
+PROOFHUNTER_PROFILE=offline` and `uv run --locked`.
 
-```text
-pytest -q tests/bench
-..........                                                               [100%]
-10 passed in 2.24s
+| command after uv run --locked | result |
+|---|---|
+| `ruff check bench tests/bench` | PASS |
+| `mypy bench tests/bench` | PASS, 35 source files |
+| `pytest -q tests/bench tests/contracts` | PASS, 266 tests |
+| `pytest -q tests/bayes tests/oracle` | PASS, 121 tests |
+| `python -m bench.corpus --check` | PASS, 12 cases, manifest SHA above |
+| `python -m bench.run --offline --split sample --seed 17 --output bench/results/sample.jsonl` | PASS, 120 runs and 5 separate fault scenarios |
 
-pytest -q tests/contracts
-.............................................................            [100%]
-205 passed in 1.69s
+Final combined regression command is `pytest -q tests/bench tests/contracts
+tests/bayes tests/oracle`. No active Git pre-commit hook or pre-commit
+configuration is present. Generated CSV now uses LF endings so normal Git
+whitespace checks remain enabled; the policy and sample outputs were refrozen
+after this format-only fix.
 
-ruff check bench tests/bench
-All checks passed!
+Runtime tests poison setup reference scoring functions and spy on every
+production entrypoint while evaluating the sample. Assertions retain
+41/41/42/42, shared-defect outcomes, honest misses, clean coverage, paired
+budgets/seeds/bank/plan, normalized determinism and case-level bootstrap
+weighting. They also check missing-oracle no-execution, source substitution,
+unreviewed hash refusal, implementation/policy drift and seed refusal. No
+holdout-labeled corpus is manufactured even for refusal tests.
 
-mypy bench tests/bench
-Success: no issues found in 34 source files
+The initial migration had one stale assertion that all item-count runs miss;
+that is false with the legal v2 case and production bank. It was replaced by
+actual censoring/coverage accounting, not forced outcomes. Initial lint line
+length issues were fixed. Requirements and gates were not weakened.
 
-python -m bench.corpus --check
-{"version": "checkout-dev-v1", "cases": 12, "manifest_sha256": "fe7283035d129331e74024d81942dcd6738ffb63ab832e8813716761d0cac77c"}
-```
+## Frozen sample results
 
-Initial checks surfaced mandatory route and posterior DTO requirements; these are now represented
-without changing frozen contracts or adapting baseline beliefs.
+`bench/results/sample.jsonl`, `.csv`, `.summary.md`, `.adversarial.jsonl` are
+committed evidence. The generated summary retains recall@1..6, medians,
+inconclusive reasons, invocation counts, local p50/p95 and paired case CIs.
 
-Sample command:
+| arm | recall@3 | recall@6 | clean confirmed FP/runs | censored defective runs | base/head/confirm |
+|---|---|---|---|---|---|
+| fixed_boundary | .000 | .750 | 0/10 | 5/20 | 150/150/15 |
+| random | .550 | .650 | 0/10 | 7/20 | 133/133/13 |
+| eig_deterministic | 1.000 | 1.000 | 0/10 | 0/20 | 90/90/20 |
+| meta_snap_eig | .750 | .750 | 0/10 | 5/20 | 105/105/15 |
 
-```sh
-UV_OFFLINE=1 PROOFHUNTER_PROFILE=offline uv run --locked python -m bench.run \
-  --offline --split sample --seed 17 --output /tmp/bench-results.jsonl
-```
+Random has 14 coverage-insufficient inconclusives. Fixed/recorded routing miss
+item-count despite bounded-clean verdicts; these remain censored detection
+misses in recall denominators. Recorded routing makes 45 stub plus 60 policy
+decisions, no provider-error fallbacks. Live usage is zero; cloud cost is unknown.
 
-Produces 120 runs (6 cases x 4 arms x 5 seeds), plus five separate infrastructure
-scenarios. Companion files: `/tmp/bench-results.csv`,
-`/tmp/bench-results.summary.md`, `/tmp/bench-results.adversarial.jsonl`.
-These requested temporary outputs are reproducible, not committed artifacts.
-The five random seeds are deterministically preregistered by SHA-256 of the master
-seed and replicate number; every row records the full list. Bank seed is always
-the master seed (17 here), independent of replicate. All arms are paired on each
-case and replicate. Deterministic arms repeat across replicates intentionally;
-bootstrap units remain cases, not the repeated runs.
+Paired recall@3 differences (95% percentile bootstrap, 2000 resamples, seed
+2000, defective **cases** as units, paired seed means): EIG-random .450
+[.200,.800]; EIG-fixed 1.000 [1.000,1.000]; recorded-routing-EIG -.250
+[-.750,.000]. Four defective sample cases include two in the per-line family.
+The degenerate interval is descriptive, not proof of generalization or
+superiority. Misses are right-censored at six, not assigned a seventh pair;
+medians condition on detection. No Brier/reliability claim.
 
-### Sample results (descriptive development results only)
+Faults preserve production reasons: timeout/invalid output yield
+coverage-insufficient, flaky replay nondeterministic, denied unknown source
+and unverified attestation isolation-unverified. All timings are local
+offline-fixture timings, never cloud measurements. No full dev comparison ran.
 
-| arm | recall@1..6 | clean FP/runs | median detected pairs | censored defects | inconclusive/runs | base/head/confirm | p50/p95 ms (offline_fixture) |
-|---|---|---|---|---|---|---|---|
-| fixed_boundary | .000, .000, .000, .750, .750, .750 | 0/10 | 4.0 | 5/20 | 0/30 | 150/150/15 | 2.485/2.914 |
-| random | .100, .150, .300, .400, .400, .400 | 0/10 | 3.0 | 12/20 | 22/30 | 153/153/8 | 2.664/2.894 |
-| eig_deterministic | .750, .750, .750, .750, .750, .750 | 0/10 | 1.0 | 5/20 | 0/30 | 105/105/15 | 2.900/4.880 |
-| meta_snap_eig | .750, .750, .750, .750, .750, .750 | 0/10 | 1.0 | 5/20 | 0/30 | 105/105/15 | 2.319/3.874 |
+## Independent verifier holdout recipe (not run here)
 
-Random had 22 coverage-insufficient inconclusives. Other arms had none, but all
-arms missed item-count; a `no_defect_found` verdict on that defective case is still
-a censored **detection miss**, never evidence of a clean label. Meta/Snap made 45
-stub decisions and 60 policy/call-budget decisions; 0 provider-failure fallbacks
-out of 105 decisions. No live calls/costs exist for these runs.
-
-| paired contrast | detection@3 difference [95% case-bootstrap CI] | recall@6 difference [CI] |
-|---|---|---|
-| EIG - random seed mean | .450 [.150, .600] | .350 [.100, .550] |
-| EIG - fixed | .750 [.250, 1.000] | .000 [.000, .000] |
-| Meta/Snap/EIG - EIG | .000 [.000, .000] | .000 [.000, .000] |
-
-Only four defective template cases are in this sample; two are in the same
-per-line family. Intervals resample cases as specified, not template clusters;
-neither independence across templates nor generalization is established.
-No superiority claim is warranted.
-
-### Separate adversarial suite
-
-| scenario | verdict reason | observation failures |
-|---|---|---|
-| timeout_head | coverage_insufficient | timeout: 6 |
-| invalid_output | coverage_insufficient | invalid: 6 |
-| flaky_confirmation | nondeterministic | none; fresh value disagrees |
-| isolation_unverified | isolation_unverified | no invocations |
-| unknown_source | coverage_insufficient | denied: 12 |
-
-The classifier's generic coverage verdict reason is preserved; transport-specific
-reason codes remain separately visible in failure/exclusion counters and probes.
-
-## Interface assumptions and production integration
-
-G0 has no bayes/oracle/runner/meta/snap role modules. Bench intentionally imports
-`fixtures.reference` and `fixtures.adapters` outside `src/`, through shared DTOs
-and `RunnerPort`. Plans come from `FixtureMeta.propose(planning_context(...))`
-once per case; both EIG arms receive that identical plan and bank. Recorded
-source references must fit the supplied checkout file (the fixture plan refers
-to line 4). FixtureRoute supplies `stub` decisions then `policy/call_budget`;
-policy exhaustion is **not** a provider-error fallback.
-
-`ProbeRecord` requires a route even in non-routing arms. Their DTO route is a
-single-selected-strategy policy projection, **not** a restriction of the EIG
-candidate pool; the arm and pool hash document actual selection. Fixed/random
-singleton selector records are audit scores, not adaptive selection claims.
-Replay commands use the shared `build_replay_command`; commands name synthetic
-offline run IDs, not persisted production receipts. The benchmark CLI is the
-reproducibility entrypoint; production replay storage is not implemented here.
-
-Integration can substitute production initialize/generate/select/update and
-evaluate/classify/compute_coverage functions with the same DTO signatures, and
-inject a `RunnerPort` into `run_arm`. Re-freeze policies/results for any such
-change. Do not replace this allowlisted local runner with arbitrary source exec.
-Production provider modes/costs and Daytona timing must be reported separately.
-
-## Independent verifier holdout recipe
-
-1. Freeze this branch's dev manifest, policy source files, bank/generator version,
-   budget and master seed **before** holdout authoring. Do not tune the bank.
-2. A separate verifier, outside the authoring worktree, prepares a private corpus
-   directory with `manifest.json` using the `bench.corpus.Manifest`/`Case` schema.
-   Use split `holdout` on every case, stable IDs, version, source paths, exact
-   SHA-256 hashes and synthetic 40-hex base/head revision IDs. Contract ID/hash
-   must match the enrolled checkout-rounding contract. No labels enter prompts.
-3. Prepare at least **36 cases**, including at least **24 distinct defective head
-   hashes** and **12 clean variants**. Group near-duplicate edits under template
-   groups; no template group or source hash may overlap dev/sample. This includes
-   base hashes: **do not reuse the dev reference base bytes**. Write independently
-   equivalent, reviewed clean bases for holdout, and fresh groups/implementations.
-4. Independently hand-prepare each defective witness (prices, discount, expected
-   half-up oracle value, head value) without reading candidate selections; verify
-   head execution matches the recorded value and differs from the independent
-   integer formula `(sum(prices)*(100-discount)+50)//100`. Clean variants require
-   semantic review rationale. Review code as safe first-party implementations;
-   the local transport cannot safely execute hostile code or enforce timeouts.
-5. Set `sample` to an empty list. Compute `manifest_sha256` with
-   `canonical_sha256(manifest.model_dump(exclude={"manifest_sha256"}))` and freeze
-   the manifest and directory before evaluation. Document who prepared/reviewed
-   them and a prior-exposure note for every evaluator, including any exposure to
-   labels, witnesses, templates or this dev bank.
-6. Run externally, keeping labels/witnesses out of the repo:
+1. Freeze dev manifest/policy, scoring/generator sources, arms, seeds and budgets
+   before holdout authoring. Do not tune using held-out labels or selections.
+2. A separate verifier prepares/reviews first-party sources outside authoring
+   worktrees, with `Manifest`/`Case` schema, all split `holdout`, sample empty,
+   and at least 36 cases: 24 distinct defective head hashes and 12 clean variants.
+   Group near-duplicates together; no dev template group, base or head hash may
+   overlap. Author independently equivalent clean bases, not copied dev bases.
+   Independently prepare legal-domain witnesses or clean review rationales.
+3. Canonically freeze manifest SHA excluding its own hash. Record preparer,
+   reviewer and all prior exposure, including dev-bank familiarity. Keep labels
+   and witnesses out of prompts, generator tuning and authoring worktrees.
+4. Review every source as safe bounded first-party fixture code, not PR code.
+   Prepare an external `FrozenPolicy` JSON: preserve this policy's scoring source
+   hashes, budgets, master/replicate seeds; replace manifest SHA and reviewed
+   source hashes with the exact external corpus values. Record review rationale;
+   set `reviewed_first_party=true` only after review. Compute policy SHA with
+   `canonical_sha256(payload_without_policy_sha256)`. Self-hashing is not proof
+   of code safety: independent review is mandatory before local execution.
+5. Run outside this branch:
 
    ```sh
    UV_OFFLINE=1 PROOFHUNTER_PROFILE=offline uv run --locked python -m bench.run \
-     --offline --split holdout --corpus-dir /absolute/private/corpus \
-     --seed 17 --output /absolute/private/holdout-results.jsonl
+     --offline --split holdout --seed 17 --corpus-dir /private/reviewed-corpus \
+     --policy /private/reviewed-policy.json --output /private/holdout-results.jsonl
    ```
 
-   Validation refuses drift, overlapping hashes/groups, wrong splits and
-   inadequate size/composition. Labels are joined only after arm execution.
-7. Publish raw JSONL/CSV, companion summary, frozen hashes and prior-exposure
-   note. Keep misses censored and conclusions descriptive. The verifier may
-   separately publish the holdout after reporting; this branch contains none.
+   Shipped dev policy cannot enroll holdout code. Policy/source review, manifest,
+   source hashes, domain/split/composition and group/hash separation must pass
+   before arm execution. Labels join only at scoring, never in `ArmInput`.
+6. Publish raw rows, summary, frozen hashes and exposure notes. Report authorized
+   live/provider measurements separately. This author did not create, inspect
+   or run holdout labels or results.
 
-## Limitations
+## Remaining gates
 
-- Fixed bank was designed with knowledge of two rounding predictors; unmodeled
-  families (notably item-count beyond eight) may be unreachable. No bank tuning
-  was performed; misses remain in recall denominators.
-- In-process fixture timings are local, exclude provider/network costs, and are
-  never cloud execution timings. Fault timeouts are injected, not OS-enforced.
-- No live provider or Daytona validation, independent holdout evaluation,
-  Brier/reliability claims, UI/visual verification, commit or push was performed.
-  This work is an offline benchmark, not a claim that the live release gate passes.
+No frozen-contract blocker or unresolved owner defect found. Independent
+holdout, live providers/Daytona latency/cost, real ASI:One/Agentverse release,
+and operator publication remain pending by instruction. No live-release claim.

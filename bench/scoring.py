@@ -110,7 +110,7 @@ def summary(rows: list[Row]) -> str:
 def write_outputs(path: Path, rows: list[Row], adversarial: list[Row]) -> str:
     path.write_text("".join(json.dumps(r, sort_keys=True) + "\n" for r in rows))
     with path.with_suffix(".csv").open("w", newline="") as stream:
-        writer = csv.DictWriter(stream, fieldnames=list(rows[0]))
+        writer = csv.DictWriter(stream, fieldnames=list(rows[0]), lineterminator="\n")
         writer.writeheader()
         for row in rows:
             writer.writerow({k: json.dumps(v, sort_keys=True) if isinstance(v, (dict, list)) else v

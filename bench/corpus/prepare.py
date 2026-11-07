@@ -19,8 +19,8 @@ VARIANTS: list[tuple[str, str, list[int], int, int, int]] = [
     ("ignored_discount", "sum(prices_cents) + 0 * d", [100], 50, 50, 100),
     ("clamped_discount", "(sum(prices_cents) * (100 - min(d, 50)) + 50) // 100",
      [100], 99, 1, 50),
-    ("item_count", "(sum(prices_cents[:8]) * (100 - d) + 50) // 100",
-     [1] * 9, 0, 9, 8),
+    ("item_count", "(sum(prices_cents[:6] if len(prices_cents) == 7 else prices_cents)\n"
+     "            * (100 - d) + 50) // 100", [1] * 7, 0, 7, 6),
     ("full_discount", "sum(prices_cents) if d == 100 else "
      "(sum(prices_cents) * (100 - d) + 50) // 100", [99], 100, 0, 99),
     ("clean_divmod", "divmod(sum(prices_cents) * (100 - d) + 50, 100)[0]",
@@ -49,7 +49,8 @@ def main() -> None:
         cases.append(Case(
             case_id=name, split="dev", template_group="per_line" if name == "existing" else name,
             base_path=f"{name}/base.py", head_path=f"{name}/checkout.py",
-            base_revision=revision(name + ":base"), head_revision=revision(name + ":head"),
+            base_revision=revision(name + ":base"),
+            head_revision=revision(name + (":v2:head" if name == "item_count" else ":head")),
             base_sha256=sha256_hex(base_bytes), head_sha256=sha256_hex(content),
             contract_sha256=catalog.contract_sha256(), label="clean" if clean else "defective",
             expected_verdict=("no_defect_found" if clean else "confirmed_existing_defect"
@@ -60,7 +61,7 @@ def main() -> None:
             review_rationale=("Equivalent nonnegative integer half-up expression; "
                               "divmod quotient, residue threshold, or commuted multiplication."
                               if clean else None)))
-    manifest = Manifest(version="checkout-dev-v1", manifest_sha256="", cases=cases,
+    manifest = Manifest(version="checkout-dev-v2", manifest_sha256="", cases=cases,
                         sample=["per_line", "half_even", "item_count", "existing",
                                 "clean_divmod", "clean_split"])
     manifest.manifest_sha256 = canonical_sha256(

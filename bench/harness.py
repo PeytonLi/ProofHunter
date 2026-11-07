@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from time import perf_counter_ns
 from types import ModuleType
 
+from bench.freeze import load_policy
 from fixtures.adapters import Fault, FaultKey, FixtureRunner
 from proofhunter.contracts import (
     Enrollment,
@@ -22,11 +23,16 @@ from proofhunter.contracts import (
 class BenchRunner(FixtureRunner):
     def __init__(self, enrolled: Mapping[str, bytes], enrollment: Enrollment, *,
                  faults: Mapping[FaultKey, Fault] | None = None,
-                 isolation: IsolationStatus = IsolationStatus.OFFLINE_FIXTURE) -> None:
+                 isolation: IsolationStatus = IsolationStatus.OFFLINE_FIXTURE,
+                 reviewed_source_sha256: frozenset[str] | None = None) -> None:
         super().__init__(enrollment, faults=faults, isolation=isolation)
         self.enrolled = dict(enrolled)
         if any(sha256_hex(data) != digest for digest, data in self.enrolled.items()):
             raise ValueError("enrollment bytes/hash mismatch")
+        reviewed = (frozenset(load_policy().reviewed_source_sha256)
+                    if reviewed_source_sha256 is None else reviewed_source_sha256)
+        self.enrolled = {digest: data for digest, data in self.enrolled.items()
+                         if digest in reviewed}
 
     async def observe(self, request: ExecutionRequest) -> SandboxObservation:
         self.requests.append(request)
