@@ -1,62 +1,104 @@
-# Ranker lane handoff (LANE=ranker)
+# Ranker lane handoff (LANE=ranker), real data v1
 
-- Branch: `devin/1794090000-research/ranker`, rebased on setup `cadc5b4d91828fec1adcb5341a11c2c466e57c1f`
-  (schemas/interfaces `13b9667`). No PR, no merge. No edits outside owned paths.
-- Owned files: `research/ranker/{__init__,features,collect,executor,fixture,metrics,baselines,train,selector,commands}.py`,
-  `research/ranker/FEATURES.md` (feature spec), `tests/research/ranker/test_ranker.py`,
-  `research/artifacts/ranker/**` (force-added; `research/.gitignore` ignores `artifacts/`).
+- Branch `devin/1794090000-research/ranker`, on setup `cadc5b4d91828fec1adcb5341a11c2c466e57c1f`
+  (schemas/interfaces `13b9667`). Dataset: branch `devin/1794090000-research/dataset` @ `b48a61f9`,
+  manifest `ba3d927d994c4c54944ab42a03b2b253ac97bbfa0193fca37e28b22c87b21520`, public tarball sha256
+  `046c59ca78329a9f31ea98d196bf95cd24571cc69f38b030851e5b47b151da98`. No PR, no merge, no edits
+  outside `research/ranker/**`, `tests/research/ranker/**`, `research/artifacts/ranker/**`.
+- Test labels and test rows were never read (collection, re-featurization, training and comparison
+  all refuse `split=test`; `labels/*.json` were not opened).
 
-## Interfaces implemented (OWNERSHIP.md)
-- `features.FEATURE_SET_VERSION = "ranker-features-v1"`, `CheckoutFeatures` (structural `I.FeatureExtractor`), 68 pre-execution features in 6 groups; ablations `full`, `no_belief`, `no_belief_no_predictor`.
-- `collect.collect_observations(store, split, seeds, policy)`: train/validation only. Runs **reviewed sources only**: the default reviewer requires matching hashes, a reviewed `research.data.templates.list_templates()` entry and a byte-identical `templates.render(template_id, params)`. Execution is in a `python -I -S` child process with an empty environment and rlimits. Every guarded pool candidate is executed at each decision step, so each decision point gives a real LambdaRank group. Policies: `eig_eps<e>` (ε-greedy production EIG) and `uniform_random`. Rows record `selection_probability`.
-- `train.LambdaRankTrainer(ablation).train(train, validation, out_dir) -> sha256(checkpoint.json)`: LightGBM 4.7.0 (research lock), `deterministic`, 1 thread, fixed seed 20261107. 24-point grid chosen by validation MRR only. `unknown` rows are dropped, never counted as zero. Rows from the wrong split raise `PermissionError`.
-- `selector.load_ranker_selector(checkpoint, *, arm_id)`: takes `checkpoint.json` (the integration lane's frozen file hash) or its directory. Checks the version, feature names and the model.txt hash, and exposes `checkpoint_sha256`. Ties break on input hash.
-- `commands.collect_observations` / `commands.train_ranker`: `--store fixture|dataset --root` (dataset uses `research.data.store.open_store`).
-- Labels are never read: `FixtureStore.labels` raises and the tests assert there were zero reads.
+## Frozen checkpoint (primary)
 
-## Tests (all pass at the handoff commit)
-```
-UV_OFFLINE=1 PROOFHUNTER_PROFILE=offline uv run --project research --locked pytest -q tests/research   # 86 passed, 2 skipped
-UV_OFFLINE=1 uv run --project research --locked python -m research.schemas.export --check             # exit 0
-UV_OFFLINE=1 uv run --project research --locked mypy --strict research tests/research                  # no issues (19 files)
-UV_OFFLINE=1 uv run --project research --locked ruff check research/ranker tests/research/ranker       # clean
-UV_OFFLINE=1 PROOFHUNTER_PROFILE=offline uv run --locked pytest -q                                      # 1252 passed, 3 skipped
-UV_OFFLINE=1 PROOFHUNTER_PROFILE=offline uv run --locked ruff check .                                   # clean
-UV_OFFLINE=1 PROOFHUNTER_PROFILE=offline uv run --locked mypy src bench tools tests/integration         # no issues
-UV_OFFLINE=1 PROOFHUNTER_PROFILE=offline uv run --locked python tools/gate.py setup|integrated          # PASSED / PASSED
-```
+`real-v1/checkpoints/dense_full/checkpoint.json` sha256
+**`cc02fb161aa7689438d1329914c447bda7cf943e6165d0941b49f145fb6e5174`** (LightGBM 4.7.0, seed
+20261107, params `num_leaves=7, learning_rate=0.05, min_data_in_leaf=20, num_boost_round=150`,
+selected on validation). Retraining from the same data reproduced the identical hash.
+Load with `load_ranker_selector(<dir or checkpoint.json>, arm_id="builtin_ranker")`.
+No-belief ablation: `dense_no_belief` `d57c4fc0fdce36e5ae83e77a3198a59262c54ae121ebd6f56fea48700cdd8af1`.
 
-## Artifacts (fixture only; `fixture-v1/SHA256SUMS`)
-The data comes from the synthetic fixture store (24 cases, 6 families, grouped splits; family shift between train and validation). Collection used policy `eig_eps0.3` with the 5 protocol seeds. Train: 8,732 rows, 193 groups. Validation: 7,332 rows, 191 groups (88 with a positive).
+## Designs (see `research/ranker/FEATURES.md`)
 
-| file | sha256 |
-|---|---|
-| data/train.jsonl.gz (raw stream sha `f712cb40…51f1`) | `095ae2a620c76d0d7dae0ac03d6982b5042a74e27906f26eb69ad5a600fcc7c1` |
-| data/validation.jsonl.gz (raw `7bd845ca…d0b0`) | `42aee0439799415926f37f19007a48e8488b469149c3ed242fa04ed48931bd5c` |
-| checkpoints/full/checkpoint.json | `5d2bfd52a028643088b8711176244487de9c18735734ae4ddbf026565cc95496` |
-| checkpoints/no_belief/checkpoint.json | `9ae4e3fee084f5f03e252ed43219cb809edca854a7f4d4192bdc11cbdd6dd927` |
-| checkpoints/no_belief_no_predictor/checkpoint.json | `3dc070a59de2659e19d966f5c18735e47512e21eefaf5b1ce61b4ca699a32c52` |
-
-Fixture validation results (decision-point first-positive rank, 88 groups):
-
-| arm | MRR | hit@1 | hit@3 |
+| checkpoint | train data | groups | weights |
 |---|---|---|---|
-| LambdaRank full | 0.192 | 0.057 | 0.295 |
-| LambdaRank no_belief | 0.198 | 0.057 | 0.227 |
-| LambdaRank no_belief_no_predictor | 0.194 | 0.057 | 0.148 |
-| production EIG score (`eig_bits`) | 0.178 | 0.125 | 0.125 |
-| uniform random (exact expectation) | 0.283 | 0.128 | 0.318 |
-| best single feature `lines_with_fraction` (picked on validation, so optimistic) | 0.453 | 0.352 | 0.523 |
+| dense_full / dense_no_belief | dense full-pool collection, `eig_eps0.3`, seed 1633385816 | decision point | none |
+| logged_ips_full / logged_ips_no_belief | dataset `eps0.3-heuristic-v1` log, re-featurized | episode | IPS, clip 50, mean 1 |
+| logged_unweighted_full | same log | episode | none |
 
-On the fixture, the ranker does not beat random (negative result). The train and validation families are deliberately disjoint, and the ranker overfits train-family cues. The fixture is too small to support any claim.
+Validation for tuning and comparison: dense validation decision points (747 with a positive).
+
+## Validation results (`real-v1/validation-comparison.json`)
+
+| arm | MRR | hit@1 |
+|---|---|---|
+| simple_heuristic (spec arm) | 0.557 | 0.452 |
+| dense_full (primary) | 0.358 | 0.245 |
+| logged_unweighted_full | 0.355 | 0.214 |
+| dense_no_belief | 0.351 | 0.249 |
+| logged_ips_no_belief | 0.345 | 0.173 |
+| uniform_random (exact) | 0.343 | 0.174 |
+| logged_ips_full | 0.339 | 0.186 |
+| builtin_eig | 0.316 | 0.170 |
+| fixed_order | 0.303 | 0.236 |
+
+Primary minus arm, case-clustered bootstrap 95% CI (2,000 resamples, 360 cases):
+heuristic −0.198 [−0.263, −0.136]; random +0.016 [−0.037, +0.072]; EIG +0.042 [−0.024, +0.110];
+fixed +0.055 [−0.027, +0.137]; no_belief +0.007 [−0.013, +0.026]; logged IPS +0.020 [−0.035, +0.076].
+
+**Negative result.** No learned ranker beats uniform random or EIG with a CI that excludes 0, and all
+lose clearly to the non-learned simple heuristic. Removing belief features changes nothing
+measurable. IPS weighting did not help the logged design. Train and validation use disjoint defect
+families, and the model fits train-family cues that do not transfer.
+
+## Data hashes (not committed; regenerate with the commands below)
+
+| file | rows | sha256 (file) | stable sha256 (excl. wall_ms; = checkpoint `*_sha256`) |
+|---|---|---|---|
+| dense/train.jsonl | 439,377 (12,612 unknown) | `56694321…3efc` | `10ac81eb3a014903d3374278e5f3e4c61fcc22317c4d960ef0fbae11ed43da14` |
+| dense/validation.jsonl | 68,482 (1,099 unknown) | `be7d8dca…7a` | `c2ea1b1fbd60094a8ba4895b38f5f50dc864d4aee487cbbe08a8fb763218dbab` |
+| logged/train.jsonl (re-featurized) | 32,129 (1,059 unknown) | `7d07656d…7743` | `103af9e33122609532c9ca1605fe19ffaa65c182e242d6273322f3a25d5c4e30` |
+
+```
+R=<extracted tarball>/track_a   # needs research/data from the dataset branch on PYTHONPATH/in tree
+uv run --project research --locked python -m research.cli collect-observations --store dataset --root $R \
+  --split train|validation --seeds 1633385816 --policy eig_eps0.3 --workers 6 --out dense/<split>.jsonl
+uv run --project research --locked python -m research.cli train-ranker --train dense/train.jsonl \
+  --validation dense/validation.jsonl --out ckpt/dense --ablation full --ablation no_belief
+uv run --project research --locked python -m research.cli train-ranker --train $R/observations/train.jsonl \
+  --validation dense/validation.jsonl --store dataset --root $R --group-by episode --weighting ips --out ckpt/logged_ips
+uv run --project research --locked python -m research.ranker.compare --validation dense/validation.jsonl \
+  --checkpoint dense_full=ckpt/dense/full ... --primary dense_full --out validation-comparison.json
+```
+
+## Tests
+
+```
+UV_OFFLINE=1 PROOFHUNTER_PROFILE=offline uv run --project research --locked pytest -q tests/research
+UV_OFFLINE=1 uv run --project research --locked python -m research.schemas.export --check
+UV_OFFLINE=1 uv run --project research --locked mypy --strict research tests/research
+UV_OFFLINE=1 uv run --project research --locked ruff check research/ranker tests/research/ranker
+UV_OFFLINE=1 PROOFHUNTER_PROFILE=offline uv run --locked pytest -q
+UV_OFFLINE=1 PROOFHUNTER_PROFILE=offline uv run --locked ruff check .
+UV_OFFLINE=1 PROOFHUNTER_PROFILE=offline uv run --locked mypy src bench tools tests/integration
+UV_OFFLINE=1 PROOFHUNTER_PROFILE=offline uv run --locked python tools/gate.py setup|integrated
+```
 
 ## Costs
-- Paid calls: none, so there are no ledger entries. The CPU time was local: each collection took about 60 s, and training all 3 ablations took about 10 s.
-- Row `wall_ms` is the batch wall time divided per invocation. It is not a per-call measurement.
 
-## Known limitations / remaining dependencies
-- **Real data not trained yet.** `devin/1794090000-research/dataset` did not exist at handoff. When it lands: `collect-observations --store dataset --root <root> --split train|validation --out …`, then `train-ranker …`, then freeze `checkpoint.json` + hash in the integration config.
-- The default reviewer depends on the dataset lane's `templates.list_templates`/`render` as specified in OWNERSHIP.md. If those are missing, collection refuses to run.
-- Collection executes the whole guarded pool at each step (up to 64×3 calls per step) to form groups. This is the ranker's own data collection, not the frozen 6-pair episode budget, which the integration lane enforces at evaluation time.
-- The pool comes from `bayes.generate(builtin plan, CaseRecord.candidate_seed)`. Missing coverage is computed from usable history tags. Both should be checked against the integration runner's state construction.
-- Ranking metrics only. Episode metrics (pairs-to-witness, censoring) belong to the integration and measurement lanes.
+No paid calls (no ledger entries). Local CPU only, 8 vCPU: dense collection ≈ 9 min (train, 6
+workers) + 3 min (validation, 2 workers); re-featurization 6 min; training ≈ 4 min per dense
+ablation (peak RSS 6.1 GB), < 1 min per logged run; comparison < 1 min.
+
+## Limitations / dependencies
+
+- Dense collection uses one replicate seed and executes the whole guarded pool per step (ranker
+  data collection, not the frozen 6-pair evaluation budget; the integration lane enforces that).
+- Metric is single-decision ranking on validation, not episode metrics; the integration and
+  measurement lanes own episode-level and test results.
+- Pool conventions differ between lanes: the protocol/integration pool is
+  `bayes.generate(plan, candidate_seed)` (used by dense collection and at inference), while the
+  dataset log uses `pool_seed(candidate_seed, seed)`. Re-featurization follows the dataset's.
+- Missing coverage in ranker states comes from usable-history coverage tags, not
+  `oracle.compute_coverage`; the integration runner should confirm equivalence.
+- Logged episode grouping leaks the stopping rule through `step`/history features (see FEATURES.md).
+- Fixture artifacts from the first handoff remain in `fixture-v1/` (unchanged).

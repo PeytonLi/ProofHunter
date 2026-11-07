@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import argparse
+import functools
 import hashlib
 import json
 from collections.abc import Sequence
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from research.schemas import interfaces as I
 from research.schemas import models as M
@@ -40,22 +42,40 @@ def collect_observations(argv: Sequence[str]) -> int:
     ap.add_argument("--policy", default="eig_eps0.3")
     ap.add_argument("--seeds", help="comma-separated; default: protocol replicate seeds")
     ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--workers", type=int, default=1)
     a = ap.parse_args(list(argv))
-    from research.ranker.collect import collect_observations as _collect
     from research.ranker.collect import replicate_seeds
 
-    store, reviewer = _store(a.store, a.root)
+    store, _ = _store(a.store, a.root)
     seeds = [int(s) for s in a.seeds.split(",")] if a.seeds else replicate_seeds()
+    split = M.Split(a.split)
+    ids = [c.case_id for c in store.manifest().cases if c.split is split]
+    chunks = [ids[i:i + 16] for i in range(0, len(ids), 16)]
+    job = functools.partial(_collect_chunk, a.store, a.root, a.split, seeds, a.policy)
     a.out.parent.mkdir(parents=True, exist_ok=True)
-    digest, n = hashlib.sha256(), 0
-    with a.out.open("w") as fh:
-        for row in _collect(store, M.Split(a.split), seeds, a.policy, reviewer=reviewer):
-            line = row.model_dump_json() + "\n"
-            fh.write(line)
-            digest.update(line.encode())
-            n += 1
-    print(json.dumps({"rows": n, "sha256": digest.hexdigest(), "out": str(a.out)}))
+    digest, stable, n = hashlib.sha256(), hashlib.sha256(), 0
+    with a.out.open("w") as fh, ProcessPoolExecutor(max(1, a.workers)) as pool:
+        for lines in pool.map(job, chunks):
+            for line, key in lines:
+                fh.write(line)
+                digest.update(line.encode())
+                stable.update(key.encode())
+                n += 1
+    print(json.dumps({"rows": n, "sha256": digest.hexdigest(),
+                      "sha256_excluding_wall_ms": stable.hexdigest(), "out": str(a.out)}))
     return 0
+
+
+def _collect_chunk(store_name: str, root: Path | None, split: str, seeds: list[int],
+                   policy: str, case_ids: list[str]) -> list[tuple[str, str]]:
+    from research.ranker.collect import collect_cases
+    from research.ranker.metrics import stable_json
+
+    store, reviewer = _store(store_name, root)
+    allowed: Literal[M.Split.TRAIN, M.Split.VALIDATION] = (
+        M.Split.TRAIN if split == "train" else M.Split.VALIDATION)
+    return [(row.model_dump_json() + "\n", stable_json(row) + "\n") for row in
+            collect_cases(store, case_ids, allowed, seeds, policy, reviewer=reviewer)]
 
 
 def read_rows(path: Path) -> list[M.RankingObservation]:
@@ -69,13 +89,25 @@ def train_ranker(argv: Sequence[str]) -> int:
     ap.add_argument("--validation", type=Path, required=True)
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--ablation", action="append", choices=ABLATION_CHOICES)
+    ap.add_argument("--group-by", choices=("decision", "episode"), default="decision")
+    ap.add_argument("--weighting", choices=("none", "ips"), default="none")
+    ap.add_argument("--store", choices=("fixture", "dataset"),
+                    help="re-featurize logged rows from another feature set via this store")
+    ap.add_argument("--root", type=Path)
     a = ap.parse_args(list(argv))
+    from research.ranker.features import FEATURE_SET_VERSION
     from research.ranker.train import LambdaRankTrainer
 
     train, validation = read_rows(a.train), read_rows(a.validation)
+    if any(r.feature_set_version != FEATURE_SET_VERSION for r in train):
+        if a.store is None:
+            raise SystemExit("train rows use another feature set; pass --store/--root")
+        from research.ranker.relabel import refeaturize
+
+        train = list(refeaturize(_store(a.store, a.root)[0], train))
     result = {}
     for ablation in a.ablation or ["full", "no_belief"]:
-        trainer = LambdaRankTrainer(ablation)
+        trainer = LambdaRankTrainer(ablation, group_by=a.group_by, weighting=a.weighting)
         result[ablation] = {"checkpoint_sha256": trainer.train(train, validation,
                                                                 a.out / ablation),
                             "validation": trainer.report["validation_metrics"]}

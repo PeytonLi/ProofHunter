@@ -170,3 +170,66 @@ def test_ablation_choices_match() -> None:
     assert set(commands.ABLATION_CHOICES) == set(features.ABLATIONS)
 
 
+
+
+def _logged(rows: list[M.RankingObservation]) -> list[M.RankingObservation]:
+    """One row per decision point, as in the dataset-lane log (first candidate by hash)."""
+    seen: dict[tuple[str, int, int], M.RankingObservation] = {}
+    for r in sorted(rows, key=lambda r: r.candidate.input_sha256):
+        seen.setdefault((r.case_id, r.episode_seed, r.decision_step), r)
+    return list(seen.values())
+
+
+def test_episode_grouping_and_ips_weights(
+        rows: dict[str, list[M.RankingObservation]]) -> None:
+    from research.ranker import metrics
+
+    logged = _logged(rows["train"])
+    names = features.feature_names("full")
+    decision = metrics.build(logged, names, features.FEATURE_SET_VERSION,
+                             allowed=(M.Split.TRAIN,))
+    assert not decision.sizes
+    ep = metrics.build(logged, names, features.FEATURE_SET_VERSION, allowed=(M.Split.TRAIN,),
+                       group_by="episode", weighting="ips")
+    assert ep.sizes
+    assert all(k[3] == 0 for k in ep.keys)
+    assert abs(float(ep.w.mean()) - 1.0) < 1e-9
+    raw = [metrics.ips_weight(r) for r in logged if r.relevance is not M.Relevance.UNKNOWN]
+    assert max(raw) <= metrics.IPS_CLIP
+    flat = metrics.build(logged, names, features.FEATURE_SET_VERSION, allowed=(M.Split.TRAIN,),
+                         group_by="episode")
+    assert set(flat.w.tolist()) == {1.0}
+
+
+def test_logged_ips_training_records_design(rows: dict[str, list[M.RankingObservation]],
+                                            tmp_path: Path) -> None:
+    logged = _logged(rows["train"])
+    trainer = LambdaRankTrainer("full", group_by="episode", weighting="ips")
+    trainer.train(logged, rows["validation"], tmp_path / "ips")
+    meta = json.loads((tmp_path / "ips" / "checkpoint.json").read_text())
+    assert (meta["train_group_by"], meta["train_weighting"]) == ("episode", "ips")
+    assert load_ranker_selector(tmp_path / "ips", arm_id="builtin_ranker").arm_id
+
+
+def test_refeaturize_checks_pool(store: fixture.FixtureStore,
+                                 rows: dict[str, list[M.RankingObservation]]) -> None:
+    from research.ranker.relabel import refeaturize
+
+    with pytest.raises(ValueError, match="pool mismatch"):
+        list(refeaturize(store, _logged(rows["train"])[:3]))
+    test_row = rows["train"][0].model_copy(update={"split": M.Split.TEST})
+    with pytest.raises(PermissionError):
+        list(refeaturize(store, [test_row]))
+
+
+def test_compare_reports_spec_arms(rows: dict[str, list[M.RankingObservation]],
+                                   checkpoint: tuple[Path, str]) -> None:
+    from research.ranker.compare import compare
+
+    report = compare(rows["validation"], {"ranker": checkpoint[0]}, "ranker")
+    assert set(report["arms"]) == {"fixed_order", "uniform_random", "simple_heuristic",
+                                   "builtin_eig", "ranker"}
+    assert all(0 < a["mrr"] <= 1 for a in report["arms"].values())
+    ci = report["paired_vs_primary"]["uniform_random"]
+    assert ci["ci95_low"] <= ci["mrr_diff"] <= ci["ci95_high"]
+    assert report["checkpoints"]["ranker"]["checkpoint_sha256"] == checkpoint[1]

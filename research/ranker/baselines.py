@@ -29,6 +29,8 @@ def evaluate_all(train: metrics.Groups, validation: metrics.Groups,
                 "train_mrr": metrics.evaluate(train, score(train, names, feature, sign))["mrr"],
                 **metrics.evaluate(validation, score(validation, names, feature, sign))}
     best = max(sorted(table), key=lambda k: table[k]["mrr"])
+    honest = max(sorted(table), key=lambda k: table[k]["train_mrr"])
     return {"per_feature": table, "selected_on_validation": best,
+            "selected_on_train": honest, "selected_on_train_validation": table[honest],
             "builtin_eig": table.get("eig_bits:high"),
             "uniform_random": metrics.random_expected(validation)}
