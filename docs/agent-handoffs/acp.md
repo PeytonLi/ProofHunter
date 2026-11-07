@@ -2,7 +2,8 @@
 
 ## Live ACP follow-up (2026-11-07)
 
-Implementation PASS; Agentverse account connection and ASI:One live gate BLOCKED.
+Implementation and minimal mailbox account connection PASS; public visibility
+verification and ASI:One live gate BLOCKED.
 Base: `4140bf0dfab8d090181b6aea37cbb7e574eb75a6`; branch:
 `devin/1794083400-proofhunter-live/live-acp`.
 
@@ -94,8 +95,9 @@ run the process locally with the SAME saved seed. Open
 `https://agentverse.ai/inspect/?uri=http%3A//127.0.0.1%3A8001&address=agent1qt7qj4vrjwxjax7cd4n4ajgn9mrf97ke2lzaau72p8f4exydamxdxhxru5y`
 (or the inspector link printed by the SDK if port differs). The browser must be
 able to reach the local process. Choose Connect and Mailbox and approve the
-connection while signed in. No Agentverse login/API key is available to this work;
-this step was NOT performed. An ASI:One account is also needed for the fresh-chat gate.
+connection while signed in. This interactive step was NOT performed; the private
+headless connection below used the saved API key instead. An ASI:One account is
+also needed for the fresh-chat gate.
 
 SDK verification: in uagents 0.26.1, inspector POST `/connect` receives
 `AgentverseConnectRequest(user_token, agent_type="mailbox", endpoint=None, team=None)`.
@@ -176,6 +178,48 @@ Registration tests mock the SDK for success, missing/empty key, remote failure,
 exception redaction, conflicting arguments, normal mailbox credential isolation,
 and default-off/missing/invalid publication approval for both network entrypoints.
 These were pre-connection checks; see the private connection follow-up below.
+
+### Private mailbox connection follow-up
+
+Implementation commit `a9c51845f667304d0c0f99d06fbe0ca07e8720d7` was tested and
+pushed before making exactly one authorized live connection. Saved seed, service
+token and Agentverse key were bound through environment references only. Live
+profile used a loopback API base, publication approval remained unset, no Agent
+was constructed, no runtime was left running, and no control API call was sent.
+Registration sent only address, neutral name and mailbox type plus SDK-required
+empty/default fields. No handle, capability description, README, keywords, avatar,
+manifest, advertised protocols, endpoint or public toggle was supplied.
+
+Sanitized HTTP audit (UTC; request-ID headers absent):
+
+| UTC | Method | Path template | Status | Latency ms |
+| --- | --- | --- | --- | --- |
+| 2026-11-07T20:46:14.211035Z | GET | /v2/identity/{address}/challenge | 200 | 218 |
+| 2026-11-07T20:46:14.615078Z | POST | /v2/identity | 200 | 403 |
+| 2026-11-07T20:46:14.982639Z | POST | /v2/agents | 200 | 367 |
+| 2026-11-07T20:46:15.169292Z | GET | /v2/agents/{address} | 200 | 184 |
+
+CLI output: `registration succeeded`; registration exit 0. The single authenticated
+record GET returned `agent_type=mailbox`. Allowlisted fields `public`, `is_public`,
+`visibility`, `status`, `state`, `active`, `is_active`, and `running` were absent or
+null. Therefore **private/public visibility and activity are not verified** by this
+response. No second query, retry, permission widening or public toggle was attempted.
+The operator must inspect the account's agent visibility before any publication;
+minimal metadata is not proof of a server's privacy default. No successful live
+verification capability is advertised by this registration payload.
+
+No provider response bodies, identity challenge/proof, API keys or authorization
+headers were logged or persisted. External trace recorded method/path templates,
+status, UTC, latency and sanitized request-ID header only. Public configuration:
+uagents 0.26.1, SDK AgentverseConfig defaults (https://agentverse.ai), mailbox type,
+blank profile, no endpoints/protocols, publication flag unset. No charges/deployment,
+Daytona execution or ASI:One conversation was performed in this follow-up.
+
+Checks for this private registrar: owned pytest `122 passed in 0.58s`; aggregate
+Ruff `All checks passed!`; aggregate mypy `Success: no issues found in 73 source
+files`; owned mypy `Success: no issues found in 16 source files`; setup gate PASSED;
+integrated gate PASSED with `912 passed, 1 warning in 11.31s` and 120 sample bench
+rows. Existing Starlette/httpx warning unchanged. No pre-commit config found.
 
 Checks: owned ACP suite `108 passed in 1.68s`; full suite `898 passed, 1 warning in
 14.40s`; Ruff `All checks passed!`; aggregate mypy `Success: no issues found in 72
