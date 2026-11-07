@@ -1,5 +1,61 @@
 # Integration release: offline G2
 
+## Authorized private Render hosting — 2026-11-07
+
+Two authorized create calls returned HTTP 201, without retries. Only the new
+ProofHunter services were touched; no existing service environment was read or
+modified. Both use one Starter instance in Oregon, automatic deploys off, and
+creation-time commit `d0513988fbbc40ac93fecdcc6e3e34844b800e9e`.
+The documentation commit recording this operation is intentionally not deployed.
+
+| Name | Service ID | API type | Plan / region | Monthly estimate | Deploy ID / observed status |
+|---|---|---|---|---|---|
+| proofhunter-core | `srv-dbnp5bm7bikc73d5ofig` | private_service | starter / oregon | $7.25 including 1 GB disk | `dep-dbnp5bu7bikc73d5ogfg` / live |
+| proofhunter-acp | `srv-dbnp60rl550s73fqpnf0` | background_worker | starter / oregon | $7 | `dep-dbnp613l550s73fqpo3g` / live; runtime publication-held restart loop |
+
+Core dashboard: <https://dashboard.render.com/pserv/srv-dbnp5bm7bikc73d5ofig>.
+ACP dashboard: <https://dashboard.render.com/worker/srv-dbnp60rl550s73fqpnf0>.
+The core's API-returned internal address is `proofhunter-core:10000`; ACP uses
+`http://proofhunter-core:10000`. ACP has no inbound hostname. Workspace:
+`tea-d892qj6k1jcs7382afo0`. Total estimate: $14.25/month before other charges.
+
+Core deploy became live at `2026-11-07T21:06:59.707263Z`. A fully paginated
+156-entry deployment-log observation contained no Python traceback and included:
+
+```text
+2026-11-07T21:06:52.610171161Z runner disabled: isolation_unverified; intake disabled
+```
+
+This confirms the startup intake/runner hold, not application readiness.
+`/readyz` from inside Render was **not verified**: no remote shell was used and
+the publication-held ACP does not exercise the control API. No run/replay was
+submitted. No mailbox registration or publication flag change was performed.
+Secrets were hydrated only in the request process's memory; registry content
+came from the existing external enrollment, with the unprovisioned sentinel.
+Operator-normalized multiline PEM was sent without changing runtime parsing.
+
+ACP deploy was marked live at `2026-11-07T21:08:03.646081Z`, but it is **not a
+working agent**. Logs show repeated publication refusals at `21:08:10Z`,
+`21:08:19Z` and `21:08:42Z`, consistent with process restart. All 167 deployment
+log entries observed through `21:08:57Z` were paginated; no Python traceback was
+present. Sanitized evidence:
+
+```text
+2026-11-07T21:08:42.920342775Z configuration error: ACP publication is disabled; PROOFHUNTER_ACP_PUBLISH=true requires operator approval after the isolated three-run gate
+```
+
+The deployed `acp/__main__.py` catches this gate refusal and returns exit 2
+before Agent construction. The fetched logs/events did not expose a numeric
+process exit code; exit 2 is established from that deployed code path, not a
+Render exit-code event. The service remains unchanged and unsuspended at one
+Starter instance. `PROOFHUNTER_ACP_PUBLISH=false`; no Agentverse key was supplied.
+
+Remaining gates: internal application readiness and intake-refusal probes,
+independently approved sandbox/isolation execution and replay,
+separate ACP publication/discovery/chat approval, and
+checks/webhooks approval. The private report includes only allowlisted resource
+metadata and sanitized log lines at `/home/ubuntu/ph-report/render-resources.json`.
+
 ## Intake-held stack and Render preparation
 
 The previous standalone staging API/worker have been stopped. The combined

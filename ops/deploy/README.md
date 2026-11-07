@@ -1,10 +1,57 @@
-# Deployment examples, not deployed
+# Deployment examples and private Render staging
 
-## Render proposal (not applied)
+## Authorized Render creation — 2026-11-07
+
+Direct API creation returned 201 for each new service, with no retries; no other
+service was touched. Both are Oregon Starter, one instance, auto-deploy off,
+at creation-time commit `d0513988fbbc40ac93fecdcc6e3e34844b800e9e`.
+
+| Name | Service ID | API type | Monthly estimate | Deploy ID / status |
+|---|---|---|---|---|
+| proofhunter-core | `srv-dbnp5bm7bikc73d5ofig` | private_service | $7.25 including 1 GB disk | `dep-dbnp5bu7bikc73d5ogfg` / live |
+| proofhunter-acp | `srv-dbnp60rl550s73fqpnf0` | background_worker | $7 | `dep-dbnp613l550s73fqpo3g` / live; runtime publication-held restart loop |
+
+Dashboards: [core](https://dashboard.render.com/pserv/srv-dbnp5bm7bikc73d5ofig),
+[ACP](https://dashboard.render.com/worker/srv-dbnp60rl550s73fqpnf0).
+Core's returned private address: `proofhunter-core:10000`; ACP API base:
+`http://proofhunter-core:10000`. ACP has no inbound address. Workspace:
+`tea-d892qj6k1jcs7382afo0`. Combined estimate: $14.25/month before other charges.
+Subsequent documentation pushes do not redeploy either service.
+
+Core deploy became live at `2026-11-07T21:06:59.707263Z`; all 156 log entries
+observed through `21:07:13Z` were paginated, with no Python traceback. Evidence:
+
+```text
+2026-11-07T21:06:52.610171161Z runner disabled: isolation_unverified; intake disabled
+```
+
+Internal `/readyz` is **not verified**; no remote shell was used and the held
+ACP does not call the API. No run was submitted. Runner/checks/webhooks and ACP
+publication remain disabled. Remaining gates are internal readiness/intake
+probes, sandbox isolation/execution/replay, separately approved ACP publication
+and chat, and checks/webhooks. No mailbox registration was attempted.
+See `docs/integration.md` and `/home/ubuntu/ph-report/render-resources.json` for
+the deployment observations and sanitized evidence.
+
+ACP deploy was marked live at `2026-11-07T21:08:03.646081Z`, but repeated
+publication refusals at `21:08:10Z`, `21:08:19Z` and `21:08:42Z` show a held
+runtime/restart loop, not a working agent. All 167 deployment log entries
+observed through `21:08:57Z` were paginated without a Python traceback:
+
+```text
+2026-11-07T21:08:42.920342775Z configuration error: ACP publication is disabled; PROOFHUNTER_ACP_PUBLISH=true requires operator approval after the isolated three-run gate
+```
+
+The deployed ACP gate handler returns exit 2; numeric exit codes were not
+exposed in the fetched Render logs/events. Publication stays false, no Agentverse
+key was supplied, and the one-Starter-instance service was left unsuspended.
+
+## Render configuration (Blueprint not applied)
 
 `render.yaml` describes two paid services in the same Oregon workspace/network:
 `proofhunter-core` (private service, one Starter instance, 1 GB disk) and
-`proofhunter-acp` (Starter background worker). No Render POST has been sent.
+`proofhunter-acp` (Starter background worker). Matching services were created
+through direct API requests; the Blueprint itself was not applied.
 Core intake, runner, checks and webhooks are disabled. API run creation and
 replay creation return 503 `intake_disabled` before authentication, store or
 provider calls. Readiness still reports the existing store/heartbeat readiness;
@@ -53,8 +100,8 @@ PEM parser or key-file write is added. Do not persist hydrated create payloads.
 
 Read-only inspection found workspace `tea-d892qj6k1jcs7382afo0`, no existing
 `proofhunter-*` services in the first 100, and zero build sources. These results
-do not establish whether Render's GitHub integration can access this repository;
-repository authorization must be verified before creation is approved.
+did not establish repository access by themselves. Subsequent authorized
+creation and the successful core build verified access to the branch.
 Prepared placeholder-only API requests are private VM artifacts:
 `/home/ubuntu/ph-staging/render-create.json` and `render-create-acp.json`.
 
@@ -76,9 +123,9 @@ either API or worker stops. Keep runner, checks and webhooks off for this lane.
 Live tokens and in-memory PEM belong only in the hosting secret environment.
 See `docs/integration.md` for enrollment and explicit retention flags; scheduling
 is off by default. The offline unit examples below are unchanged and are not
-live deployment manifests. No service was created or started.
+live deployment manifests. No systemd service was created or started.
 
-All examples are offline and private. Create the unprivileged service user,
+The unit examples below are offline and private. Create the unprivileged service user,
 install the reviewed checkout at `/opt/proofhunter`, and provision a writable
 `/var/lib/proofhunter` before use. Set the same database and enrollment paths for
 API and worker. Explicitly provision distinct test-only API/operator tokens for
