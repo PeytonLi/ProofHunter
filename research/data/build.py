@@ -223,15 +223,19 @@ def enumerate_test_clean_backfill(master_seed: int) -> list[Raw]:
 def repair_test_split(chosen: list[Raw], validated: Sequence[Raw], backfill: Sequence[Raw],
                       protocol: M.ProtocolV1,
                       bench_hashes: set[str]) -> tuple[list[Raw], list[Raw]]:
-    """Drop test cases whose normalised diff fingerprint appears in train/validation and
-    backfill them with test-only cases. Train and validation selections are left untouched."""
-    blocked_fp = {S.diff_fingerprint(r.base, r.head) for r in chosen if r.split is not M.Split.TEST}
+    """Drop test cases whose normalised diff matches a train/validation diff (exact
+    ``normalized-diff-v2`` fingerprint or shingle Jaccard >= 0.9) and backfill them with
+    test-only cases. Train and validation selections are left untouched."""
+    blocked = S.DiffIndex()
+    for r in chosen:
+        if r.split is not M.Split.TEST:
+            blocked.add(case_id(r), S.diff_signature(r.base, r.head))
     blocked_src = {_sha(x) for r in validated if r.split is not M.Split.TEST and r.base
                    for x in (r.base, r.head)} | bench_hashes
     kept: list[Raw] = []
     dropped: list[Raw] = []
     for raw in chosen:
-        if raw.split is M.Split.TEST and S.diff_fingerprint(raw.base, raw.head) in blocked_fp:
+        if raw.split is M.Split.TEST and blocked.matches(S.diff_signature(raw.base, raw.head)):
             raw.reason = "cross_split_diff_duplicate"
             dropped.append(raw)
         else:
@@ -255,9 +259,11 @@ def repair_test_split(chosen: list[Raw], validated: Sequence[Raw], backfill: Seq
             if raw.reason not in (None, "over_split_target"):
                 excluded.append(raw)
                 continue
-            fp = S.diff_fingerprint(raw.base, raw.head)
-            if fp in blocked_fp or {_sha(raw.base), _sha(raw.head)} & blocked_src:
-                raw.reason = "cross_split_diff_duplicate" if fp in blocked_fp else (
+            sig = S.diff_signature(raw.base, raw.head)
+            fp = sig.fingerprint
+            leaks = bool(blocked.matches(sig))
+            if leaks or {_sha(raw.base), _sha(raw.head)} & blocked_src:
+                raw.reason = "cross_split_diff_duplicate" if leaks else (
                     "cross_split_source_duplicate")
             elif (fp in used_fp or raw.cluster in used_clusters
                   or (raw.base, raw.head) in used_pairs):
@@ -460,7 +466,7 @@ def build_cases(protocol: M.ProtocolV1, out_dir: Path, *, workers: int | None = 
     fingerprints = {case_id(r): r.cluster for r in chosen}
     audit = leakage_audit(manifest, label_files, fingerprints,
                           {case_id(r): r.fingerprint for r in chosen}, bench,
-                          {case_id(r): S.diff_fingerprint(r.base, r.head) for r in chosen})
+                          {case_id(r): S.diff_signature(r.base, r.head) for r in chosen})
     hashes["reports/split-audit.json"] = _write_json(out_dir / "reports" / "split-audit.json",
                                                      audit)
     provenance = {

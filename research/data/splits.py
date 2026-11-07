@@ -5,76 +5,122 @@ from __future__ import annotations
 import builtins
 import difflib
 import hashlib
+import io
 import json
 import keyword
-import re
+import tokenize
 from collections import Counter, defaultdict
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 
 from research.data import templates as T
 from research.schemas import models as M
 
 GROUP_KEYS = ("family_id", "defect_origin", "near_dup_cluster", "template_id")
-DIFF_FINGERPRINT_VERSION = "normalized-diff-v1"
-_TOKEN = re.compile(
-    r'''[rbuRBU]{0,2}("""|\'\'\'|"|\')(?:\\.|(?!\1).)*\1'''
-    r'''|\d[\d_]*(?:\.\d*)?|[A-Za-z_]\w*|\S''')
-
-_SEMANTIC_NAMES = frozenset(dir(builtins)) | {
-    "Decimal", "Fraction", "ROUND_HALF_UP", "ROUND_FLOOR", "ROUND_CEILING", "ROUND_HALF_EVEN",
-    "ROUND_DOWN", "ROUND_HALF_DOWN", "decimal", "fractions", "functools", "math", "operator",
-    "floor", "ceil", "reduce", "add", "quantize", "numerator", "denominator"}
-
-_ROLES = ("ITEMS", "DISCOUNT", "SUBTOTAL", "TOTAL", "HELPER")
-_ROLE_OF = {name: role for names in T.NAMES for name, role in zip(names, _ROLES, strict=True)}
-_ROLE_OF[T.ALT_HELPER] = "HELPER"
+DIFF_FINGERPRINT_VERSION = "normalized-diff-v2"
+DIFF_SHINGLE_TOKENS = 5
+DIFF_JACCARD_THRESHOLD = 0.9
+_KEEP_NAMES = frozenset(dir(builtins)) | frozenset(keyword.kwlist) | frozenset(keyword.softkwlist)
+_SKIP_TOKENS = frozenset({tokenize.COMMENT, tokenize.NL, tokenize.INDENT, tokenize.DEDENT,
+                          tokenize.ENCODING, tokenize.ENDMARKER})
 
 
-def _normalize_line(line: str) -> list[str]:
-    tokens: list[str] = []
-    for match in _TOKEN.finditer(line):
-        tok = match.group(0)
-        if tok == "#":
-            break
-        if match.group(1):
-            tokens.append("STR")
-        elif tok[0].isalpha() or tok[0] == "_":
-            semantic = keyword.iskeyword(tok) or tok in _SEMANTIC_NAMES
-            tokens.append(tok if semantic else _ROLE_OF.get(tok, "ID"))
-        else:
-            tokens.append(tok)
-    return tokens
+def _logical_lines(source: bytes) -> list[list[tokenize.TokenInfo]]:
+    """Logical lines without comments, whitespace or docstrings (bare string statements)."""
+    lines: list[list[tokenize.TokenInfo]] = []
+    current: list[tokenize.TokenInfo] = []
+    for tok in tokenize.tokenize(io.BytesIO(source).readline):
+        if tok.type in _SKIP_TOKENS:
+            continue
+        if tok.type == tokenize.NEWLINE:
+            if current and not (len(current) == 1 and current[0].type == tokenize.STRING):
+                lines.append(current)
+            current = []
+            continue
+        current.append(tok)
+    if current:
+        lines.append(current)
+    return lines
 
 
-def _tokens(line: str) -> list[str]:
-    tokens: list[str] = []
-    for match in _TOKEN.finditer(line):
-        if match.group(0) == "#":
-            break
-        tokens.append(match.group(0))
-    return tokens
+def _stripped_lines(source: bytes) -> list[tuple[str, ...]]:
+    """Logical lines as tokens with strings collapsed to ``STR`` (identifiers still exact)."""
+    return [tuple("STR" if tok.type == tokenize.STRING else tok.string for tok in line)
+            for line in _logical_lines(source)]
 
 
-def _code_lines(source: bytes) -> list[str]:
-    lines = (" ".join(_tokens(line)) for line in source.decode().splitlines())
-    return [line for line in lines if line]
-
-
-def diff_fingerprint(base: bytes, head: bytes) -> str:
-    """Hash of the base->head changed lines. Lines are compared with whitespace and comments
-    removed, so formatting-only edits vanish; the changed lines are then hashed with string
-    contents as ``STR``, template renames collapsed to their role and other names to ``ID``.
-    Renamed or reformatted copies of the same change collide across splits."""
-    old, new = _code_lines(base), _code_lines(head)
-    removed: list[list[str]] = []
-    added: list[list[str]] = []
+def _changed_lines(base: bytes, head: bytes) -> tuple[list[str], list[str]]:
+    """Removed and added lines of the base->head change, after stripping comments, docstrings
+    and whitespace and collapsing strings. Every non-builtin identifier in the changed lines is
+    then renamed ``v<n>`` in order of first appearance, one renaming shared by base and head."""
+    old, new = _stripped_lines(base), _stripped_lines(head)
+    removed: list[tuple[str, ...]] = []
+    added: list[tuple[str, ...]] = []
     matcher = difflib.SequenceMatcher(None, old, new, autojunk=False)
     for tag, i1, i2, j1, j2 in matcher.get_opcodes():
         if tag != "equal":
-            removed.extend(_normalize_line(line) for line in old[i1:i2])
-            added.extend(_normalize_line(line) for line in new[j1:j2])
+            removed.extend(old[i1:i2])
+            added.extend(new[j1:j2])
+    names: dict[str, str] = {}
+
+    def rename(line: tuple[str, ...]) -> str:
+        return " ".join(
+            names.setdefault(t, f"v{len(names)}")
+            if (t[0].isalpha() or t[0] == "_") and t != "STR" and t not in _KEEP_NAMES else t
+            for t in line)
+
+    return [rename(line) for line in removed], [rename(line) for line in added]
+
+
+@dataclass(frozen=True)
+class DiffSignature:
+    fingerprint: str
+    shingles: frozenset[str]
+
+
+def diff_signature(base: bytes, head: bytes) -> DiffSignature:
+    """``normalized-diff-v2`` signature of the base->head change: the sha256 of the changed
+    normalised lines plus their 5-token shingles (one shingle if the change is shorter)."""
+    removed, added = _changed_lines(base, head)
     payload = json.dumps([DIFF_FINGERPRINT_VERSION, removed, added], separators=(",", ":"))
-    return hashlib.sha256(payload.encode()).hexdigest()
+    seq = [t for line in removed for t in ("-", *line.split())]
+    seq += [t for line in added for t in ("+", *line.split())]
+    k = DIFF_SHINGLE_TOKENS
+    shingles = (frozenset({" ".join(seq)}) if len(seq) < k
+                else frozenset(" ".join(seq[i:i + k]) for i in range(len(seq) - k + 1)))
+    return DiffSignature(hashlib.sha256(payload.encode()).hexdigest(), shingles)
+
+
+def diff_fingerprint(base: bytes, head: bytes) -> str:
+    return diff_signature(base, head).fingerprint
+
+
+class DiffIndex:
+    """Exact-fingerprint and shingle-Jaccard lookup over a set of case diffs."""
+
+    def __init__(self) -> None:
+        self.signatures: dict[str, DiffSignature] = {}
+        self._by_fp: dict[str, set[str]] = defaultdict(set)
+        self._by_shingle: dict[str, set[str]] = defaultdict(set)
+
+    def add(self, key: str, sig: DiffSignature) -> None:
+        self.signatures[key] = sig
+        self._by_fp[sig.fingerprint].add(key)
+        for sh in sig.shingles:
+            self._by_shingle[sh].add(key)
+
+    def matches(self, sig: DiffSignature) -> list[tuple[str, float]]:
+        """Keys whose diff equals ``sig`` exactly or has Jaccard >= the threshold."""
+        hits = {key: 1.0 for key in self._by_fp.get(sig.fingerprint, ())}
+        inter: Counter[str] = Counter()
+        for sh in sig.shingles:
+            inter.update(self._by_shingle.get(sh, ()))
+        for key, n in inter.items():
+            other = self.signatures[key].shingles
+            jaccard = n / (len(sig.shingles) + len(other) - n)
+            if jaccard >= DIFF_JACCARD_THRESHOLD:
+                hits[key] = max(hits.get(key, 0.0), jaccard)
+        return sorted(hits.items())
 
 
 def template_split(template_id: str) -> M.Split:
@@ -104,7 +150,7 @@ def assign_splits(cases: Sequence[M.CaseRecord], protocol: M.ProtocolV1, *,
 def leakage_audit(manifest: M.CaseManifest, labels: Mapping[M.Split, M.LabelFile],
                   clusters: Mapping[str, str], fingerprints: Mapping[str, str],
                   bench_hashes: set[str],
-                  diff_fingerprints: Mapping[str, str] | None = None) -> dict[str, object]:
+                  diff_signatures: Mapping[str, DiffSignature] | None = None) -> dict[str, object]:
     by_split: dict[str, list[M.CaseRecord]] = defaultdict(list)
     for case in manifest.cases:
         by_split[case.split.value].append(case)
@@ -115,15 +161,23 @@ def leakage_audit(manifest: M.CaseManifest, labels: Mapping[M.Split, M.LabelFile
         for case in manifest.cases:
             owners[str(getattr(case, key))].add(case.split.value)
         checks[f"{key}_cross_split"] = sorted(k for k, v in owners.items() if len(v) > 1)
-    diff_owner: dict[str, set[str]] = defaultdict(set)
-    diff_cases: dict[str, list[str]] = defaultdict(list)
-    for case in manifest.cases:
-        fp = (diff_fingerprints or {}).get(case.case_id)
-        if fp:
-            diff_owner[fp].add(case.split.value)
-            diff_cases[fp].append(f"{case.split.value}:{case.case_id}")
-    shared_diffs = sorted(k for k, v in diff_owner.items() if len(v) > 1)
-    checks["diff_fingerprint_cross_split"] = shared_diffs
+    split_of = {case.case_id: case.split.value for case in manifest.cases}
+    diff_index = DiffIndex()
+    for case_id, sig in sorted((diff_signatures or {}).items()):
+        diff_index.add(case_id, sig)
+    diff_pairs: list[dict[str, object]] = []
+    for case_id, sig in sorted(diff_index.signatures.items()):
+        for other, jaccard in diff_index.matches(sig):
+            if other > case_id and split_of[other] != split_of[case_id]:
+                diff_pairs.append({
+                    "cases": [f"{split_of[case_id]}:{case_id}", f"{split_of[other]}:{other}"],
+                    "exact": sig.fingerprint == diff_index.signatures[other].fingerprint,
+                    "jaccard": round(jaccard, 4)})
+    fp_split: dict[str, set[str]] = defaultdict(set)
+    for case_id, sig in diff_index.signatures.items():
+        fp_split[sig.fingerprint].add(split_of[case_id])
+    checks["diff_fingerprint_cross_split"] = sorted(k for k, v in fp_split.items() if len(v) > 1)
+    checks["diff_jaccard_cross_split"] = [p["cases"] for p in diff_pairs]
     src_owner: dict[str, set[str]] = defaultdict(set)
     for case in manifest.cases:
         src_owner[case.head_source_sha256].add(case.split.value)
@@ -158,9 +212,12 @@ def leakage_audit(manifest: M.CaseManifest, labels: Mapping[M.Split, M.LabelFile
         "summary": summary,
         "grouping_key_violations": checks,
         "diff_fingerprint_version": DIFF_FINGERPRINT_VERSION,
-        "diff_fingerprints_recorded": len(diff_owner),
-        "diff_fingerprint_shared_across_splits": len(shared_diffs),
-        "diff_fingerprint_shared_examples": {k: sorted(diff_cases[k]) for k in shared_diffs[:5]},
+        "diff_fingerprints_recorded": len(fp_split),
+        "diff_fingerprint_shared_across_splits": len(checks["diff_fingerprint_cross_split"]),
+        "diff_shingle_tokens": DIFF_SHINGLE_TOKENS,
+        "diff_jaccard_threshold": DIFF_JACCARD_THRESHOLD,
+        "diff_similar_pairs_across_splits": len(diff_pairs),
+        "diff_similar_pair_examples": diff_pairs[:10],
         "source_sha256_shared_across_splits": len(shared_sources),
         "source_sha256_shared_examples": shared_sources[:5],
         "behavior_fingerprint_shared_across_splits": sum(len(v) > 1 for v in fp_owner.values()),

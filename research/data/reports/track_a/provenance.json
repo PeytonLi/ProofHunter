@@ -1,15 +1,15 @@
 {
  "artifact_sha256": {
-  "case-manifest.json": "aaa8ea78fc2826b05bdeb5e434a7697461abd88a81980436019f387374b58a04",
-  "exclusions.jsonl": "fa4033aa3e905413b8dfc2b1a839334c04ff2358b800dfa85d5f9d313da17f7d",
-  "labels/test.sealed.json": "2344b8a2897c191c78132e69cfc59a8e4cfa446f4d5db91155199f4b3a7524e0",
-  "labels/train.json": "7163a3af8adbef1d7f66e30e45ab26f6552a1207e6a44277fe04c5bb50e9c596",
-  "labels/validation.json": "8f4124e64e6925bd15085eaec431b2154317a43417b5eb44c5a43f1763bea72a",
-  "reports/exclusion-report.json": "7f7c4ed124c16be8dcea95569ab446af39b6b8c9c0bc9eda4a93f927e685a419",
-  "reports/split-audit.json": "0a2198682c0b9e6ac1510cabf557e8f2dd60deeb610ecda58e80fb53ae6eecbb"
+  "case-manifest.json": "c7b6072c80a2b060539c51a863d487006cc8da042ceca695903d10e093f38cf1",
+  "exclusions.jsonl": "9062a161779b238ce66f6e511ed7a137ff24c3ad8e93610a2014c942bbc8763a",
+  "labels/test.sealed.json": "edbc940aa94044163d52e6da415f70b24c8131e7830f10ca56ed32bb8ad9059e",
+  "labels/train.json": "63fa3261084b0b95f5c7049bf9e9a693819e6d97b6777ffe89d12f18dfb5ed97",
+  "labels/validation.json": "683e0263494b6891b31e450b1a45c0c4c0f0377657c2f05fbd47218169d64c78",
+  "reports/exclusion-report.json": "65a07462f9e504c044015ce64617f45cc038e8db9ec30fa7496ee469b117bcc2",
+  "reports/split-audit.json": "595bc9896ac2ab2ecb7a6f41623d8e725db503a3d99d0adff540a60e1a84023a"
  },
  "clean_rule": "base and head equal the oracle on every probe; reviewed cosmetic refactor",
- "dataset_commit": "ac50b9838ed359f8923961bca8c38ac0c69ca0c0",
+ "dataset_commit": "c668241b8a9bb71e375930d925cc7f829bd4f48e",
  "families": {
   "bulk_discount_extra": {
    "description": "unspecified extra discount",
@@ -109,7 +109,7 @@
   }
  },
  "label_rule": "defect: base equals oracle on every probe (introduced) or base == head everywhere (existing); witness = first probe where head != oracle; fresh head re-execution in a new namespace must return the same value",
- "manifest_cases_sha256": "dcd14e3f8e17533d89dd526d1d801493bfe019c58939cdc806ff87e637459340",
+ "manifest_cases_sha256": "897109b31604ebb62dfd5e8334dcf5a5c244527fc319eddbf573527f90fa7b94",
  "master_seed": 20261107,
  "oracle": "proofhunter.oracle.rounding.rounding_half_up_once",
  "probe_inputs": 3200,
@@ -190,7 +190,7 @@
    "subtotal": "reduce"
   }
  },
- "source_files": 3807,
+ "source_files": 3819,
  "template_module_sha256": "e616b5abbc488ffc378e79edf89bdd3fd424d9b1cb00f9617a22f09deb78416b",
  "template_registry_version": "checkout-templates-v1"
 }

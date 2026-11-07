@@ -10,7 +10,12 @@ from research.data import execute as X
 from research.data import observations, sft
 from research.data import templates as T
 from research.data.build import build_cases
-from research.data.splits import diff_fingerprint
+from research.data.splits import (
+    DIFF_JACCARD_THRESHOLD,
+    DiffIndex,
+    diff_fingerprint,
+    diff_signature,
+)
 from research.data.store import SealedLabelsError, open_store, unseal_token
 from research.data.swe_smith import prepare_swe_smith_manifest
 from research.schemas import models as M
@@ -92,16 +97,41 @@ def test_manifest_grouped_labels_witnessed_and_test_sealed(small_root: Path) -> 
     assert audit["grouping_key_violations"]["diff_fingerprint_cross_split"] == []
 
 
-def test_diff_fingerprint_normalises_names_whitespace_and_comments() -> None:
-    base = b'"""Doc."""\ndef f(prices_cents, discount_percent):\n    items = list(prices_cents)\n'
-    head = b'"""Doc."""\ndef f(prices_cents, discount_percent):\n    items = sorted(prices_cents)\n'
-    renamed = (base.replace(b"items", b"basket").replace(b"Doc.", b"Other doc."),
-               head.replace(b"items", b"basket").replace(b"    ", b"      ")
-               .replace(b"\n", b"  # note\n", 2).replace(b"Doc.", b"Other doc."))
-    assert diff_fingerprint(base, head) == diff_fingerprint(*renamed)
-    role_changed = head.replace(b"items =", b"d =")
-    assert diff_fingerprint(base, head) != diff_fingerprint(base, role_changed)
+def test_diff_fingerprint_normalises_names_whitespace_comments_and_docstrings() -> None:
+    base = (b'"""Doc."""\nimport math\n\n\ndef f(prices_cents, discount_percent):\n'
+            b'    items = list(prices_cents)\n    return len(items)\n')
+    head = base.replace(b"list(prices_cents)", b"sorted(prices_cents)")
+    sig = diff_signature(base, head)
+
+    def variant(src: bytes) -> bytes:
+        return (src.replace(b"items", b"foo_bar").replace(b"prices_cents", b"xs")
+                .replace(b"Doc.", b"Another docstring.").replace(b"import math", b"import os")
+                .replace(b"    ", b"        ").replace(b"):\n", b"):  # comment\n"))
+
+    assert diff_signature(variant(base), variant(head)).fingerprint == sig.fingerprint
+    assert diff_signature(base, head.replace(b"Doc.", b"Changed doc.")).fingerprint == (
+        sig.fingerprint)
     assert diff_fingerprint(base, head) != diff_fingerprint(base, head.replace(b"sorted", b"max"))
+    # one shared renaming: renaming only the head side changes the edit
+    assert diff_fingerprint(base, head) != diff_fingerprint(
+        base, head.replace(b"items = sorted", b"other = sorted"))
+
+
+def test_diff_index_flags_exact_and_near_duplicate_edits() -> None:
+    def src(ops: list[str]) -> bytes:
+        body = "".join(f"    t{i} = t{i - 1} {op} {i}\n" for i, op in enumerate(ops, 1))
+        return f"def f(t0):\n{body}    return t{len(ops)}\n".encode()
+
+    base, head = src(["+"] * 30), src(["*"] * 30)
+    near_head = src(["*"] * 14 + ["-"] + ["*"] * 15)
+    index = DiffIndex()
+    index.add("train-case", diff_signature(base, head))
+    assert index.matches(diff_signature(base, head)) == [("train-case", 1.0)]
+    hit = index.matches(diff_signature(base, near_head))
+    assert hit
+    assert hit[0][0] == "train-case"
+    assert DIFF_JACCARD_THRESHOLD <= hit[0][1] < 1.0
+    assert index.matches(diff_signature(base, src(["-"] * 30))) == []
 
 
 def test_build_is_deterministic(small_root: Path, tmp_path: Path) -> None:

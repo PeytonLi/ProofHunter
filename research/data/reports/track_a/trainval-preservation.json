@@ -1,11 +1,11 @@
 {
  "after": {
-  "cases_sha256": "dcd14e3f8e17533d89dd526d1d801493bfe019c58939cdc806ff87e637459340",
-  "dataset_commit": "ac50b9838ed359f8923961bca8c38ac0c69ca0c0",
+  "cases_sha256": "897109b31604ebb62dfd5e8334dcf5a5c244527fc319eddbf573527f90fa7b94",
+  "dataset_commit": "c668241b8a9bb71e375930d925cc7f829bd4f48e",
   "generator/train.jsonl": "cc5c14121f548500dff1aa3a2810dea02e33b737b901d1b3d22debe2ad5e48e9",
   "generator/validation.jsonl": "57a119d8bbf92b9816e0af52bb40fd597808818a144dc896b4593e6910c48866",
-  "labels/train.json.file": "7163a3af8adbef1d7f66e30e45ab26f6552a1207e6a44277fe04c5bb50e9c596",
-  "labels/validation.json.file": "8f4124e64e6925bd15085eaec431b2154317a43417b5eb44c5a43f1763bea72a",
+  "labels/train.json.file": "63fa3261084b0b95f5c7049bf9e9a693819e6d97b6777ffe89d12f18dfb5ed97",
+  "labels/validation.json.file": "683e0263494b6891b31e450b1a45c0c4c0f0377657c2f05fbd47218169d64c78",
   "observations/train.jsonl": "d349fb46b948813ad19fc26dca119904d507f7b70cd5c9cfc272c11e9dd83d2c",
   "observations/validation.jsonl": "1e88d2c4573eb2bac1e8b8197e36b97f0be798afdd90e6b2260a71b55e289cb7",
   "train.labels_array": "08b0b2743328cde00bf70fe3b892f667e337db62aebb35b57d1198f83b2339ea",
@@ -56,6 +56,6 @@
   "validation.source_files"
  ],
  "note": "labels/{train,validation}.json differ only in manifest_cases_sha256 (frozen LabelFile field checked by the store); the label arrays are identical.",
- "previous_dataset_commit": "ac50b9838ed359f8923961bca8c38ac0c69ca0c0",
- "repair": "test-only clean-control repair for normalized-diff-v1 cross-split leak"
+ "repair": "test-only clean-control repair for normalized-diff-v2 cross-split leaks (exact fingerprint or 5-token-shingle Jaccard >= 0.9)",
+ "train_validation_frozen_at": "ac50b9838ed359f8923961bca8c38ac0c69ca0c0"
 }
