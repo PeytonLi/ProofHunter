@@ -164,8 +164,9 @@ def project(summary: Mapping[str, Any], protocol: ProtocolV1) -> dict[str, Any]:
         * protocol.max_invocations_per_episode,
         "projected_usd_measured_arms": known_cost,
         "arms_with_unknown_cost": unknown,
-        "note": "Execution is local reviewed template code in isolated child processes (0 USD). Model-arm dollars stay "
-                "unknown until their lanes report measured per-episode costs.",
+        "note": "Execution is local reviewed template code in isolated child processes "
+                "(0 USD). Model-arm dollars stay unknown until their lanes report measured "
+                "per-episode costs.",
     }
 
 
@@ -249,8 +250,8 @@ def render_markdown(report: Mapping[str, Any]) -> str:
     checks = report["dataset_checks"]
     lines = [
         "# R1 feasibility pilot", "",
-        f"Mode: {report['measurement_mode']} (reviewed templates, one isolated local child process per invocation; "
-        "not a cloud or sandbox timing). Split: "
+        f"Mode: {report['measurement_mode']} (reviewed templates, one isolated local child "
+        "process per invocation; not a cloud or sandbox timing). Split: "
         f"{report['split']}. Cases: {report['cases']}. Seeds: {len(report['seeds'])}. "
         f"Implementation: `{report['implementation_sha']}`.", "",
         "## Dataset checks", "",
