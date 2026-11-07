@@ -9,13 +9,14 @@ from __future__ import annotations
 
 import difflib
 import hashlib
+import importlib
 import subprocess
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from time import perf_counter_ns
-from typing import Final, cast
+from typing import Any, Final
 
 from pydantic import ValidationError
 
@@ -109,7 +110,7 @@ def template_review(sources: CaseSources) -> str | None:
     if hashlib.sha256(sources.head_source).hexdigest() != case.head_source_sha256:
         return "head_source_hash_mismatch"
     try:
-        from research.data import templates  # type: ignore[import-untyped]
+        templates: Any = importlib.import_module("research.data.templates")
     except ModuleNotFoundError:
         return "template_registry_unavailable"
     info = {t.template_id: t for t in templates.list_templates()}.get(case.template_id)
@@ -124,9 +125,9 @@ def template_review(sources: CaseSources) -> str | None:
 
 
 def default_prompt_builder(sources: CaseSources) -> GeneratorInput:
-    from research.generator.prompt import build_input  # type: ignore[import-untyped]
-
-    return cast(GeneratorInput, build_input(sources))
+    built: GeneratorInput = importlib.import_module("research.generator.prompt").build_input(
+        sources)
+    return built
 
 
 def _commit(source_sha256: str) -> str:
