@@ -170,6 +170,34 @@ def project(summary: Mapping[str, Any], protocol: ProtocolV1) -> dict[str, Any]:
     }
 
 
+def degraded_reason(selector: object, generator: object) -> str | None:
+    """The baseline selector's ``degraded`` reason, else a generator fallback, else ``None``."""
+    reason = getattr(selector, "degraded", None)
+    if reason is not None:
+        return str(reason)
+    last = getattr(generator, "last", None)
+    if last is not None and getattr(last, "mode", None) == "fallback":
+        code = getattr(last, "reason_code", None)
+        return f"generator_fallback:{getattr(code, 'value', code)}"
+    return None
+
+
+def write_degraded(path: Path, records: Sequence[Mapping[str, str | None]]) -> None:
+    with path.open("w", encoding="utf-8") as stream:
+        for record in records:
+            stream.write(json.dumps(record, sort_keys=True) + "\n")
+
+
+def degraded_by_arm(rows: Sequence[RawResultRow],
+                    records: Sequence[Mapping[str, str | None]]) -> dict[str, dict[str, int]]:
+    arm = {r.run_id: r.arm_id for r in rows}
+    out: dict[str, Counter[str]] = defaultdict(Counter)
+    for record in records:
+        if record["degraded"] is not None and record["run_id"] is not None:
+            out[arm[record["run_id"]]][record["degraded"]] += 1
+    return {k: dict(v) for k, v in sorted(out.items())}
+
+
 def run(store: CaseStore, protocol: ProtocolV1, runner: ResearchEpisodeRunner,
         factory: Factory, *, arms: Sequence[str], split: Split, max_cases: int,
         seeds: Sequence[int], mode: MeasurementMode, out: Path) -> dict[str, Any]:
@@ -178,7 +206,8 @@ def run(store: CaseStore, protocol: ProtocolV1, runner: ResearchEpisodeRunner,
     start = perf_counter_ns()
     out.mkdir(parents=True, exist_ok=True)
     manifest = store.manifest()
-    cases = sorted((c for c in manifest.cases if c.split is split), key=lambda c: c.case_id)
+    cases = sorted((c for c in manifest.cases if c.split is split),
+                   key=lambda c: hashlib.sha256(c.case_id.encode()).hexdigest())
     cases = cases[:max_cases]
     labels = {lab.case_id: lab for lab in store.labels(split.value)}
     specs = {a.arm_id: a for a in protocol.arms}
@@ -188,6 +217,7 @@ def run(store: CaseStore, protocol: ProtocolV1, runner: ResearchEpisodeRunner,
     audits = [audit_case(runner, store.sources(c.case_id), labels.get(c.case_id), protocol)
               for c in cases]
     rows: list[RawResultRow] = []
+    degraded: list[dict[str, str | None]] = []
     skipped: dict[str, str] = {}
     for arm_id in arms:
         spec = specs[arm_id]
@@ -203,12 +233,15 @@ def run(store: CaseStore, protocol: ProtocolV1, runner: ResearchEpisodeRunner,
                 selector: Selector = factory.selector(spec, seed)
                 rows.append(runner.run(sources, selector, generator, arm_id=arm_id, seed=seed,
                                        repetition=repetition, mode=mode))
+                degraded.append({"run_id": rows[-1].run_id,
+                                 "degraded": degraded_reason(selector, generator)})
     with (out / "rows.jsonl").open("w", encoding="utf-8") as stream:
         for row in rows:
             stream.write(row.model_dump_json() + "\n")
     with (out / "events.jsonl").open("w", encoding="utf-8") as stream:
         for event in runner.events:
             stream.write(json.dumps(event, sort_keys=True) + "\n")
+    write_degraded(out / "degraded.jsonl", degraded)
     summary = summarize(rows, labels, protocol, skipped)
     usable_audits = [a for a in audits if a["source_review"] == "ok"]
     report = {
@@ -236,6 +269,7 @@ def run(store: CaseStore, protocol: ProtocolV1, runner: ResearchEpisodeRunner,
             "defect_cases": sum(1 for a in usable_audits if a["label_kind"] not in (None, "clean")),
         },
         **summary,
+        "degraded_by_arm": degraded_by_arm(rows, degraded),
         "projection": project(summary, protocol),
         "rows_sha256": hashlib.sha256((out / "rows.jsonl").read_bytes()).hexdigest(),
         "pilot_wall_ms": (perf_counter_ns() - start) / 1e6,

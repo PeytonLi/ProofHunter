@@ -10,7 +10,9 @@ from pathlib import Path
 from typing import Any, cast
 
 from research.schemas.interfaces import CaseStore, HypothesisGenerator, Ledger, Selector
-from research.schemas.models import ArmSpec, LedgerEntry
+from research.schemas.models import ArmSpec, LedgerEntry, LedgerPhase, MeasurementMode
+
+SINGLE_JOB_CHECKIN_USD = 50.0
 
 FACTORY_SELECTORS = {"fixed_order", "uniform_random", "simple_heuristic"}
 
@@ -72,6 +74,24 @@ def _check_hash(path: Path | None, digest: str | None, what: str) -> Path:
 @dataclass
 class ArmFactory:
     artifacts: FrozenArtifacts = field(default_factory=FrozenArtifacts)
+    ledger: Ledger | None = None
+    mode: MeasurementMode = MeasurementMode.OFFLINE
+    phase: LedgerPhase = LedgerPhase.PILOT
+    estimated_job_usd: dict[str, float] = field(default_factory=dict)
+
+    def _provider_kwargs(self, arm_id: str) -> dict[str, Any]:
+        """Ledger/mode/phase for paid provider arms; refuses without a pre-launch estimate."""
+        if self.mode is not MeasurementMode.LIVE:
+            raise LaneMissing(f"{arm_id} calls a paid provider; run it with --mode live")
+        if self.ledger is None:
+            raise LaneMissing(f"{arm_id} needs a ledger")
+        estimate = self.estimated_job_usd.get(arm_id)
+        if estimate is None:
+            raise LaneMissing(f"{arm_id} needs a pre-launch estimate (--estimate {arm_id}=USD)")
+        if estimate > SINGLE_JOB_CHECKIN_USD:
+            raise LaneMissing(f"{arm_id} estimate {estimate} USD needs a coordinator check-in")
+        return {"ledger": self.ledger, "mode": self.mode, "phase": self.phase,
+                "estimated_job_usd": estimate}
 
     def selector(self, spec: ArmSpec, seed: int) -> Selector:
         selector: Selector
@@ -87,13 +107,18 @@ class ArmFactory:
             return selector
         model_id = self.artifacts.frontier_model_id
         if spec.selector in ("frontier_reviewer", "frontier_agent") and model_id is None:
-            raise LaneMissing("frontier_model_id must be frozen in the config")
+            if self.phase is not LedgerPhase.PILOT:
+                raise LaneMissing("frontier_model_id must be frozen in the config")
+            models = _attr("research.baselines.config", "load_models")()
+            model_id = models["frontier"]["primary_model_id"]
         if spec.selector == "frontier_reviewer":
-            selector = _attr("research.baselines.frontier", "frontier_reviewer")(model_id)
+            selector = _attr("research.baselines.frontier", "frontier_reviewer")(
+                model_id, **self._provider_kwargs(spec.arm_id))
             return selector
         if spec.selector == "frontier_agent":
             selector = _attr("research.baselines.frontier", "frontier_agent")(
-                model_id, free_input=spec.candidate_freedom == "free_input_documented")
+                model_id, free_input=spec.candidate_freedom == "free_input_documented",
+                **self._provider_kwargs(spec.arm_id))
             return selector
         raise LaneMissing(f"no selector factory for {spec.selector!r}")
 
@@ -102,7 +127,11 @@ class ArmFactory:
         if spec.generator in (None, "builtin_plan"):
             return None
         if spec.generator == "meta_muse_spark":
-            generator = _attr("research.baselines.meta", "meta_generator")()
+            kwargs = self._provider_kwargs(spec.arm_id)
+            generator = _attr("research.baselines.meta", "meta_generator")(
+                ledger=kwargs.pop("ledger"))
+            for key, value in kwargs.items():
+                setattr(generator, key, value)
             return generator
         if spec.generator in ("qwen_untuned", "qwen_qlora"):
             revision = self.artifacts.generator_revision

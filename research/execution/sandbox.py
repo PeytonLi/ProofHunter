@@ -175,8 +175,8 @@ class ProcessTemplateExecutor(Executor):
         except (UnicodeDecodeError, ValidationError):
             return Execution(ObservationOutcome.DENIED, None, 0.0)
         observation, timing = self.sandbox.invoke(request)
-        if not timing.cleaned:
-            raise RuntimeError("sandbox cleanup evidence missing for an invocation")
-        return Execution(observation.outcome, observation.value, timing.execution_ms,
+        outcome = observation.outcome if timing.cleaned else ObservationOutcome.INFRA_ERROR
+        return Execution(outcome, observation.value if timing.cleaned else None,
+                         timing.execution_ms,
                          startup_ms=timing.startup_ms, cleanup_ms=timing.cleanup_ms,
                          launched=timing.refusal is None)

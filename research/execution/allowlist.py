@@ -23,12 +23,22 @@ ALLOWED_CALLS: Final = frozenset(
      "round", "sorted", "sum", "tuple", "zip"}
 )
 ALLOWED_ANNOTATIONS: Final = frozenset({"int", "list", "tuple", "bool"})
+#: Pure stdlib arithmetic modules used by the reviewed dataset templates (no I/O capability).
+ALLOWED_IMPORTS: Final[dict[str, frozenset[str] | None]] = {
+    "operator": None,
+    "math": None,
+    "functools": frozenset({"reduce"}),
+    "fractions": frozenset({"Fraction"}),
+    "decimal": frozenset({"Decimal", "ROUND_HALF_UP", "ROUND_HALF_DOWN", "ROUND_HALF_EVEN",
+                          "ROUND_FLOOR", "ROUND_CEILING", "ROUND_DOWN", "ROUND_UP"}),
+}
 _NODES: Final = (
     ast.Module, ast.FunctionDef, ast.arguments, ast.arg, ast.Return, ast.Assign, ast.AugAssign,
-    ast.AnnAssign, ast.For, ast.If, ast.IfExp, ast.Expr, ast.BinOp, ast.UnaryOp, ast.BoolOp,
-    ast.Compare, ast.Call, ast.Name, ast.Constant, ast.Subscript, ast.Slice, ast.List, ast.Tuple,
-    ast.ListComp, ast.GeneratorExp, ast.comprehension, ast.Load, ast.Store, ast.operator,
-    ast.unaryop, ast.boolop, ast.cmpop, ast.expr_context, ast.Pass, ast.Break, ast.Continue,
+    ast.AnnAssign, ast.For, ast.While, ast.If, ast.IfExp, ast.Expr, ast.BinOp, ast.UnaryOp,
+    ast.BoolOp, ast.Compare, ast.Call, ast.Name, ast.Attribute, ast.Constant, ast.Subscript,
+    ast.Slice, ast.List, ast.Tuple, ast.ListComp, ast.GeneratorExp, ast.comprehension, ast.Load,
+    ast.Store, ast.operator, ast.unaryop, ast.boolop, ast.cmpop, ast.expr_context, ast.Pass,
+    ast.Break, ast.Continue, ast.Import, ast.ImportFrom, ast.alias, ast.keyword,
 )
 
 
@@ -36,37 +46,78 @@ class ExecutionRefused(PermissionError):
     """Raised (or reported as ``denied``) when code is not reviewed and allowlisted."""
 
 
+def _import_refusal(stmt: ast.Import | ast.ImportFrom, imported: set[str]) -> str | None:
+    if isinstance(stmt, ast.Import):
+        for alias in stmt.names:
+            if alias.name not in ALLOWED_IMPORTS or alias.asname is not None:
+                return "import_not_allowed"
+            imported.add(alias.name)
+        return None
+    allowed = ALLOWED_IMPORTS.get(stmt.module or "")
+    if stmt.level or stmt.module not in ALLOWED_IMPORTS:
+        return "import_not_allowed"
+    for alias in stmt.names:
+        if alias.asname is not None or (allowed is not None and alias.name not in allowed):
+            return "import_not_allowed"
+        imported.add(alias.name)
+    return None
+
+
 def screen_source(data: bytes) -> str | None:
-    """Return a refusal reason, or ``None`` if the source is a plain integer checkout module."""
+    """Return a refusal reason, or ``None`` if the source is a plain integer checkout module.
+
+    Allowed: top-level functions, a docstring and imports from ``ALLOWED_IMPORTS``; bounded
+    arithmetic statements; calls to builtins in ``ALLOWED_CALLS``, local or imported names and
+    public attributes. Dunder names, private attributes and dunder strings are refused.
+    """
     if len(data) > MAX_SOURCE_BYTES:
         return "source_too_large"
     try:
         tree = ast.parse(data.decode("utf-8"), filename="checkout.py")
     except (SyntaxError, UnicodeDecodeError, ValueError):
         return "unparseable"
-    names = [n.name for n in tree.body if isinstance(n, ast.FunctionDef)]
+    names = {n.name for n in tree.body if isinstance(n, ast.FunctionDef)}
     if "total_cents" not in names:
         return "missing_entrypoint"
+    imported: set[str] = set()
+    top_imports: set[int] = set()
     for stmt in tree.body:
         if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Constant):
+            continue
+        if isinstance(stmt, ast.Import | ast.ImportFrom):
+            reason = _import_refusal(stmt, imported)
+            if reason is not None:
+                return reason
+            top_imports.add(id(stmt))
             continue
         if not isinstance(stmt, ast.FunctionDef):
             return "top_level_statement"
     for node in ast.walk(tree):
         if not isinstance(node, _NODES):
             return f"node_{type(node).__name__.lower()}"
+        if isinstance(node, ast.Import | ast.ImportFrom) and id(node) not in top_imports:
+            return "nested_import"
         if isinstance(node, ast.FunctionDef) and (node.decorator_list or node.type_params):
             return "decorator"
         if isinstance(node, ast.Name) and node.id.startswith("__"):
             return "dunder_name"
+        if isinstance(node, ast.keyword) and (node.arg is None or node.arg.startswith("_")):
+            return "keyword_not_allowed"
+        if isinstance(node, ast.Attribute) and node.attr.startswith("_"):
+            return "private_attribute"
         if isinstance(node, ast.Call):
             func = node.func
-            if not isinstance(func, ast.Name) or (
-                func.id not in ALLOWED_CALLS and func.id not in names
+            if isinstance(func, ast.Name) and (
+                func.id not in ALLOWED_CALLS and func.id not in names | imported
             ):
                 return "call_not_allowed"
-        if isinstance(node, ast.Constant) and isinstance(node.value, bytes | complex):
-            return "constant_not_allowed"
+            if not isinstance(func, ast.Name | ast.Attribute):
+                return "call_not_allowed"
+        if isinstance(node, ast.Constant):
+            if isinstance(node.value, bytes | complex):
+                return "constant_not_allowed"
+            if isinstance(node.value, str) and "__" in node.value:
+                return "dunder_string"
     return None
 
 

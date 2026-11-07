@@ -43,7 +43,12 @@ def no_process(monkeypatch):
     b"def total_cents(p, d):\n    return open('/etc/passwd')\n",
     b"def total_cents(p, d):\n    return __import__('os').system('id')\n",
     b"def total_cents(p, d):\n    return p.__class__\n",
-    b"def total_cents(p, d):\n    while True:\n        pass\n",
+    b"import subprocess\ndef total_cents(p, d):\n    return 1\n",
+    b"from os import system\ndef total_cents(p, d):\n    return 1\n",
+    b"def total_cents(p, d):\n    import math\n    return 1\n",
+    b"import operator\ndef total_cents(p, d):\n    return operator.attrgetter('__class__')(p)\n",
+    b"def total_cents(p, d):\n    return p._x\n",
+    b"def total_cents(p, d):\n    return getattr(p, 'x')\n",
     b"def other(p, d):\n    return 1\n",
 ])
 def test_allowlist_rejects_unreviewable_source(source, reviewed):
