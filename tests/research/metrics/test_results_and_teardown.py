@@ -10,6 +10,7 @@ from research.cli import main as cli
 from research.metrics.ledger import JsonlLedger
 from research.metrics.results import (
     ResultsError,
+    read_degraded,
     read_label_files,
     read_raw_results,
     write_raw_results,
@@ -88,3 +89,24 @@ def test_verify_teardown_cli_exit_codes(tmp_path: Path, capsys: pytest.CaptureFi
     out = json.loads(capsys.readouterr().out)
     assert [u["resource_id"] for u in out["unverified"]] == ["pod-other"]
     assert cli(["verify-teardown", "--ledger", str(tmp_path / "missing.jsonl")]) == 2
+
+
+def test_read_degraded_records(tmp_path: Path) -> None:
+    path = tmp_path / "degraded.jsonl"
+    path.write_text(
+        '{"run_id": "a", "degraded": "timeout"}\n{"run_id": "b", "degraded": null}\n\n'
+        '{"run_id": "a", "degraded": "timeout"}\n'
+    )
+    assert read_degraded(path) == {"a": "timeout"}
+    for bad, match in (
+        ('{"run_id": "a", "degraded": "Bad Reason"}', "reason code"),
+        ('{"degraded": "timeout"}', "run_id"),
+        ("not json", "invalid JSON"),
+        (
+            '{"run_id": "a", "degraded": "timeout"}\n{"run_id": "a", "degraded": "other"}',
+            "conflict",
+        ),
+    ):
+        path.write_text(bad + "\n")
+        with pytest.raises(ResultsError, match=match):
+            read_degraded(path)

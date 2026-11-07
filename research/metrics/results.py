@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import json
+import re
 from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Any
@@ -75,6 +76,38 @@ def read_label_files(paths: Sequence[Path], *, allow_sealed: bool = False) -> li
             raise ResultsError(f"{path}: sealed test labels need an explicit unseal flag")
         files.append(label_file)
     return files
+
+
+DEGRADED_REASON = re.compile(r"^[a-z0-9_:]{1,64}$")
+
+
+def read_degraded(*paths: Path) -> dict[str, str]:
+    """Read ``{"run_id": ..., "degraded": reason | null}`` JSONL records, one per episode.
+
+    ``RawResultRow`` has no degraded field, so arms that fell back to fixed order report it here.
+    """
+    out: dict[str, str] = {}
+    for path in paths:
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if not line.strip():
+                continue
+            where = f"{path}:{number}"
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError as error:
+                raise ResultsError(f"{where}: invalid JSON: {error}") from error
+            if not isinstance(record, dict) or not isinstance(record.get("run_id"), str):
+                raise ResultsError(f"{where}: degradation record needs a string run_id")
+            reason = record.get("degraded")
+            if reason is None:
+                continue
+            if not isinstance(reason, str) or not DEGRADED_REASON.match(reason):
+                raise ResultsError(f"{where}: degraded must be null or a reason code")
+            run_id = record["run_id"]
+            if out.get(run_id, reason) != reason:
+                raise ResultsError(f"{where}: conflicting degraded reasons for {run_id!r}")
+            out[run_id] = reason
+    return out
 
 
 def read_protocol(path: Path) -> ProtocolV1:

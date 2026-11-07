@@ -167,6 +167,8 @@ def totals(entries: Iterable[LedgerEntry]) -> list[dict[str, Any]]:
                 "phase": phase,
                 "entries": len(items),
                 "paid_entries": sum(e.paid for e in items),
+                "measured_entries": sum(e.cost_status is CostStatus.MEASURED for e in items),
+                "estimated_entries": sum(e.cost_status is CostStatus.ESTIMATED for e in items),
                 "measured_usd": sum(
                     e.cost_usd or 0.0 for e in items if e.cost_status is CostStatus.MEASURED
                 ),

@@ -228,6 +228,7 @@ def _summarize_arm(
     labels: Mapping[str, CaseLabel],
     protocol: ProtocolV1,
     families: Mapping[str, str],
+    degraded: Mapping[str, str],
 ) -> dict[str, Any]:
     budgets = list(protocol.budgets_reported)
     defect_rows = [r for r in rows if labels[r.case_id].kind is not LabelKind.CLEAN]
@@ -274,6 +275,9 @@ def _summarize_arm(
     cost_rows = Counter(r.cost_status.value for r in rows)
     known_cost = sum(r.cost_usd or 0.0 for r in rows)
     unknown_cost = cost_rows.get(CostStatus.UNKNOWN.value, 0)
+    estimated = [r for r in rows if r.cost_status is CostStatus.ESTIMATED]
+    degraded_rows = [r for r in rows if r.run_id in degraded]
+    degraded_reasons = Counter(degraded[r.run_id] for r in degraded_rows)
     cases = {r.case_id for r in rows}
     true_defects = sum(
         success_within(r, labels[r.case_id], protocol.max_pairs) for r in defect_rows
@@ -352,12 +356,26 @@ def _summarize_arm(
         },
         "cost_status_runs": dict(sorted(cost_rows.items())),
         "known_cost_usd": known_cost,
+        "estimated_cost_usd": sum(r.cost_usd or 0.0 for r in estimated),
+        "estimated_cost_runs": len(estimated),
         "unknown_cost_runs": unknown_cost,
         "usd_per_case": (known_cost / len(cases)) if cases and not unknown_cost else None,
         "usd_per_confirmed_defect": (
             (known_cost / true_defects) if true_defects and not unknown_cost else None
         ),
         "confirmed_true_defect_runs": true_defects,
+        "degraded_runs": len(degraded_rows),
+        "degraded_rate": _fraction(len(degraded_rows), len(rows)),
+        "degraded_by_reason": {
+            reason: {"runs": n, "rate": _fraction(n, len(rows))}
+            for reason, n in sorted(degraded_reasons.items())
+        },
+        "degraded_known_cost_usd": sum(r.cost_usd or 0.0 for r in degraded_rows),
+        "degraded_confirmed_true_defect_runs": sum(
+            success_within(r, labels[r.case_id], protocol.max_pairs)
+            for r in degraded_rows
+            if labels[r.case_id].kind is not LabelKind.CLEAN
+        ),
     }
 
 
@@ -529,12 +547,23 @@ CONTRASTS = (
 
 
 def score(
-    rows: Iterable[RawResultRow], labels: Iterable[CaseLabel], protocol: ProtocolV1
+    rows: Iterable[RawResultRow],
+    labels: Iterable[CaseLabel],
+    protocol: ProtocolV1,
+    degraded: Mapping[str, str] | None = None,
 ) -> Mapping[str, object]:
-    """Per measurement mode x split x arm summaries, curves, paired contrasts and factorial."""
+    """Per measurement mode x split x arm summaries, curves, paired contrasts and factorial.
+
+    ``degraded`` maps run_id to the reason an arm fell back to fixed order. Degraded episodes
+    stay in their arm's results (outcome and cost); they are only additionally counted.
+    """
     rows = list(rows)
+    degraded = dict(degraded or {})
     by_case = {lab.case_id: lab for lab in labels}
     _check(rows, by_case, protocol)
+    stray = sorted(set(degraded) - {r.run_id for r in rows})
+    if stray:
+        raise ValueError(f"degradation records for unknown run_ids: {stray[:5]}")
     families = _families(by_case)
     order = [a.arm_id for a in protocol.arms]
     modes: dict[str, Any] = {}
@@ -544,7 +573,9 @@ def score(
             scoped = [r for r in rows if r.measurement_mode is mode and r.split is split]
             present = [a for a in order if any(r.arm_id == a for r in scoped)]
             arms = {
-                a: _summarize_arm([r for r in scoped if r.arm_id == a], by_case, protocol, families)
+                a: _summarize_arm(
+                    [r for r in scoped if r.arm_id == a], by_case, protocol, families, degraded
+                )
                 for a in present
             }
             curves = {
@@ -599,4 +630,5 @@ def score(
         "max_pairs": protocol.max_pairs,
         "modes": modes,
         "implementation_shas": sorted({r.implementation_sha for r in rows}),
+        "degraded_records": len(degraded),
     }
