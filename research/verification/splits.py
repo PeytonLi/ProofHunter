@@ -21,6 +21,7 @@ SPLITS = ("train", "validation", "test")
 DISJOINT_KEYS = ("family_id", "defect_origin", "near_dup_cluster", "template_id",
                  "head_source_sha256")
 _TOKEN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*|\d+|[^\sA-Za-z0-9_]")
+_JSON_ESCAPE = re.compile(rb"\\(?:u[0-9a-fA-F]{4}|.)")
 _SKIP_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".pdf"}
 
 
@@ -244,7 +245,9 @@ def audit_training_artifacts(cases: Sequence[Mapping[str, Any]], paths: Iterable
     if not tokens:
         gate.error("no_test_tokens", "no test-only identifiers; audit vacuous")
         return gate
-    encoded = [(t.encode(), src) for t, src in tokens.items()]
+    word = re.compile(rb"[A-Za-z0-9_-]+")
+    simple = {t.encode(): src for t, src in tokens.items() if word.fullmatch(t.encode())}
+    other = [(t.encode(), src) for t, src in tokens.items() if t.encode() not in simple]
     scanned = 0
     for root in paths:
         if not root.exists():
@@ -259,7 +262,9 @@ def audit_training_artifacts(cases: Sequence[Mapping[str, Any]], paths: Iterable
                 continue
             data = path.read_bytes()
             scanned += 1
-            hits = [src for tok, src in encoded if tok in data]
+            found = set(word.findall(_JSON_ESCAPE.sub(b" ", data))) & simple.keys()
+            hits = sorted(simple[t] for t in found) + [src for tok, src in other if tok in data]
+            gate.stats.setdefault("hits_by_file", {})[str(path)] = len(hits)
             for src in hits[:10]:
                 gate.error("test_token_in_training_artifact", f"contains {src}", str(path))
     gate.stats["files_scanned"] = scanned
