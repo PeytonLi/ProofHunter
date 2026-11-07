@@ -243,18 +243,21 @@ def test_progress_rollback_reopen_reclaim(tmp_path: Path) -> None:
 
 def test_v1_upgrade(tmp_path: Path) -> None:
     config = settings(tmp_path / "db")
+    donor = SQLiteStore(settings(tmp_path / "donor"), clock=clock(), ids=SequentialIds())
+    status = create(donor)
+    with donor._connection() as db:
+        row = tuple(
+            db.execute(
+                "SELECT run_id,kind,target,seed,scope,status,state,parent,replay,owner,epoch,"
+                "expires FROM runs"
+            ).fetchone()
+        )
     with sqlite3.connect(config.db_path) as db:
         db.execute("CREATE TABLE schema_version (version INTEGER PRIMARY KEY)")
         for statement in _MIGRATION:
             db.execute(statement)
         db.execute("INSERT INTO schema_version VALUES (1)")
-    store = SQLiteStore(config, clock=clock(), ids=SequentialIds())
-    status = create(store)
-    # Reconstruct a genuine v1 row and schema before reopening.
-    with store._transaction() as db:
-        db.execute("ALTER TABLE runs DROP COLUMN checkpoint")
-        db.execute("DROP TABLE worker_heartbeats")
-        db.execute("DELETE FROM schema_version WHERE version=2")
+        db.execute("INSERT INTO runs VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", row)
     store = SQLiteStore(config, clock=clock())
     assert store.ready()
     record = store.load_run(status.run_id)

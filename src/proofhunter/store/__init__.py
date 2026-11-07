@@ -11,6 +11,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from proofhunter import oracle
 from proofhunter.config import Settings
 from proofhunter.contracts import (
     ACTIVE_STATES,
@@ -50,6 +51,22 @@ from proofhunter.ports import (
     IdFactory,
     LeaseLostError,
     RunRecord,
+)
+from proofhunter.store.outbox import (
+    MAX_OUTBOX_AMBIGUITIES,
+    MAX_OUTBOX_CALLS,
+    MIGRATION_3,
+    OutboxAttempt,
+    OutboxLease,
+    OutboxOperation,
+    OutboxOutcome,
+)
+from proofhunter.store.retention import (
+    DEFAULT_BATCH_LIMIT,
+    MIGRATION_4,
+    OPERATIONS_TTL,
+    RECEIPTS_TTL,
+    purge,
 )
 
 _MIGRATION = (
@@ -115,7 +132,7 @@ class SQLiteStore:
             version = db.execute("SELECT COALESCE(MAX(version),0) FROM schema_version").fetchone()[
                 0
             ]
-            if version not in (0, 1, 2):
+            if version not in (0, 1, 2, 3, 4):
                 raise ValueError("unsupported database schema")
             if version == 0:
                 for statement in _MIGRATION:
@@ -128,6 +145,14 @@ class SQLiteStore:
                     "body TEXT NOT NULL)"
                 )
                 db.execute("INSERT INTO schema_version VALUES (2)")
+            if version < 3:
+                for statement in MIGRATION_3:
+                    db.execute(statement)
+                db.execute("INSERT INTO schema_version VALUES (3)")
+            if version < 4:
+                for statement in MIGRATION_4:
+                    db.execute(statement)
+                db.execute("INSERT INTO schema_version VALUES (4)")
 
     @contextmanager
     def _connection(self) -> Iterator[sqlite3.Connection]:
@@ -159,7 +184,262 @@ class SQLiteStore:
 
     def ready(self) -> bool:
         with self._connection() as db:
-            return bool(db.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] == 2)
+            return bool(db.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] == 4)
+
+    def purge_expired(
+        self,
+        now: datetime,
+        *,
+        operations_ttl: timedelta = OPERATIONS_TTL,
+        receipts_ttl: timedelta = RECEIPTS_TTL,
+        batch_limit: int = DEFAULT_BATCH_LIMIT,
+        dry_run: bool = False,
+    ) -> dict[str, int]:
+        with self._transaction() as db:
+            return purge(
+                db,
+                now,
+                operations_ttl=operations_ttl,
+                receipts_ttl=receipts_ttl,
+                batch_limit=batch_limit,
+                dry_run=dry_run,
+            )
+
+    def _publisher_enabled(self) -> bool:
+        return not self.settings.offline and self.settings.github.enable_checks
+
+    def _outbox_event(
+        self,
+        db: sqlite3.Connection,
+        run_id: str,
+        operation: OutboxOperation,
+        outcome: OutboxOutcome,
+        http_status: int | None = None,
+    ) -> None:
+        if http_status is not None and (
+            type(http_status) is not int or not 100 <= http_status <= 599
+        ):
+            raise ValueError("invalid HTTP status")
+        number = db.execute(
+            "SELECT COALESCE(MAX(attempt_no),0)+1 FROM outbox_attempts WHERE run_id=?",
+            (run_id,),
+        ).fetchone()[0]
+        db.execute(
+            "INSERT INTO outbox_attempts VALUES (?,?,?,?,?,?)",
+            (
+                run_id,
+                number,
+                self.clock.now().astimezone(UTC).isoformat(),
+                operation.value,
+                outcome.value,
+                http_status,
+            ),
+        )
+
+    def claim_outbox(self, owner: str, lease_seconds: int = 30) -> OutboxLease | None:
+        if not self._publisher_enabled():
+            return None
+        if (
+            not owner
+            or len(owner) > 128
+            or type(lease_seconds) is not int
+            or not 1 <= lease_seconds <= 300
+        ):
+            raise ValueError("invalid publisher lease")
+        with self._transaction() as db:
+            now = self.clock.now()
+            rows = db.execute(
+                "SELECT * FROM check_outbox WHERE publish_state='pending' "
+                "AND (owner IS NULL OR expires<=?) ORDER BY run_id",
+                (now.timestamp(),),
+            ).fetchall()
+            for row in rows:
+                run_id = row["run_id"]
+                ambiguities = row["ambiguities"]
+                if row["operation"] is not None:
+                    self._outbox_event(
+                        db, run_id, OutboxOperation(row["operation"]), OutboxOutcome.AMBIGUOUS
+                    )
+                    ambiguities += 1
+                if row["calls"] >= MAX_OUTBOX_CALLS or ambiguities >= MAX_OUTBOX_AMBIGUITIES:
+                    db.execute(
+                        "UPDATE check_outbox SET publish_state='held',owner=NULL,expires=NULL,"
+                        "operation=NULL,ambiguities=? WHERE run_id=?",
+                        (ambiguities, run_id),
+                    )
+                    continue
+                expires = now + timedelta(seconds=lease_seconds)
+                db.execute(
+                    "UPDATE check_outbox SET owner=?,epoch=epoch+1,expires=?,operation=NULL,"
+                    "ambiguities=? WHERE run_id=?",
+                    (owner, expires.timestamp(), ambiguities, run_id),
+                )
+                return OutboxLease(
+                    CheckIntent.model_validate_json(row["body"]),
+                    owner,
+                    row["epoch"] + 1,
+                    expires,
+                    bool(row["requires_reconciliation"]),
+                )
+        return None
+
+    def _outbox_check(self, db: sqlite3.Connection, lease: OutboxLease) -> sqlite3.Row:
+        row: sqlite3.Row | None = db.execute(
+            "SELECT * FROM check_outbox WHERE run_id=?", (lease.intent.run_id,)
+        ).fetchone()
+        if (
+            not self._publisher_enabled()
+            or row is None
+            or row["publish_state"] != "pending"
+            or row["owner"] != lease.owner
+            or row["epoch"] != lease.epoch
+            or row["expires"] is None
+            or row["expires"] <= self.clock.now().timestamp()
+            or CheckIntent.model_validate_json(row["body"]) != lease.intent
+        ):
+            raise LeaseLostError(lease.intent.run_id)
+        return row
+
+    def begin_outbox_attempt(self, lease: OutboxLease, operation: OutboxOperation) -> None:
+        """Reserve before external I/O; lost create acknowledgements require reconciliation."""
+        operation = OutboxOperation(operation)
+        with self._transaction() as db:
+            row = self._outbox_check(db, lease)
+            if row["operation"] is not None or row["calls"] >= MAX_OUTBOX_CALLS:
+                raise ValueError("outbox attempt already reserved or exhausted")
+            if operation is OutboxOperation.CREATE and row["requires_reconciliation"]:
+                raise ValueError("reconciliation required before create")
+            self._outbox_event(db, lease.intent.run_id, operation, OutboxOutcome.STARTED)
+            db.execute(
+                "UPDATE check_outbox SET operation=?,calls=calls+1,requires_reconciliation=1 "
+                "WHERE run_id=?",
+                (operation.value, lease.intent.run_id),
+            )
+
+    def record_outbox_attempt(
+        self, lease: OutboxLease, outcome: OutboxOutcome, *, http_status: int | None = None
+    ) -> None:
+        outcome = OutboxOutcome(outcome)
+        if outcome not in (OutboxOutcome.RETRYABLE, OutboxOutcome.AMBIGUOUS):
+            raise ValueError("use publication or reconciliation completion")
+        with self._transaction() as db:
+            row = self._outbox_check(db, lease)
+            if row["operation"] is None:
+                raise ValueError("no reserved outbox attempt")
+            operation = OutboxOperation(row["operation"])
+            if (
+                outcome is OutboxOutcome.RETRYABLE
+                and operation is OutboxOperation.CREATE
+                and http_status != 429
+            ):
+                raise ValueError("uncertain create requires reconciliation")
+            ambiguities = row["ambiguities"] + (outcome is OutboxOutcome.AMBIGUOUS)
+            held = ambiguities >= MAX_OUTBOX_AMBIGUITIES or row["calls"] >= MAX_OUTBOX_CALLS
+            self._outbox_event(db, lease.intent.run_id, operation, outcome, http_status)
+            db.execute(
+                "UPDATE check_outbox SET operation=NULL,owner=NULL,expires=NULL,ambiguities=?,"
+                "requires_reconciliation=?,publish_state=? WHERE run_id=?",
+                (
+                    ambiguities,
+                    int(
+                        operation is OutboxOperation.RECONCILE or outcome is OutboxOutcome.AMBIGUOUS
+                    ),
+                    "held" if held else "pending",
+                    lease.intent.run_id,
+                ),
+            )
+
+    def mark_outbox_ambiguous(self, lease: OutboxLease, *, http_status: int | None = None) -> None:
+        self.record_outbox_attempt(lease, OutboxOutcome.AMBIGUOUS, http_status=http_status)
+
+    def mark_outbox_published(
+        self, lease: OutboxLease, check_run_id: int, *, http_status: int | None = None
+    ) -> None:
+        if type(check_run_id) is not int or check_run_id <= 0:
+            raise ValueError("invalid check ID")
+        if http_status is not None and (
+            type(http_status) is not int or not 200 <= http_status < 300
+        ):
+            raise ValueError("publication requires a successful response")
+        with self._transaction() as db:
+            row = self._outbox_check(db, lease)
+            if row["operation"] != OutboxOperation.CREATE:
+                raise ValueError(
+                    "publication requires a reserved create; use reconciliation otherwise"
+                )
+            self._outbox_publish(db, lease, check_run_id, OutboxOperation.CREATE, http_status)
+
+    def _outbox_publish(
+        self,
+        db: sqlite3.Connection,
+        lease: OutboxLease,
+        check_run_id: int,
+        operation: OutboxOperation,
+        http_status: int | None,
+    ) -> None:
+        self._outbox_event(db, lease.intent.run_id, operation, OutboxOutcome.PUBLISHED, http_status)
+        db.execute(
+            "UPDATE check_outbox SET publish_state='published',check_run_id=?,owner=NULL,"
+            "expires=NULL,operation=NULL WHERE run_id=?",
+            (check_run_id, lease.intent.run_id),
+        )
+
+    def reconcile_outbox(
+        self,
+        lease: OutboxLease,
+        *,
+        head_sha: str,
+        external_id: str,
+        check_run_id: int | None,
+        http_status: int = 200,
+    ) -> None:
+        """Complete a bounded commit/external-ID lookup; None asserts definitive absence."""
+        if head_sha != lease.intent.head_sha or external_id != lease.intent.external_id:
+            raise ValueError("reconciliation must match commit and external ID")
+        if check_run_id is not None and (type(check_run_id) is not int or check_run_id <= 0):
+            raise ValueError("invalid check ID")
+        if type(http_status) is not int or not 200 <= http_status < 300:
+            raise ValueError("reconciliation requires a successful lookup")
+        with self._transaction() as db:
+            row = self._outbox_check(db, lease)
+            if row["operation"] != OutboxOperation.RECONCILE:
+                raise ValueError("no reserved reconciliation")
+            if check_run_id is not None:
+                self._outbox_publish(
+                    db, lease, check_run_id, OutboxOperation.RECONCILE, http_status
+                )
+            else:
+                self._outbox_event(
+                    db,
+                    lease.intent.run_id,
+                    OutboxOperation.RECONCILE,
+                    OutboxOutcome.RECONCILED_ABSENT,
+                    http_status,
+                )
+                db.execute(
+                    "UPDATE check_outbox SET requires_reconciliation=0,operation=NULL,"
+                    "owner=NULL,expires=NULL,"
+                    "publish_state=? WHERE run_id=?",
+                    (
+                        "held" if row["calls"] >= MAX_OUTBOX_CALLS else "pending",
+                        lease.intent.run_id,
+                    ),
+                )
+
+    def outbox_attempts(self, run_id: str) -> Sequence[OutboxAttempt]:
+        with self._connection() as db:
+            return tuple(
+                OutboxAttempt(
+                    row["attempt_no"],
+                    datetime.fromisoformat(row["at"]),
+                    OutboxOperation(row["operation"]),
+                    OutboxOutcome(row["outcome"]),
+                    row["http_status"],
+                )
+                for row in db.execute(
+                    "SELECT * FROM outbox_attempts WHERE run_id=? ORDER BY attempt_no", (run_id,)
+                )
+            )
 
     def write_heartbeat(self, heartbeat: WorkerHeartbeat) -> None:
         heartbeat = WorkerHeartbeat.model_validate(heartbeat.model_dump())
@@ -236,6 +516,7 @@ class SQLiteStore:
         seed: int,
         parent: str | None = None,
         replay: Replay | None = None,
+        enrollment: str | None = None,
     ) -> RunStatus:
         now = self.clock.now()
         if not self.settings.enable_intake or not self._quota(db, scope, now).allowed:
@@ -277,8 +558,9 @@ class SQLiteStore:
             receipt_sha256=None,
         )
         db.execute(
-            "INSERT INTO runs(run_id,kind,target,seed,scope,status,state,parent,replay,checkpoint) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO runs(run_id,kind,target,seed,scope,status,state,parent,replay,"
+            "checkpoint,enrollment) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
             (
                 run_id,
                 kind.value,
@@ -290,6 +572,7 @@ class SQLiteStore:
                 parent,
                 None if replay is None else _json(replay),
                 _json(RunCheckpoint()),
+                enrollment,
             ),
         )
         db.execute(
@@ -336,6 +619,7 @@ class SQLiteStore:
                 RunKind.VERIFICATION,
                 target,
                 17 if request.seed is None else request.seed,
+                enrollment=_json(enrollment),
             )
             db.execute(
                 "INSERT INTO idempotency_keys VALUES (?,?,?,?)",
@@ -356,24 +640,23 @@ class SQLiteStore:
             if existing is not None:
                 return existing
             parent = db.execute(
-                "SELECT target FROM runs WHERE run_id=?", (parent_run_id,)
+                "SELECT target,enrollment FROM runs WHERE run_id=?", (parent_run_id,)
             ).fetchone()
             row = db.execute(
                 "SELECT body FROM receipts WHERE run_id=?", (parent_run_id,)
             ).fetchone()
-            receipt = None if row is None else ReceiptV1.model_validate_json(row[0])
-            if (
-                parent is None
-                or receipt is None
-                or receipt.replay is None
-                or receipt.replay.probe_no != request.probe_no
-            ):
+            try:
+                if parent is None or row is None:
+                    raise ValueError("missing parent binding")
+                receipt = ReceiptV1.model_validate_json(row[0])
+                replay = oracle.validate_replay(receipt, request.probe_no)
+            except (ValueError, AdapterError):
                 raise AdapterError(
                     "store",
                     ReasonCode.REPLAY_UNAVAILABLE,
                     "no eligible pinned input",
                     retryable=False,
-                )
+                ) from None
             status = self._new_run(
                 db,
                 "operator",
@@ -381,7 +664,8 @@ class SQLiteStore:
                 PrTarget.model_validate_json(parent[0]),
                 receipt.seed,
                 receipt.receipt_sha256,
-                receipt.replay,
+                replay,
+                enrollment=parent["enrollment"],
             )
             db.execute(
                 "INSERT INTO idempotency_keys VALUES (?,?,?,?)",
