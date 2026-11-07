@@ -110,7 +110,7 @@
     "max_attempts": 2,
     "fallback": "proofhunter.contracts.builtin_hypothesis_payload on any adapter error (production pipeline behaviour)",
     "snap_routing": "disabled",
-    "pricing_reference": "dev.meta.ai/docs/models, as provided by user on 2026-11-07, pending page verification",
+    "pricing_reference": "Meta developer console, prices pasted by user (Peyton) on 2026-11-07",
     "pricing_date": "2026-11-07",
     "pricing_usd_per_1m_tokens": {
       "muse-spark-1.3": {
@@ -127,12 +127,19 @@
       }
     },
     "listing_check": "GET https://api.meta.ai/v1/models with MODEL_API_KEY on 2026-11-07 listed muse-spark-1.3 and muse-wonder-1.0",
-    "cost_accounting": "Token usage is read from each chat-completions response (usage.prompt_tokens, usage.completion_tokens, usage.prompt_tokens_details.cached_tokens). Attempts without usage are priced at an upper bound: input = ceil(request bytes / 3) tokens, output = max_completion_tokens. cost_status is measured only when usage is complete and the price is verified, otherwise estimated.",
+    "cost_accounting": "Token usage is read from each chat-completions response (usage.prompt_tokens, usage.completion_tokens, usage.prompt_tokens_details.cached_tokens) and priced at the user-supplied console price (cost_basis=user_supplied_price). Attempts without usage are priced at an upper bound (cost_basis=upper_bound_estimate).",
     "arms": {
       "meta_muse_spark_eig": "muse-spark-1.3",
       "meta_muse_wonder_eig": "muse-wonder-1.0"
     },
-    "arms_note": "Both arms are enabled by default (coordinator decision 2026-11-07) and share the adapter settings: max_completion_tokens=4096, reasoning_effort=low, temperature 0, 2 attempts, Snap disabled."
+    "arms_note": "Both arms are enabled by default (coordinator decision 2026-11-07) and share the adapter settings: max_completion_tokens=4096, reasoning_effort=low, temperature 0, 2 attempts, Snap disabled.",
+    "price_source": "user_supplied_meta_console_2026-11-07",
+    "cost_basis": {
+      "user_supplied_price": "response token usage x the user-supplied console price",
+      "upper_bound_estimate": "attempt without usage: input=ceil(request_bytes/3), output=max_completion_tokens, x the user-supplied price",
+      "unknown": "no cost recorded (e.g. HTTP 400 request rejected)",
+      "ledger_encoding": "The frozen CostStatus enum has only measured/estimated/unknown, so Meta rows keep cost_status=estimated (or unknown) and carry the basis as the leading 'cost_basis=<label>; price_source=<source>' of pricing_reference"
+    }
   },
   "grid": {
     "arm_name": "<role>:<model>",

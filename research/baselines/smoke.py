@@ -267,6 +267,37 @@ def reprice_meta_rows(path: Path) -> int:
     return repriced
 
 
+def relabel_meta_rows(path: Path) -> int:
+    """Rewrite Meta rows' ``pricing_reference`` to the ``cost_basis=...; price_source=...`` form.
+
+    Token rows → ``user_supplied_price``; attempt rows → ``upper_bound_estimate``; ``unknown``-cost
+    rows are left as they are. Costs are unchanged (same prices). Returns rows relabelled.
+    """
+    import re
+
+    default = load_models()["meta"]["model_id"]
+    out, changed = [], 0
+    for line in path.read_text().splitlines():
+        if not line.strip():
+            continue
+        entry = LedgerEntry.model_validate_json(line)
+        ref = entry.pricing_reference or ""
+        if (entry.provider == "meta" and entry.cost_status is not CostStatus.UNKNOWN
+                and not ref.startswith("cost_basis=")):
+            found = re.search(r"model=([\w.\-]+)", ref)
+            note = ref.split("; ", 2)[2] if ref.count("; ") >= 2 else ""
+            basis = meta.USER_SUPPLIED if entry.unit == "tokens" else meta.UPPER_BOUND
+            entry = LedgerEntry.model_validate_json(entry.model_copy(update={
+                "pricing_reference": meta.meta_pricing_reference(
+                    found.group(1) if found else default, basis, note)[:500]}).model_dump_json())
+            changed += 1
+        out.append(entry.model_dump_json())
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text("".join(x + "\n" for x in out))
+    tmp.replace(path)
+    return changed
+
+
 Main = Callable[[list[str] | None], int]
 if __name__ == "__main__":
     raise SystemExit(main())

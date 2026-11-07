@@ -181,6 +181,9 @@ class _HttpClient:
     def _tokens(self, data: dict[str, Any]) -> tuple[int, int, int] | None:
         raise NotImplementedError
 
+    def _reference(self, cost: float | None) -> str:
+        return f"{self._pricing_reference}; model={self.model_id}"
+
     def _account(self, data: dict[str, Any] | None, start: float) -> None:
         wall = (time.monotonic() - start) * 1000
         self.usage.calls += 1
@@ -204,7 +207,7 @@ class _HttpClient:
         self.ledger.append(model_call_entry(
             provider=self.provider, unit="tokens", quantity=tokens, cost_usd=cost,
             cost_status=status,
-            pricing_reference=f"{self._pricing_reference}; model={self.model_id}",
+            pricing_reference=self._reference(cost),
             pricing_date=self._pricing_date, wall_ms=wall,
             estimated_job_usd=self.estimated_job_usd, phase=self.phase, mode=self.mode,
             run_id=self.run_id, case_id=self.case_id))
@@ -259,8 +262,7 @@ class ResponsesConversation:
     def ask(self, instructions: str) -> list[ToolCall]:
         data = self.client.create(self.client.body(
             instructions, self.items, tools=[self.tool],
-            tool_choice={"type": "function", "name": self.tool["name"]},
-            parallel_tool_calls=False))
+            tool_choice=AGENT_TOOL_CHOICE))
         _check_status(data)
         self.items.extend(data["output"])
         calls = function_calls(data)
@@ -291,6 +293,10 @@ class ChatClient(_HttpClient):
     def __post_init__(self) -> None:
         super().__post_init__()
         self.endpoint = META_CHAT_COMPLETIONS_URL
+
+    def _reference(self, cost: float | None) -> str:
+        return meta_mod.meta_pricing_reference(
+            self.model_id, "unknown" if cost is None else meta_mod.USER_SUPPLIED)
 
     def body(self, instructions: str, messages: list[dict[str, Any]],
              **extra: Any) -> dict[str, Any]:
@@ -350,7 +356,7 @@ class ChatConversation:
         spec = {k: self.tool[k] for k in ("name", "description", "parameters", "strict")}
         data = self.client.create(self.client.body(
             instructions, self.messages, tools=[{"type": "function", "function": spec}],
-            tool_choice=META_TOOL_CHOICE))
+            tool_choice=AGENT_TOOL_CHOICE))
         message = _chat_message(data)
         raw = message.get("tool_calls") or []
         if not isinstance(raw, list) or not raw:
@@ -374,10 +380,10 @@ class ChatConversation:
 
 ProviderClient = ResponsesClient | ChatClient
 
-# The Meta API rejects "required", "none" and named tool_choice with HTTP 400 ("only "auto" is
-# supported for tool_choice"; probed 2026-11-07), so the Meta agent relies on the prompt; a turn
-# without a tool call is malformed_output, the same fallback as OpenAI.
-META_TOOL_CHOICE: Final = "auto"
+# Identical agent conditions for every provider (coordinator decision 2026-11-07): the Meta API
+# rejects "required", "none" and named tool_choice with HTTP 400 (probed 2026-11-07), so every agent
+# sends "auto" and no parallel_tool_calls; a turn without a tool call is malformed_output.
+AGENT_TOOL_CHOICE: Final = "auto"
 
 
 class _HttpStatus(Exception):
