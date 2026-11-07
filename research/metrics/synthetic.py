@@ -378,7 +378,25 @@ def write_demo(
             for e in make_ledger_entries(mode)
         )
     )
-    return {"results": results, "labels": labels_path, "ledger": ledger}
+    degraded = out / "degraded.jsonl"
+    reasons = ("timeout", "malformed_output", "empty_ranking")
+    degraded.write_text(
+        "".join(
+            json.dumps(
+                {
+                    "run_id": r.run_id,
+                    "degraded": reasons[int(hashlib.sha256(r.run_id.encode()).hexdigest(), 16) % 3]
+                    if int(hashlib.sha256(r.run_id.encode()).hexdigest(), 16) % 5 == 0
+                    else None,
+                },
+                sort_keys=True,
+            )
+            + "\n"
+            for r in rows
+            if r.arm_id.startswith("frontier")
+        )
+    )
+    return {"results": results, "labels": labels_path, "ledger": ledger, "degraded": degraded}
 
 
 def main(argv: Sequence[str] | None = None) -> int:

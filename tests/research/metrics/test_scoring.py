@@ -265,3 +265,39 @@ def test_rejects_unlabelled_unknown_arm_and_duplicate(labels: list[CaseLabel]) -
     )
     with pytest.raises(ValueError, match="duplicate episodes"):
         score([row, twin], labels, PROTOCOL)
+
+
+def test_degraded_episodes_stay_in_arm_and_are_counted(labels: list[CaseLabel]) -> None:
+    rows = _arm("frontier_reviewer", {"syn-rg-0000": 1, "syn-rg-0001": None}, cost=0.25)
+    degraded = {rows[0].run_id: "timeout", rows[2].run_id: "timeout", rows[3].run_id: "empty"}
+    plain = score(rows, labels, PROTOCOL)["modes"]["offline"]["validation"]["arms"]
+    scores = score(rows, labels, PROTOCOL, degraded)
+    arm = scores["modes"]["offline"]["validation"]["arms"]["frontier_reviewer"]
+    base = plain["frontier_reviewer"]
+    assert arm["runs"] == base["runs"] == 4
+    assert arm["recall"] == base["recall"]
+    assert arm["known_cost_usd"] == base["known_cost_usd"] == 1.0
+    assert arm["degraded_runs"] == 3
+    assert arm["degraded_rate"] == 0.75
+    assert arm["degraded_by_reason"] == {
+        "empty": {"runs": 1, "rate": 0.25},
+        "timeout": {"runs": 2, "rate": 0.5},
+    }
+    assert arm["degraded_known_cost_usd"] == 0.75
+    assert arm["degraded_confirmed_true_defect_runs"] == 1
+    assert scores["degraded_records"] == 3
+    assert base["degraded_runs"] == 0
+    with pytest.raises(ValueError, match="unknown run_ids"):
+        score(rows, labels, PROTOCOL, {"nope": "timeout"})
+
+
+def test_estimated_costs_are_reported_separately(labels: list[CaseLabel]) -> None:
+    rows = _arm("frontier_agent", {"syn-rg-0000": 1}, cost=0.5)
+    data = rows[0].model_dump(mode="json")
+    data["cost_status"] = "estimated"
+    rows[0] = RawResultRow.model_validate_json(json.dumps(data))
+    arm = score(rows, labels, PROTOCOL)["modes"]["offline"]["validation"]["arms"]["frontier_agent"]
+    assert arm["known_cost_usd"] == 1.0
+    assert arm["estimated_cost_usd"] == 0.5
+    assert arm["estimated_cost_runs"] == 1
+    assert arm["cost_status_runs"] == {"estimated": 1, "measured": 1}

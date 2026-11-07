@@ -27,6 +27,8 @@ def test_report_cli_end_to_end_keeps_modes_separate(tmp_path: Path) -> None:
                 str(demo["labels"]),
                 "--ledger",
                 str(demo["ledger"]),
+                "--degraded",
+                str(demo["degraded"]),
                 "--out",
                 str(out),
             ]
@@ -44,6 +46,11 @@ def test_report_cli_end_to_end_keeps_modes_separate(tmp_path: Path) -> None:
     assert "never pooled" in text
     assert "descriptive only" in text  # 14 defect cases < 30
     assert "unknown" in text  # storage cost unknown, not zero
+    assert "counted as the arm's own results" in text
+    assert "| frontier_agent |" in text
+    assert "estimated (entries)" in text
+    assert "incl. estimated $" in text  # recorded rows carry estimated cost
+    assert " estimated (" in text  # ledger rows marked estimated are labelled
     for mode in ("offline", "recorded", "live"):
         for name in (
             "recall_vs_executions",

@@ -50,6 +50,16 @@ def _usd(value: object) -> str:
     return "unknown" if value is None else f"${cast(float, value):.4f}"
 
 
+def _known_cost(summary: Mapping[str, Any]) -> str:
+    total = _usd(summary["known_cost_usd"])
+    if not summary.get("estimated_cost_runs"):
+        return total
+    return (
+        f"{total} (incl. estimated {_usd(summary['estimated_cost_usd'])}, "
+        f"{summary['estimated_cost_runs']} runs)"
+    )
+
+
 def _ci(ci: Mapping[str, Any]) -> str:
     if ci.get("estimate") is None:
         return "NA"
@@ -126,6 +136,47 @@ def _figures(prefix: str, out_dir: Path, block: Mapping[str, Any], mode: str) ->
     return lines
 
 
+def _degraded_section(arms: Mapping[str, Any], scores: Mapping[str, Any]) -> list[str]:
+    if not scores.get("degraded_records"):
+        return ["No degraded episodes were reported (no degradation records supplied).", ""]
+    lines = [
+        "Degraded episodes (provider failure, fell back to fixed order). They are counted as "
+        "the arm's own results, including outcome and cost:",
+        "",
+    ]
+    rows = []
+    for a, s in arms.items():
+        reasons = s["degraded_by_reason"] or {"none": {"runs": 0, "rate": 0.0}}
+        for reason, d in reasons.items():
+            rows.append(
+                [
+                    a,
+                    str(s["runs"]),
+                    str(s["degraded_runs"]),
+                    _f(s["degraded_rate"]),
+                    reason,
+                    str(d["runs"]),
+                    _f(d["rate"]),
+                    _usd(s["degraded_known_cost_usd"]),
+                    str(s["degraded_confirmed_true_defect_runs"]),
+                ]
+            )
+    return lines + _table(
+        [
+            "arm",
+            "runs",
+            "degraded runs",
+            "degraded rate",
+            "reason",
+            "reason runs",
+            "reason rate",
+            "degraded known cost",
+            "degraded confirmed defects",
+        ],
+        rows,
+    )
+
+
 def _split_section(
     mode: str, split: str, block: Mapping[str, Any], scores: Mapping[str, Any], out_dir: Path
 ) -> list[str]:
@@ -175,7 +226,11 @@ def _split_section(
         ["arm", *[f"recall@{b}" for b in budgets]],
         [[a, *[_ci(s["recall"][b]["case"]) for b in budgets]] for a, s in arms.items()],
     )
-    lines += ["Speed and cost (unknown costs are not counted as zero):", ""]
+    lines += [
+        "Speed and cost (unknown costs are not counted as zero; estimated costs are "
+        "labelled and are not provider-measured):",
+        "",
+    ]
     lines += _table(
         [
             "arm",
@@ -184,6 +239,7 @@ def _split_section(
             "cold/warm p50 ms",
             "base/head/confirm/failed",
             "known cost",
+            "estimated-cost runs",
             "unknown-cost runs",
             "$/case",
             "$/confirmed defect",
@@ -196,7 +252,8 @@ def _split_section(
                 _f(s["time_to_first_witness_ms_detected_only"]["p50"], 1),
                 f"{_f(s['cold_start_wall_ms_p50'], 1)}/{_f(s['warm_wall_ms_p50'], 1)}",
                 "/".join(str(s["invocations"][k]) for k in ("base", "head", "confirm", "failed")),
-                _usd(s["known_cost_usd"]),
+                _known_cost(s),
+                _f(s["estimated_cost_runs"]),
                 _f(s["unknown_cost_runs"]),
                 _usd(s["usd_per_case"]),
                 _usd(s["usd_per_confirmed_defect"]),
@@ -215,6 +272,7 @@ def _split_section(
         ]
         or [["-", "-", "0"]],
     )
+    lines += _degraded_section(arms, scores)
     families = sorted({f for s in arms.values() for f in s["recall_by_family"]})
     if families:
         key = f"recall_at_{scores['max_pairs']}"
@@ -298,15 +356,19 @@ def _ledger_section(mode: str, ledger: Sequence[Mapping[str, Any]], out_dir: Pat
     rows = [t for t in ledger if t["measurement_mode"] == mode]
     if not rows:
         return [f"No ledger entries recorded for {mode} measurements.", ""]
-    lines = [f"Cost/timing ledger ({mode} only; includes failed and retried calls):", ""]
+    lines = [
+        f"Cost/timing ledger ({mode} only; includes failed and retried calls; "
+        "estimated amounts are labelled and are not provider-measured):",
+        "",
+    ]
     lines += _table(
         [
             "category",
             "phase",
             "entries",
             "paid",
-            "measured",
-            "estimated",
+            "measured (entries)",
+            "estimated (entries)",
             "unknown-cost entries",
             "wall ms",
             "providers",
@@ -317,8 +379,10 @@ def _ledger_section(mode: str, ledger: Sequence[Mapping[str, Any]], out_dir: Pat
                 t["phase"],
                 str(t["entries"]),
                 str(t["paid_entries"]),
-                _usd(t["measured_usd"]),
-                _usd(t["estimated_usd"]),
+                f"{_usd(t['measured_usd'])} ({t['measured_entries']})",
+                f"{_usd(t['estimated_usd'])} estimated ({t['estimated_entries']})"
+                if t["estimated_entries"]
+                else "-",
                 str(t["unknown_cost_entries"]),
                 _f(t["wall_ms"], 0),
                 ", ".join(t["providers"]),
@@ -345,7 +409,7 @@ def _ledger_section(mode: str, ledger: Sequence[Mapping[str, Any]], out_dir: Pat
     name = _write(
         out_dir / f"{mode}_cost_breakdown.svg",
         bar_chart(
-            f"Known cost by component ({mode}; unknown excluded)",
+            f"Known cost by component ({mode}; measured + estimated, unknown excluded)",
             "USD",
             categories,
             series,

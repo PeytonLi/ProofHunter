@@ -38,8 +38,13 @@ Results are grouped by mode, then split, then arm.
 - **Invocations:** base, head, confirm and failed.
 - **Timing:** p50 and p95 wall time, time to first witness (detected runs only), cold vs warm p50
   and mean timing for each component.
-- **Tokens and cost:** token totals, known cost, runs with unknown cost, and dollars per case and
+- **Tokens and cost:** token totals, known cost (with the estimated part and its run count labelled), runs with unknown cost, and dollars per case and
   per confirmed defect. The dollar ratios are `None` when any cost is unknown.
+- **Degraded episodes:** per arm, the degraded run count and rate, with each reason's count and
+  rate, plus the cost and confirmed defects of degraded runs. Degraded episodes stay in their
+  arm's results (outcome and cost). `RawResultRow` has no `degraded` field (extra=forbid), so the
+  records come from a sidecar JSONL `{"run_id": ..., "degraded": reason|null}` passed with
+  `research report --degraded PATH` (`read_degraded` in `results.py`). Unknown run_ids are rejected.
 - **Replicates:** recall for each seed, and the spread across seeds.
 - **Paired contrasts** on identical (case, seed, repetition) episodes.
 - **Factorial main effects and interaction**, when all four Qwen cells exist.
@@ -49,19 +54,19 @@ Results are grouped by mode, then split, then arm.
 
 ```
 UV_OFFLINE=1 PROOFHUNTER_PROFILE=offline uv run --project research --locked pytest -q tests/research
-  -> 95 passed, 2 skipped (the setup CLI-stub checks skip because report and verify-teardown now exist)
+  -> 98 passed, 2 skipped (the setup CLI-stub checks skip because report and verify-teardown now exist)
 UV_OFFLINE=1 uv run --project research --locked mypy --strict research tests/research   -> no issues (23 files)
 UV_OFFLINE=1 uv run --project research --locked ruff check research tests/research      -> all passed
 UV_OFFLINE=1 uv run --project research --locked python -m research.schemas.export --check -> exit 0
 Production (UV_OFFLINE=1 PROOFHUNTER_PROFILE=offline uv run --locked ...):
-  pytest -q -> 1261 passed, 4 skipped (the numpy tests skip there)
+  pytest -q -> 1262 passed, 4 skipped (the numpy tests skip there)
   ruff check . -> clean; mypy src bench tools tests/integration -> clean (81 files)
   tools/gate.py setup -> PASSED; tools/gate.py integrated -> PASSED
 
 # synthetic demo (D=research/artifacts/measurement/synthetic-demo)
 uv run --project research --locked python -m research.metrics.synthetic --out $D/inputs
 uv run --project research --locked python -m research.cli report --results $D/inputs/results.jsonl \
-  --labels $D/inputs/labels-validation.json --ledger $D/inputs/ledger.jsonl --out $D/report
+  --labels $D/inputs/labels-validation.json --ledger $D/inputs/ledger.jsonl --degraded $D/inputs/degraded.jsonl --out $D/report
 uv run --project research --locked python -m research.cli verify-teardown --ledger $D/inputs/ledger.jsonl  -> ok
 ```
 
@@ -74,6 +79,7 @@ These are the synthetic demo inputs. They are deterministic and git-ignored.
 | inputs/results.jsonl | 05fa03bdb72efbc8320f4408386fb03697878c3bb0e427bb9fe484777d90ed8d |
 | inputs/labels-validation.json | d66e2cb9b7a943bc53de24e741dd17f513458d01c61abeb7e302639893d0cef9 |
 | inputs/ledger.jsonl | 512c56fb83fd37f4b3b9be3089ac4f7c45469a0f6aaa72425ede111eec8d4d1a |
+| inputs/degraded.jsonl | 87b11fc0a5a0905b50ea5a1c04d8f1d078d21a156a953bd4e67bb9c8974cbb51 |
 
 This lane produced no real dataset or model artifacts.
 
@@ -97,6 +103,9 @@ Zero paid calls, so the ledger has no real spend. No dataset or target-repositor
 - Only synthetic rows were tested; no real episode rows exist yet.
 
 ## Remaining dependencies
+
+- Baselines/integration lanes: write one degradation record per episode (`run_id`, `degraded`)
+  next to the raw results. If `degraded` should live on `RawResultRow`, that is a setup-owned schema change.
 
 - Integration lane: real `RawResultRow` output, ideally with confirmation that episodes stop at
   the witness.

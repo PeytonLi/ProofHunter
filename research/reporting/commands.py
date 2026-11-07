@@ -10,6 +10,7 @@ from pathlib import Path
 from research.metrics.ledger import read_ledger, totals
 from research.metrics.results import (
     ResultsError,
+    read_degraded,
     read_label_files,
     read_protocol,
     read_raw_results,
@@ -29,6 +30,13 @@ def report(argv: Sequence[str]) -> int:
     parser.add_argument("--results", type=Path, nargs="+", required=True)
     parser.add_argument("--labels", type=Path, nargs="+", required=True)
     parser.add_argument("--ledger", type=Path, nargs="*", default=[])
+    parser.add_argument(
+        "--degraded",
+        type=Path,
+        nargs="*",
+        default=[],
+        help='JSONL of {"run_id", "degraded": reason|null} from arms that fell back',
+    )
     parser.add_argument("--protocol", type=Path, default=DEFAULT_PROTOCOL)
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
     parser.add_argument(
@@ -45,7 +53,7 @@ def report(argv: Sequence[str]) -> int:
             for f in read_label_files(args.labels, allow_sealed=args.unseal_test_labels)
             for lab in f.labels
         ]
-        scores = dict(score(rows, labels, protocol))
+        scores = dict(score(rows, labels, protocol, read_degraded(*args.degraded)))
         scores["ledger"] = totals(e for p in args.ledger for e in read_ledger(p))
     except (ResultsError, ValueError) as error:
         print(f"report failed: {error}", file=sys.stderr)
