@@ -18,6 +18,7 @@ from fixtures.adapters import (
     SequentialIds,
     SteppingClock,
 )
+from proofhunter import contracts as c
 from proofhunter.api import create_app
 from proofhunter.config import Settings, load_settings
 from proofhunter.contracts import (
@@ -115,6 +116,21 @@ def receipt_for(status: RunStatus, *, live: bool = False) -> ReceiptV1:
     )
 
 
+def progress_for(status: RunStatus, meta: int = 0, snap: int = 0) -> c.RunCheckpoint:
+    revision = receipt_for(status).pinned_revision
+    assert revision is not None
+    target, _ = FixtureRepositoryValidator().resolve(URL)
+    pin = c.PinnedRevision(
+        **target.model_dump(),
+        base_sha=revision.base_sha,
+        head_sha=revision.head_sha,
+        resolved_at=status.created_at,
+    )
+    return c.RunCheckpoint(
+        pinned_revision=pin, provider_allocations=c.ProviderAllocations(meta=meta, snap=snap)
+    )
+
+
 def probe_for(receipt: ReceiptV1) -> ProbeRecord:
     data = receipt.probes[0].model_dump(mode="json")
     for side in ("base", "head", "confirmation"):
@@ -172,6 +188,9 @@ def test_reference_idempotency_quota_and_resume(store: SQLiteStore | InMemoryRun
     assert len(store.quota_reservations(status.run_id)) == 1
     lease = store.claim("worker", 60)
     assert lease is not None
+    progress = progress_for(status, meta=1)
+    assert store.reserve_progress(lease, progress) == progress
+    assert store.load_run(status.run_id).status.budget.used.meta_requests == 1
     store.checkpoint(lease, event_for(status))
     store.record_attempt(lease, attempt_for(status))
     store.commit_probe(lease, probe_for(receipt_for(status)))
@@ -195,7 +214,7 @@ def test_reference_idempotency_quota_and_resume(store: SQLiteStore | InMemoryRun
 
 
 @pytest.mark.parametrize(
-    "write", ["renew", "checkpoint", "record_attempt", "commit_probe", "finish"]
+    "write", ["renew", "checkpoint", "record_attempt", "commit_probe", "finish", "reserve_progress"]
 )
 @pytest.mark.parametrize("fence", ["expired", "epoch", "owner", "terminal"])
 def test_every_write_fenced(tmp_path: Path, write: str, fence: str) -> None:
@@ -225,6 +244,8 @@ def test_every_write_fenced(tmp_path: Path, write: str, fence: str) -> None:
             store.record_attempt(lease, attempt_for(status))
         elif write == "commit_probe":
             store.commit_probe(lease, probe_for(receipt_for(status)))
+        elif write == "reserve_progress":
+            store.reserve_progress(lease, progress_for(status))
         else:
             store.finish(lease, receipt_for(status), None)
 
@@ -574,8 +595,7 @@ def test_body_limit_and_readiness(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     client = client_for(store)
     assert client.get("/healthz").json() == {"status": "ok"}
     ready = client.get("/readyz")
-    assert ready.status_code == 200
-    assert ready.json()["worker_heartbeat"] == "unavailable"
+    assert ready.status_code == 503
     content = json.dumps({"pr_url": URL}).encode()
     assert (
         client.post(
