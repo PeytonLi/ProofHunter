@@ -197,6 +197,9 @@ stricter one-CPU snapshot. There is no resource fallback to provider defaults.
    ```
 
    This is a trusted operator artifact, not a provider response or PR input.
+   Live startup with the runner enabled validates this same local file and
+   refuses missing or invalid evidence without constructing a provider client.
+   Runner-disabled private staging does not require this artifact.
    `attest()` still allocates a fresh benign canary sandbox, checks returned
    policy/resources, executes the canary and confirms deletion. Approval alone
    cannot make it pass. Missing approval or any mismatch denies source upload.

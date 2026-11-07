@@ -27,6 +27,7 @@ from proofhunter.config import (
 )
 from proofhunter.pipeline import VerificationPipeline, WallClock, compose
 from proofhunter.ports import AdapterError, ApiDependencies, ConfigError
+from proofhunter.runner.approval import config_fingerprint, harness_sha256, local_approval_refusal
 from proofhunter.store import create_store
 from proofhunter.worker import VerificationWorker
 
@@ -57,6 +58,21 @@ def live_trust_gate(settings: Settings, enrollments: Sequence[c.Enrollment]) -> 
             or settings.daytona.image_digest != enrollment.image_digest
         ):
             raise ConfigError("runner provisioning required")
+    if not settings.offline and settings.daytona.enable_live_runner:
+        harness = harness_sha256()
+        fingerprint = config_fingerprint(
+            settings.daytona.snapshot or "",
+            settings.daytona.image_digest or "",
+            harness,
+            c.canonical_sha256(str(settings.db_path.resolve()))[:24],
+        )
+        reason = local_approval_refusal(
+            settings.db_path.parent,
+            fingerprint=fingerprint,
+            image_digest=settings.daytona.image_digest or "",
+        )
+        if reason is not None:
+            raise ConfigError(reason)
 
 
 def live_settings(env: dict[str, str], role: ServiceRole) -> Settings:
@@ -238,8 +254,6 @@ async def repository_metadata(settings: Settings, repo_url: str) -> tuple[int, i
 
 
 def enroll(settings: Settings, args: argparse.Namespace) -> None:
-    from proofhunter.runner.daytona import harness_sha256
-
     destination = args.out.resolve()
     repo_root = Path(__file__).resolve().parents[2]
     if destination.is_relative_to(repo_root):
