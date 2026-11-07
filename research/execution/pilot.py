@@ -100,6 +100,11 @@ def summarize(rows: Sequence[RawResultRow], labels: Mapping[str, CaseLabel],
         invocations = [r.invocations.base + r.invocations.head + r.invocations.confirm
                        for r in arm_rows]
         walls = [r.timings.wall_ms for r in arm_rows]
+        startups = [r.timings.sandbox_startup_ms for r in arm_rows
+                    if r.timings.sandbox_startup_ms is not None]
+        cleanups = [r.timings.cleanup_ms for r in arm_rows if r.timings.cleanup_ms is not None]
+        executions = [r.timings.execution_ms for r in arm_rows
+                      if r.timings.execution_ms is not None]
         costs = [r.cost_usd for r in arm_rows]
         defect = [r for r in usable if (lab := labels.get(r.case_id)) is not None
                   and lab.kind is not LabelKind.CLEAN]
@@ -121,6 +126,9 @@ def summarize(rows: Sequence[RawResultRow], labels: Mapping[str, CaseLabel],
             "invocations_mean": statistics.fmean(invocations) if invocations else None,
             "invocations_max": max(invocations, default=None),
             "failed_invocations": sum(r.invocations.failed for r in arm_rows),
+            "sandbox_startup_ms_mean": statistics.fmean(startups) if startups else None,
+            "execution_ms_mean": statistics.fmean(executions) if executions else None,
+            "cleanup_ms_mean": statistics.fmean(cleanups) if cleanups else None,
             "wall_ms_p50": _pct(walls, 0.5), "wall_ms_p95": _pct(walls, 0.95),
             "wall_ms_per_usable_case": (sum(walls) / len(usable)) if usable else None,
             "cost_usd_total": (None if any(c is None for c in costs)
@@ -133,10 +141,13 @@ def summarize(rows: Sequence[RawResultRow], labels: Mapping[str, CaseLabel],
     return {"arms": arms, "skipped_arms": dict(skipped)}
 
 
-def project(summary: Mapping[str, Any], protocol: ProtocolV1) -> dict[str, Any]:
-    targets = protocol.split_targets
-    cases = sum(t.defect_cases + t.clean_controls for t in (targets["validation"],
-                                                             targets["test"]))
+def project(summary: Mapping[str, Any], protocol: ProtocolV1,
+            test_cases: int | None = None) -> dict[str, Any]:
+    """Project the frozen test evaluation: test cases x 13 arms x 5 seeds x executions."""
+    target = protocol.split_targets["test"]
+    cases = test_cases if test_cases is not None else target.defect_cases + target.clean_controls
+    source = ("manifest test split (defect+clean)" if test_cases is not None
+              else "protocol split_targets test (defect+clean)")
     reps = len(protocol.replicate_seeds)
     n_arms = len(protocol.arms)
     measured = summary["arms"]
@@ -148,17 +159,49 @@ def project(summary: Mapping[str, Any], protocol: ProtocolV1) -> dict[str, Any]:
     known_cost = sum((v or 0.0) * cases * reps for v in per_arm_cost.values() if v is not None)
     return {
         "formula": "cases x arms x repetitions x executions_per_episode",
-        "cases": cases, "cases_source": "split_targets validation+test (defect+clean)",
+        "cases": cases, "cases_source": source,
         "arms": n_arms, "repetitions": reps,
         "expected_executions_per_episode": mean_inv,
         "expected_executions_total": (cases * n_arms * reps * mean_inv) if mean_inv else None,
         "worst_case_executions_total": cases * n_arms * reps
         * protocol.max_invocations_per_episode,
         "projected_usd_measured_arms": known_cost,
+        "projected_usd_by_arm": {k: (v * cases * reps if v is not None else None)
+                                 for k, v in sorted(per_arm_cost.items())},
         "arms_with_unknown_cost": unknown,
-        "note": "Execution is local reviewed in-process code (0 USD). Model-arm dollars stay "
-                "unknown until their lanes report measured per-episode costs.",
+        "note": "Execution is local reviewed template code in isolated child processes "
+                "(0 USD). Model-arm dollars stay unknown until their lanes report measured "
+                "per-episode costs.",
     }
+
+
+def degraded_reason(selector: object, generator: object) -> str | None:
+    """The baseline selector's ``degraded`` reason, else a generator fallback, else ``None``."""
+    for source in (selector, generator):
+        reason = getattr(source, "degraded", None)
+        if reason is not None:
+            return str(reason)
+    last = getattr(generator, "last", None)
+    if last is not None and getattr(last, "mode", None) == "fallback":
+        code = getattr(last, "reason_code", None)
+        return f"generator_fallback:{getattr(code, 'value', code)}"
+    return None
+
+
+def write_degraded(path: Path, records: Sequence[Mapping[str, str | None]]) -> None:
+    with path.open("w", encoding="utf-8") as stream:
+        for record in records:
+            stream.write(json.dumps(record, sort_keys=True) + "\n")
+
+
+def degraded_by_arm(rows: Sequence[RawResultRow],
+                    records: Sequence[Mapping[str, str | None]]) -> dict[str, dict[str, int]]:
+    arm = {r.run_id: r.arm_id for r in rows}
+    out: dict[str, Counter[str]] = defaultdict(Counter)
+    for record in records:
+        if record["degraded"] is not None and record["run_id"] is not None:
+            out[arm[record["run_id"]]][record["degraded"]] += 1
+    return {k: dict(v) for k, v in sorted(out.items())}
 
 
 def run(store: CaseStore, protocol: ProtocolV1, runner: ResearchEpisodeRunner,
@@ -169,16 +212,18 @@ def run(store: CaseStore, protocol: ProtocolV1, runner: ResearchEpisodeRunner,
     start = perf_counter_ns()
     out.mkdir(parents=True, exist_ok=True)
     manifest = store.manifest()
-    cases = sorted((c for c in manifest.cases if c.split is split), key=lambda c: c.case_id)
+    cases = sorted((c for c in manifest.cases if c.split is split),
+                   key=lambda c: hashlib.sha256(c.case_id.encode()).hexdigest())
     cases = cases[:max_cases]
     labels = {lab.case_id: lab for lab in store.labels(split.value)}
-    specs = {a.arm_id: a for a in protocol.arms}
+    specs = runner.arm_specs()
     unknown_arms = [a for a in arms if a not in specs]
     if unknown_arms:
         raise ValueError(f"arms not in protocol: {unknown_arms}")
     audits = [audit_case(runner, store.sources(c.case_id), labels.get(c.case_id), protocol)
               for c in cases]
     rows: list[RawResultRow] = []
+    degraded: list[dict[str, str | None]] = []
     skipped: dict[str, str] = {}
     for arm_id in arms:
         spec = specs[arm_id]
@@ -194,12 +239,15 @@ def run(store: CaseStore, protocol: ProtocolV1, runner: ResearchEpisodeRunner,
                 selector: Selector = factory.selector(spec, seed)
                 rows.append(runner.run(sources, selector, generator, arm_id=arm_id, seed=seed,
                                        repetition=repetition, mode=mode))
+                degraded.append({"run_id": rows[-1].run_id,
+                                 "degraded": degraded_reason(selector, generator)})
     with (out / "rows.jsonl").open("w", encoding="utf-8") as stream:
         for row in rows:
             stream.write(row.model_dump_json() + "\n")
     with (out / "events.jsonl").open("w", encoding="utf-8") as stream:
         for event in runner.events:
             stream.write(json.dumps(event, sort_keys=True) + "\n")
+    write_degraded(out / "degraded.jsonl", degraded)
     summary = summarize(rows, labels, protocol, skipped)
     usable_audits = [a for a in audits if a["source_review"] == "ok"]
     report = {
@@ -227,7 +275,9 @@ def run(store: CaseStore, protocol: ProtocolV1, runner: ResearchEpisodeRunner,
             "defect_cases": sum(1 for a in usable_audits if a["label_kind"] not in (None, "clean")),
         },
         **summary,
-        "projection": project(summary, protocol),
+        "degraded_by_arm": degraded_by_arm(rows, degraded),
+        "projection": project(summary, protocol,
+                              sum(c.split is Split.TEST for c in manifest.cases)),
         "rows_sha256": hashlib.sha256((out / "rows.jsonl").read_bytes()).hexdigest(),
         "pilot_wall_ms": (perf_counter_ns() - start) / 1e6,
     }
@@ -241,8 +291,8 @@ def render_markdown(report: Mapping[str, Any]) -> str:
     checks = report["dataset_checks"]
     lines = [
         "# R1 feasibility pilot", "",
-        f"Mode: {report['measurement_mode']} (in-process reviewed template execution; "
-        "not a cloud or sandbox timing). Split: "
+        f"Mode: {report['measurement_mode']} (reviewed templates, one isolated local child "
+        "process per invocation; not a cloud or sandbox timing). Split: "
         f"{report['split']}. Cases: {report['cases']}. Seeds: {len(report['seeds'])}. "
         f"Implementation: `{report['implementation_sha']}`.", "",
         "## Dataset checks", "",
@@ -254,8 +304,8 @@ def render_markdown(report: Mapping[str, Any]) -> str:
         f"{checks['source_review_failures'] or 'none'}.", "",
         "## Arms (descriptive, small sample)", "",
         "| arm | episodes | usable | recall@1 | recall@3 | recall@6 | clean FP | mean invocations "
-        "| p50 ms | p95 ms | USD per usable case |",
-        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+        "| p50 ms | p95 ms | startup ms | exec ms | cleanup ms | USD per usable case |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
 
     def fmt(value: object) -> str:
@@ -268,7 +318,8 @@ def render_markdown(report: Mapping[str, Any]) -> str:
             f"| {arm_id} | {a['episodes']} | {a['usable_episodes']} | {fmt(recall.get('1'))} | "
             f"{fmt(recall.get('3'))} | {fmt(recall.get('6'))} | {a['clean_false_positives']} | "
             f"{fmt(a['invocations_mean'])} | {fmt(a['wall_ms_p50'])} | {fmt(a['wall_ms_p95'])} | "
-            f"{fmt(a['cost_usd_per_usable_case'])} |")
+            f"{fmt(a['sandbox_startup_ms_mean'])} | {fmt(a['execution_ms_mean'])} | "
+            f"{fmt(a['cleanup_ms_mean'])} | {fmt(a['cost_usd_per_usable_case'])} |")
     if report["skipped_arms"]:
         lines += ["", "Skipped arms: " + "; ".join(
             f"{k} ({v})" for k, v in sorted(report["skipped_arms"].items()))]

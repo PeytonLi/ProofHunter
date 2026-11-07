@@ -210,13 +210,51 @@ def test_rows_never_carry_labels(protocol: ProtocolV1) -> None:
 
 
 def test_sixteenth_invocation_is_refused(protocol: ProtocolV1) -> None:
+    from types import SimpleNamespace
+
+    from research.execution.budget import EpisodeBudget
     from research.execution.runner import BudgetViolation, Side, _Episode
 
     calls: list[str] = []
+    budget = EpisodeBudget.from_protocol(protocol)
     episode = _Episode("run", None, doubles.bench_sources("per_line"),  # type: ignore[arg-type]
                        lambda *a: calls.append("x"),  # type: ignore[arg-type,return-value]
-                       protocol.max_invocations_per_episode, protocol.max_retries_per_episode)
-    episode.counts["base"] = protocol.max_invocations_per_episode
-    with pytest.raises(BudgetViolation):
-        episode.observe(Side.BASE, None)  # type: ignore[arg-type]
+                       protocol.max_invocations_per_episode, protocol.max_retries_per_episode,
+                       budget)
+    for i in range(protocol.max_pairs):
+        budget.open_pair(f"c{i}")
+        budget.charge(Side.BASE, f"c{i}")
+        budget.charge(Side.HEAD, f"c{i}")
+    budget.charge(Side.BASE, "c5", retry=True)
+    budget.charge(Side.HEAD, "c5", retry=True)
+    budget.charge(Side.CONFIRM, "c5")
+    assert budget.invocations == protocol.max_invocations_per_episode
+    for side in Side:
+        with pytest.raises(BudgetViolation):
+            episode.observe(side, SimpleNamespace(input_sha256="c5"))  # type: ignore[arg-type]
     assert calls == []
+
+
+def test_isolated_runner_reports_phase_timings(protocol: ProtocolV1) -> None:
+    runner = doubles.offline_runner(protocol, isolated=True)
+    row = run(protocol, "per_line", doubles.EigDouble(), runner=runner)
+    assert row.verdict.value == "confirmed_regression"  # type: ignore[union-attr]
+    assert row.timings.sandbox_startup_ms is not None
+    assert row.timings.sandbox_startup_ms > 0
+    assert row.timings.cleanup_ms is not None
+
+
+def test_isolated_runner_timeout_drill_stays_in_budget(protocol: ProtocolV1) -> None:
+    runner = doubles.offline_runner(protocol, isolated=True,
+                                    faults={("head", 1): ObservationOutcome.TIMEOUT})
+    row = run(protocol, "per_line", doubles.EigDouble(), runner=runner)
+    assert row.probes[0].retries == 1
+    assert total(row) <= protocol.max_invocations_per_episode
+
+
+def test_default_runner_refuses_without_reviewed_registry(protocol: ProtocolV1) -> None:
+    from research.execution.runner import make_runner
+
+    row = run(protocol, "per_line", doubles.EigDouble(),
+              runner=make_runner(protocol, doubles.MemoryLedger()))
+    assert (row.reason_code, total(row)) == ("source_invalid", 0)

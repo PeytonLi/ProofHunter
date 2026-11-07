@@ -4,13 +4,27 @@ from __future__ import annotations
 
 import importlib
 import json
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, cast
 
 from research.schemas.interfaces import CaseStore, HypothesisGenerator, Ledger, Selector
-from research.schemas.models import ArmSpec, LedgerEntry
+from research.schemas.models import ArmSpec, LedgerEntry, LedgerPhase, MeasurementMode
+
+SINGLE_JOB_CHECKIN_USD = 50.0
+#: Frozen protocol-v1 arm whose spec (selector loop, feedback, budget) each grid role reuses.
+GRID_BASE = {"generator": "meta_muse_spark_eig", "reviewer": "frontier_reviewer",
+             "agent": "frontier_agent"}
+
+
+def grid_addons() -> dict[str, str]:
+    """``<role>:<model>`` add-on arms from the baselines grid, mapped to their frozen base arm."""
+    try:
+        arms = _attr("research.baselines.grid", "grid_arms")()
+    except LaneMissing:
+        return {}
+    return {arm: GRID_BASE[arm.partition(":")[0]] for arm in arms}
 
 FACTORY_SELECTORS = {"fixed_order", "uniform_random", "simple_heuristic"}
 
@@ -41,6 +55,7 @@ class FrozenArtifacts:
     generator_revision: str | None = None
     frontier_model_id: str | None = None
     arms: Sequence[str] | None = None
+    addon_arms: Mapping[str, Mapping[str, str]] | None = None
 
     @classmethod
     def load(cls, path: Path | None) -> FrozenArtifacts:
@@ -54,6 +69,10 @@ class FrozenArtifacts:
         for key in ("ranker_checkpoint", "generator_adapter"):
             if data.get(key) is not None:
                 data[key] = (path.parent / data[key]).resolve()
+        for addon in (data.get("addon_arms") or {}).values():
+            if addon.get("ranker_checkpoint") is not None:
+                checkpoint = path.parent / addon["ranker_checkpoint"]
+                addon["ranker_checkpoint"] = str(checkpoint.resolve())
         return cls(**data)
 
 
@@ -72,37 +91,80 @@ def _check_hash(path: Path | None, digest: str | None, what: str) -> Path:
 @dataclass
 class ArmFactory:
     artifacts: FrozenArtifacts = field(default_factory=FrozenArtifacts)
+    ledger: Ledger | None = None
+    mode: MeasurementMode = MeasurementMode.OFFLINE
+    phase: LedgerPhase = LedgerPhase.PILOT
+    estimated_job_usd: dict[str, float] = field(default_factory=dict)
+
+    def _provider_kwargs(self, arm_id: str) -> dict[str, Any]:
+        """Ledger/mode/phase for paid provider arms; refuses without a pre-launch estimate."""
+        if self.mode is not MeasurementMode.LIVE:
+            raise LaneMissing(f"{arm_id} calls a paid provider; run it with --mode live")
+        if self.ledger is None:
+            raise LaneMissing(f"{arm_id} needs a ledger")
+        estimate = self.estimated_job_usd.get(arm_id)
+        if estimate is None:
+            raise LaneMissing(f"{arm_id} needs a pre-launch estimate (--estimate {arm_id}=USD)")
+        if estimate > SINGLE_JOB_CHECKIN_USD:
+            raise LaneMissing(f"{arm_id} estimate {estimate} USD needs a coordinator check-in")
+        return {"ledger": self.ledger, "mode": self.mode, "phase": self.phase,
+                "estimated_job_usd": estimate}
 
     def selector(self, spec: ArmSpec, seed: int) -> Selector:
         selector: Selector
+        if ":" in spec.arm_id:
+            role = spec.arm_id.partition(":")[0]
+            kwargs = {} if role == "generator" else self._provider_kwargs(spec.arm_id)
+            selector = _attr("research.baselines.grid", "make_arm_selector")(
+                spec.arm_id, seed=seed, **kwargs)
+            return selector
         if spec.selector in FACTORY_SELECTORS or spec.selector == "eig":
             arm_id = spec.arm_id if spec.selector in FACTORY_SELECTORS else "builtin_eig"
             selector = _attr("research.baselines.selectors", "make_selector")(arm_id, seed=seed)
             return selector
         if spec.selector == "lambdarank":
-            checkpoint = _check_hash(self.artifacts.ranker_checkpoint,
-                                     self.artifacts.ranker_checkpoint_sha256, "ranker checkpoint")
+            addon = (self.artifacts.addon_arms or {}).get(spec.arm_id)
+            if addon is not None:
+                checkpoint = _check_hash(Path(addon["ranker_checkpoint"]),
+                                         addon["ranker_checkpoint_sha256"], "ranker checkpoint")
+            else:
+                checkpoint = _check_hash(self.artifacts.ranker_checkpoint,
+                                         self.artifacts.ranker_checkpoint_sha256,
+                                         "ranker checkpoint")
             selector = _attr("research.ranker.selector", "load_ranker_selector")(
-                checkpoint, arm_id=spec.arm_id)
+                checkpoint, arm_id=addon["base"] if addon is not None else spec.arm_id)
             return selector
         model_id = self.artifacts.frontier_model_id
         if spec.selector in ("frontier_reviewer", "frontier_agent") and model_id is None:
-            raise LaneMissing("frontier_model_id must be frozen in the config")
+            if self.phase is not LedgerPhase.PILOT:
+                raise LaneMissing("frontier_model_id must be frozen in the config")
+            models = _attr("research.baselines.config", "load_models")()
+            model_id = models["frontier"]["primary_model_id"]
         if spec.selector == "frontier_reviewer":
-            selector = _attr("research.baselines.frontier", "frontier_reviewer")(model_id)
+            selector = _attr("research.baselines.frontier", "frontier_reviewer")(
+                model_id, **self._provider_kwargs(spec.arm_id))
             return selector
         if spec.selector == "frontier_agent":
             selector = _attr("research.baselines.frontier", "frontier_agent")(
-                model_id, free_input=spec.candidate_freedom == "free_input_documented")
+                model_id, free_input=spec.candidate_freedom == "free_input_documented",
+                **self._provider_kwargs(spec.arm_id))
             return selector
         raise LaneMissing(f"no selector factory for {spec.selector!r}")
 
     def generator(self, spec: ArmSpec) -> HypothesisGenerator | None:
         generator: HypothesisGenerator
+        if spec.arm_id.startswith("generator:"):
+            generator = _attr("research.baselines.grid", "make_generator")(
+                spec.arm_id, **self._provider_kwargs(spec.arm_id))
+            return generator
         if spec.generator in (None, "builtin_plan"):
             return None
         if spec.generator == "meta_muse_spark":
-            generator = _attr("research.baselines.meta", "meta_generator")()
+            kwargs = self._provider_kwargs(spec.arm_id)
+            generator = _attr("research.baselines.meta", "meta_generator")(
+                ledger=kwargs.pop("ledger"))
+            for key, value in kwargs.items():
+                setattr(generator, key, value)
             return generator
         if spec.generator in ("qwen_untuned", "qwen_qlora"):
             revision = self.artifacts.generator_revision

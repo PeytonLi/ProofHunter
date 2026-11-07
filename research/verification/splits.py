@@ -7,8 +7,12 @@ training/validation artifact. Derived from RESEARCH-SPEC §3.1/§6 and the froze
 
 from __future__ import annotations
 
+import builtins
 import difflib
+import io
+import keyword
 import re
+import tokenize
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from itertools import combinations
@@ -21,6 +25,10 @@ SPLITS = ("train", "validation", "test")
 DISJOINT_KEYS = ("family_id", "defect_origin", "near_dup_cluster", "template_id",
                  "head_source_sha256")
 _TOKEN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*|\d+|[^\sA-Za-z0-9_]")
+_JSON_ESCAPE = re.compile(rb"\\(?:u[0-9a-fA-F]{4}|.)")
+_BUILTINS = frozenset(dir(builtins))
+_FSTRING_START = getattr(tokenize, "FSTRING_START", -1)
+_FSTRING_END = getattr(tokenize, "FSTRING_END", -1)
 _SKIP_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".pdf"}
 
 
@@ -35,6 +43,62 @@ def change_text(base: bytes, head: bytes) -> str:
     """Only the changed lines of base -> head (context-free unified diff body)."""
     diff = difflib.unified_diff(base.decode("utf-8", "replace").splitlines(),
                                 head.decode("utf-8", "replace").splitlines(), n=0, lineterm="")
+    return "\n".join(line for line in diff
+                     if line[:1] in "+-" and not line.startswith(("+++", "---")))
+
+
+def normalise_source(src: bytes, names: dict[str, str] | None = None) -> list[str]:
+    """Logical lines with comments, docstrings and layout dropped, strings collapsed to
+    ``S`` and non-builtin identifiers alpha-renamed by first occurrence (``names`` is
+    shared so base and head use one renaming)."""
+    names = {} if names is None else names
+    try:
+        toks = list(tokenize.tokenize(io.BytesIO(src).readline))
+    except (tokenize.TokenError, SyntaxError):
+        return [" ".join(_TOKEN.findall(line)) for line in
+                src.decode("utf-8", "replace").splitlines() if line.strip()]
+    lines: list[str] = []
+    cur: list[str] = []
+    depth = fdepth = 0
+
+    def flush() -> None:
+        if cur and cur != ["S"]:
+            lines.append(" " * depth + " ".join(cur))
+        cur.clear()
+
+    for t in toks:
+        if t.type == _FSTRING_START:
+            if fdepth == 0:
+                cur.append("S")
+            fdepth += 1
+        elif t.type == _FSTRING_END:
+            fdepth -= 1
+        elif fdepth:
+            continue
+        elif t.type == tokenize.INDENT:
+            depth += 1
+        elif t.type == tokenize.DEDENT:
+            depth -= 1
+        elif t.type == tokenize.NEWLINE:
+            flush()
+        elif t.type in (tokenize.COMMENT, tokenize.NL, tokenize.ENCODING, tokenize.ENDMARKER):
+            continue
+        elif t.type == tokenize.STRING:
+            cur.append("S")
+        elif (t.type == tokenize.NAME and not keyword.iskeyword(t.string)
+              and t.string not in _BUILTINS):
+            cur.append(names.setdefault(t.string, f"_v{len(names)}"))
+        else:
+            cur.append(t.string)
+    flush()
+    return lines
+
+
+def normalised_change_text(base: bytes, head: bytes) -> str:
+    """Changed lines of base -> head after :func:`normalise_source` (one shared renaming)."""
+    names: dict[str, str] = {}
+    a, b = normalise_source(base, names), normalise_source(head, names)
+    diff = difflib.unified_diff(a, b, n=0, lineterm="")
     return "\n".join(line for line in diff
                      if line[:1] in "+-" and not line.startswith(("+++", "---")))
 
@@ -170,6 +234,16 @@ def audit_manifest_splits(cases: Sequence[Mapping[str, Any]], *,
         for a, b, sim in dups[:50]:
             gate.error("near_duplicate_change",
                        f"{a} ({texts[a][0]}) ~ {b} ({texts[b][0]}) jaccard={sim}")
+        raw = {(a, b) for a, b, _ in dups}
+        ntexts = {cid: (split_of[cid], normalised_change_text(*src))
+                  for cid, src in sources.items() if cid in split_of}
+        ndups = [d for d in near_duplicates(ntexts, near_dup_threshold)
+                 if (d[0], d[1]) not in raw]
+        gate.stats["normalised_near_duplicate_pairs"] = len(ndups)
+        for a, b, sim in ndups[:50]:
+            gate.error("near_duplicate_normalised_change",
+                       f"{a} ({ntexts[a][0]}) ~ {b} ({ntexts[b][0]}) jaccard={sim} "
+                       "after comment/whitespace/identifier normalisation")
     return gate
 
 
@@ -244,7 +318,9 @@ def audit_training_artifacts(cases: Sequence[Mapping[str, Any]], paths: Iterable
     if not tokens:
         gate.error("no_test_tokens", "no test-only identifiers; audit vacuous")
         return gate
-    encoded = [(t.encode(), src) for t, src in tokens.items()]
+    word = re.compile(rb"[A-Za-z0-9_-]+")
+    simple = {t.encode(): src for t, src in tokens.items() if word.fullmatch(t.encode())}
+    other = [(t.encode(), src) for t, src in tokens.items() if t.encode() not in simple]
     scanned = 0
     for root in paths:
         if not root.exists():
@@ -259,7 +335,9 @@ def audit_training_artifacts(cases: Sequence[Mapping[str, Any]], paths: Iterable
                 continue
             data = path.read_bytes()
             scanned += 1
-            hits = [src for tok, src in encoded if tok in data]
+            found = set(word.findall(_JSON_ESCAPE.sub(b" ", data))) & simple.keys()
+            hits = sorted(simple[t] for t in found) + [src for tok, src in other if tok in data]
+            gate.stats.setdefault("hits_by_file", {})[str(path)] = len(hits)
             for src in hits[:10]:
                 gate.error("test_token_in_training_artifact", f"contains {src}", str(path))
     gate.stats["files_scanned"] = scanned

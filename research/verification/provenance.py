@@ -134,6 +134,10 @@ def audit_label_files(cases: Sequence[Mapping[str, Any]],
         counts[split] = dict(kinds)
     missing = sorted(set(split_of) - labelled)
     gate.stats.update(counts=counts, unlabelled=len(missing))
+    if missing and "test" not in counts and all(split_of[c] == "test" for c in missing):
+        gate.warn("sealed_labels_unavailable",
+                  f"{len(missing)} test cases unlabelled: sealed test labels not supplied")
+        return gate
     for cid in missing[:50]:
         gate.error("unlabelled_case", "manifest case has no label", cid)
     return gate

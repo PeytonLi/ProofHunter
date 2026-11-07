@@ -9,6 +9,7 @@ from typing import Any
 
 import pytest
 
+from proofhunter.contracts import canonical_sha256
 from research.schemas.export import SCHEMA_DIR
 from research.verification import budget, ledger, metrics, provenance, schema, splits, teardown
 from research.verification.checkpoints import audit_checkpoint_hashes, check_deterministic
@@ -207,3 +208,63 @@ def test_checkpoint_hash_and_determinism(tmp_path: Path) -> None:
     counter = iter(range(10))
     assert not check_deterministic(lambda: next(counter), lambda m: m, name="drift").passed
     assert "| Gate |" in render_markdown([bad]) or "Gate" in render_markdown([bad])
+
+
+def test_source_hashes_and_tokenized_scan(tmp_path: Path) -> None:
+    import hashlib
+
+    from research.verification.cli import load_sources
+
+    src = tmp_path / "sources"
+    src.mkdir()
+    body = b"def total_cents(p, d):\n    return 0\n"
+    (src / f"{hashlib.sha256(body).hexdigest()}.py").write_bytes(body)
+    found, gate = load_sources([tmp_path])
+    assert gate.passed
+    assert len(found) == 1
+    (src / f"{'0' * 64}.py").write_bytes(body)
+    assert "source_hash_mismatch" in codes(load_sources([tmp_path])[1])
+    cases = _cases()
+    art = tmp_path / "obs.jsonl"
+    art.write_text(json.dumps({"x": "prefix\n" + str(cases[2]["case_id"])}) + "\n")
+    assert "test_token_in_training_artifact" in codes(
+        splits.audit_training_artifacts(cases, [art]))
+
+
+def test_sealed_test_labels_absent_is_warning_only() -> None:
+    manifest, lf = sample("CaseManifest"), sample("LabelFile")
+    cases = [c for c in manifest["cases"] if c["split"] == lf["split"]]
+    labelled = {lab["case_id"] for lab in lf["labels"]}
+    cases = [c for c in cases if c["case_id"] in labelled]
+    extra = copy.deepcopy(cases[0])
+    extra["case_id"], extra["split"] = "case-sealed-test-0001", "test"
+    sha = canonical_sha256([*cases, extra])
+    bound = copy.deepcopy(lf)
+    bound["manifest_cases_sha256"] = sha
+    gate = provenance.audit_label_files([*cases, extra], {lf["split"]: bound}, sha)
+    assert gate.passed
+    assert {f.code for f in gate.findings} == {"sealed_labels_unavailable"}
+    extra["split"] = lf["split"]
+    sha = canonical_sha256([*cases, extra])
+    bound["manifest_cases_sha256"] = sha
+    gate = provenance.audit_label_files([*cases, extra], {lf["split"]: bound}, sha)
+    assert "unlabelled_case" in codes(gate)
+
+
+def test_normalised_diff_catches_light_rewrites() -> None:
+    cases = _cases()
+    base_a = b"def f(xs, d):\n    t = 0\n    i = 0\n    while i < len(xs):\n" \
+             b"        t += xs[i]\n        i += 1\n    return t * (100 - d)\n"
+    head_a = b'def f(xs, d):\n    """Doc."""\n    t = 0\n    for x in xs:\n' \
+             b"        t += x\n    return t * (100 - d)\n"
+    base_b = b"def g(p,pct):\n  acc=0\n  j=0\n  while j<len(p):  # loop\n" \
+             b"    acc+=p[j]\n    j+=1\n  return acc*(100-pct)\n"
+    head_b = b"def g(p, pct):\n  acc = 0\n  for q in p:  # rewritten\n" \
+             b"    acc += q\n  return acc * (100 - pct)\n"
+    srcs = {cases[0]["case_id"]: (base_a, head_a), cases[1]["case_id"]: (b"x = 1\n", b"x = 2\n"),
+            cases[2]["case_id"]: (base_b, head_b)}
+    assert splits.change_text(base_a, head_a) != splits.change_text(base_b, head_b)
+    gate = splits.audit_manifest_splits(cases, sources=srcs)
+    assert "near_duplicate_normalised_change" in codes(gate)
+    assert "near_duplicate_change" not in codes(gate)
+    assert splits.normalised_change_text(base_a, base_a.replace(b"t = 0", b"t = 0  # c")) == ""

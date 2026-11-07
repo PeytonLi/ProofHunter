@@ -21,12 +21,11 @@ def test_run_pilot_smoke_writes_report(tmp_path: Path, capsys: pytest.CaptureFix
     report = json.loads((tmp_path / "pilot-report.json").read_text())
     assert report["cases"] == 3
     assert report["seeds"] == report["seeds"][:1]
-    assert report["skipped_arms"] == {"simple_heuristic": "no double for selector "
-                                      "'simple_heuristic'"}
+    assert report["skipped_arms"] == {}
     assert report["projection"]["worst_case_executions_total"] == (
         report["projection"]["cases"] * report["projection"]["arms"] * 5 * 15)
     rows = (tmp_path / "rows.jsonl").read_text().splitlines()
-    assert len(rows) == 3 * 3
+    assert len(rows) == 3 * 4
     assert all(RawResultRow.model_validate_json(r) for r in rows)
     assert (tmp_path / "pilot-report.md").read_text().startswith("# R1 feasibility pilot")
     assert json.loads(capsys.readouterr().out)["out"] == str(tmp_path)

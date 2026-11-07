@@ -15,6 +15,7 @@ from research.execution.lanes import (
     ArmFactory,
     FrozenArtifacts,
     LaneMissing,
+    grid_addons,
     open_ledger,
     open_store,
 )
@@ -25,7 +26,13 @@ from research.execution.runner import (
     make_runner,
 )
 from research.schemas.interfaces import CaseStore
-from research.schemas.models import MeasurementMode, ProtocolV1, RawResultRow, Split
+from research.schemas.models import (
+    LedgerPhase,
+    MeasurementMode,
+    ProtocolV1,
+    RawResultRow,
+    Split,
+)
 
 PROTOCOL = REPO / "research" / "spec" / "protocol-v1.json"
 ARTIFACTS = REPO / "research" / "artifacts" / "execution"
@@ -46,8 +53,18 @@ def _common(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--out", type=Path)
     parser.add_argument("--mode", choices=[m.value for m in MeasurementMode], default="offline")
     parser.add_argument("--arms", help="comma-separated arm ids (default: see command)")
+    parser.add_argument("--estimate", action="append", default=[], metavar="ARM=USD",
+                        help="pre-launch job estimate for a paid arm (required for live arms)")
     parser.add_argument("--doubles", action="store_true",
                         help="integration self-test: reviewed bench corpus + selector doubles")
+
+
+def _estimates(items: Sequence[str]) -> dict[str, float]:
+    out: dict[str, float] = {}
+    for item in items:
+        arm, _, usd = item.partition("=")
+        out[arm] = float(usd)
+    return out
 
 
 def _setup(
@@ -64,16 +81,27 @@ def _setup(
         from research.execution import doubles
 
         store = doubles.BenchStore(split)
-        runner = doubles.offline_runner(protocol)
+        runner = doubles.offline_runner(protocol, isolated=True)
         runner.ledger = ledger
         runner.implementation = implementation_sha()
-        factory = doubles.DoubleFactory()
+        factory = ArmFactory(
+            FrozenArtifacts.load(getattr(args, "config", None)), ledger=ledger,
+            mode=MeasurementMode(args.mode),
+            phase=LedgerPhase.PILOT if args.command == "pilot" else LedgerPhase.EVALUATION,
+            estimated_job_usd=_estimates(args.estimate))
     else:
         if args.store is None:
             raise LaneMissing("--store is required (or --doubles for the self-test)")
         store = open_store(args.store)
         runner = make_runner(protocol, ledger)
-        factory = ArmFactory(FrozenArtifacts.load(getattr(args, "config", None)))
+        factory = ArmFactory(
+            FrozenArtifacts.load(getattr(args, "config", None)), ledger=ledger,
+            mode=MeasurementMode(args.mode),
+            phase=LedgerPhase.PILOT if args.command == "pilot" else LedgerPhase.EVALUATION,
+            estimated_job_usd=_estimates(args.estimate))
+    addons = getattr(getattr(factory, "artifacts", None), "addon_arms", None) or {}
+    runner.addons = {**grid_addons(),
+                     **{arm_id: spec["base"] for arm_id, spec in addons.items()}}
     return protocol, out, store, runner, factory
 
 
@@ -121,7 +149,7 @@ def evaluate(argv: Sequence[str]) -> int:
         protocol, out, store, runner, factory = _setup(args, Split(args.split))
         arm_ids = (args.arms.split(",") if args.arms else list(artifacts.arms or [])
                    or [a.arm_id for a in protocol.arms])
-        specs = {a.arm_id: a for a in protocol.arms}
+        specs = runner.arm_specs()
         if set(arm_ids) - set(specs):
             raise ValueError(f"arms not in protocol: {sorted(set(arm_ids) - set(specs))}")
         cases = sorted((c for c in store.manifest().cases
@@ -129,12 +157,13 @@ def evaluate(argv: Sequence[str]) -> int:
         cases = cases[: args.max_cases] if args.max_cases else cases
         rows: list[RawResultRow] = []
         skipped: dict[str, str] = {}
+        degraded: list[dict[str, str | None]] = []
         for arm_id in arm_ids:
             spec = specs[arm_id]
             try:
                 generator = factory.generator(spec)
                 factory.selector(spec, protocol.replicate_seeds[0])
-            except LaneMissing as error:
+            except (LaneMissing, NotImplementedError) as error:
                 skipped[arm_id] = str(error)
                 continue
             for case in cases:
@@ -144,9 +173,12 @@ def evaluate(argv: Sequence[str]) -> int:
                     rows.append(runner.run(
                         sources, selector, generator, arm_id=arm_id, seed=seed,
                         repetition=repetition, mode=MeasurementMode(args.mode)))
+                    degraded.append({"run_id": rows[-1].run_id,
+                                     "degraded": pilot.degraded_reason(selector, generator)})
     except (LaneMissing, ValueError) as error:
         print(f"evaluate: {error}", file=sys.stderr)
         return 1
+    pilot.write_degraded(out / "degraded.jsonl", degraded)
     rows_path = out / "rows.jsonl"
     rows_path.write_text("".join(r.model_dump_json() + "\n" for r in rows), encoding="utf-8")
     (out / "events.jsonl").write_text("".join(

@@ -11,7 +11,7 @@ import difflib
 import hashlib
 import importlib
 import subprocess
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -47,9 +47,14 @@ from proofhunter.contracts import (
     canonical_sha256,
     sha256_hex,
 )
+from research.execution.allowlist import (
+    ExecutionRefused,
+    ReviewedSourceAllowlist,
+    from_template_render,
+)
+from research.execution.budget import BudgetExceeded, EpisodeBudget
 from research.execution.pool import as_plan, shared_pool
-from research.execution.process_sandbox import PhasedExecution, ProcessTemplateExecutor
-from research.execution.sandbox import Execution, Executor
+from research.execution.sandbox import Execution, Executor, ProcessTemplateExecutor
 from research.schemas.interfaces import (
     CaseSources,
     EpisodeContext,
@@ -85,8 +90,7 @@ SourceReview = Callable[[CaseSources], str | None]
 PromptBuilder = Callable[[CaseSources], GeneratorInput]
 
 
-class BudgetViolation(RuntimeError):
-    """Raised if the runner would exceed a frozen bound (a runner bug, never expected)."""
+BudgetViolation = BudgetExceeded
 
 
 def implementation_sha() -> str:
@@ -160,38 +164,36 @@ class _Episode:
     executor: Executor
     max_invocations: int
     max_retries: int
+    budget: EpisodeBudget = field(default_factory=EpisodeBudget)
     counts: dict[str, int] = field(default_factory=lambda: {"base": 0, "head": 0, "confirm": 0})
     failed: int = 0
     retries: int = 0
     attempts: int = 0
     execution_ms: float = 0.0
     confirmation_ms: float = 0.0
-    startup_ms: float | None = None
-    cleanup_ms: float | None = None
+    startup_ms: float = 0.0
+    cleanup_ms: float = 0.0
+    launched: int = 0
 
     @property
     def invocations(self) -> int:
         return sum(self.counts.values())
 
-    def observe(self, side: Side, candidate: Candidate) -> SandboxObservation:
-        if self.invocations >= self.max_invocations:
-            raise BudgetViolation("invocation ceiling reached")
+    def observe(self, side: Side, candidate: Candidate, *,
+                retry: bool = False) -> SandboxObservation:
+        self.budget.charge(side, candidate.input_sha256, retry=retry)
         self.counts[side.value] += 1
         self.attempts += 1
         source = self.sources.base_source if side is Side.BASE else self.sources.head_source
         source_sha = hashlib.sha256(source).hexdigest()
         result: Execution = self.executor(side.value, source, candidate.as_input())
-        run_ms = result.duration_ms
-        if isinstance(result, PhasedExecution):
-            self.startup_ms = (self.startup_ms or 0.0) + result.startup_ms
-            self.cleanup_ms = (self.cleanup_ms or 0.0) + result.cleanup_ms
-            run_ms = result.execution_ms
-            if not result.cleaned:
-                result = Execution(ObservationOutcome.INFRA_ERROR, None, result.duration_ms)
+        self.startup_ms += result.startup_ms
+        self.cleanup_ms += result.cleanup_ms
+        self.launched += int(result.launched)
         if side is Side.CONFIRM:
-            self.confirmation_ms += run_ms
+            self.confirmation_ms += result.duration_ms
         else:
-            self.execution_ms += run_ms
+            self.execution_ms += result.duration_ms
         ok = result.outcome is ObservationOutcome.OK
         if not ok:
             self.failed += 1
@@ -215,11 +217,10 @@ class _Episode:
     ) -> tuple[SandboxObservation, int]:
         used = 0
         observation = self.observe(side, candidate)
-        while (observation.outcome in RETRYABLE and self.retries < self.max_retries
-               and self.invocations < self.max_invocations):
+        while observation.outcome in RETRYABLE and self.budget.can_retry():
             self.retries += 1
             used += 1
-            observation = self.observe(side, candidate)
+            observation = self.observe(side, candidate, retry=True)
         return observation, used
 
 
@@ -233,12 +234,20 @@ class ResearchEpisodeRunner:
     implementation: str = field(default_factory=implementation_sha)
     enrollment: Enrollment = field(default_factory=catalog.demo_enrollment)
     events: list[dict[str, object]] = field(default_factory=list)
+    #: Add-on (non-protocol) arm id -> frozen base arm whose spec, budget and loop it reuses.
+    addons: Mapping[str, str] = field(default_factory=dict)
 
     def arm(self, arm_id: str) -> ArmSpec:
+        base_id = self.addons.get(arm_id, arm_id)
         for spec in self.protocol.arms:
-            if spec.arm_id == arm_id:
-                return spec
-        raise ValueError(f"arm {arm_id!r} is not in the frozen protocol")
+            if spec.arm_id == base_id:
+                return spec if base_id == arm_id else spec.model_copy(update={"arm_id": arm_id})
+        raise ValueError(f"arm {arm_id!r} is not in the frozen protocol or the add-on arms")
+
+    def arm_specs(self) -> dict[str, ArmSpec]:
+        """Frozen protocol arms plus configured add-on arms (rows record the add-on id)."""
+        ids = [a.arm_id for a in self.protocol.arms] + list(self.addons)
+        return {arm_id: self.arm(arm_id) for arm_id in ids}
 
     def run(
         self,
@@ -260,7 +269,8 @@ class ResearchEpisodeRunner:
             "seed": seed, "repetition": repetition, "mode": mode.value})[:24]
         episode = _Episode(run_id, self.enrollment, sources, self.executor,
                            self.protocol.max_invocations_per_episode,
-                           self.protocol.max_retries_per_episode)
+                           self.protocol.max_retries_per_episode,
+                           EpisodeBudget.from_protocol(self.protocol))
         if hasattr(self.executor, "reset"):
             self.executor.reset()
         timings: dict[str, float | None] = {"generation_ms": None, "ranking_ms": None}
@@ -363,6 +373,7 @@ class ResearchEpisodeRunner:
             if oracle.trusted_expected(expected) is None:
                 stop = ReasonCode.ORACLE_UNAVAILABLE
                 break
+            episode.budget.open_pair(chosen.input_sha256)
             base, base_retries = episode.observe_with_retry(Side.BASE, chosen)
             head, head_retries = episode.observe_with_retry(Side.HEAD, chosen)
             assessment = oracle.assess_probe(expected, base, head,
@@ -462,25 +473,32 @@ class ResearchEpisodeRunner:
             timings=Timings(
                 wall_ms=(perf_counter_ns() - start) / 1e6, queue_ms=None,
                 generation_ms=timings["generation_ms"], feature_ms=None,
-                ranking_ms=timings["ranking_ms"], sandbox_startup_ms=episode.startup_ms,
+                ranking_ms=timings["ranking_ms"],
+                sandbox_startup_ms=episode.startup_ms if episode.launched else None,
                 execution_ms=episode.execution_ms,
                 confirmation_ms=episode.confirmation_ms if episode.counts["confirm"] else None,
-                cleanup_ms=episode.cleanup_ms, cold_start=None),
+                cleanup_ms=episode.cleanup_ms if episode.launched else None,
+                cold_start=None),
             tokens=TokenUsage(input_tokens=None, output_tokens=None, reasoning_tokens=None),
             cost_usd=cost, cost_status=status)
 
 
 def make_runner(protocol: ProtocolV1, ledger: Ledger) -> ResearchEpisodeRunner:
-    """Frozen-interface factory: reviewed-template executor with the protocol timeout."""
-    reviewed: set[str] = set()
+    """Frozen-interface factory: isolated per-invocation child, reviewed-render allowlist."""
+    reviewed: dict[str, bytes] = {}
+    enrollment = catalog.demo_enrollment()
 
     def review(sources: CaseSources) -> str | None:
         reason = template_review(sources)
         if reason is None:
-            reviewed.update({sources.case.base_source_sha256, sources.case.head_source_sha256})
+            try:
+                reviewed.update(from_template_render([sources]).reviewed)
+            except ExecutionRefused:
+                return "template_not_reviewed"
         return reason
 
-    executor = ProcessTemplateExecutor(reviewed.__contains__,
-                                       timeout_seconds=protocol.invocation_timeout_seconds)
+    executor = ProcessTemplateExecutor(
+        ReviewedSourceAllowlist(reviewed, "research-templates"), enrollment,
+        timeout_seconds=protocol.invocation_timeout_seconds)
     return ResearchEpisodeRunner(protocol=protocol, ledger=ledger, executor=executor,
-                                 review=review)
+                                 review=review, enrollment=enrollment)

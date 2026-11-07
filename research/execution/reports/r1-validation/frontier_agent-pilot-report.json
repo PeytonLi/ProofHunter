@@ -1,0 +1,114 @@
+{
+  "arms": {
+    "frontier_agent": {
+      "clean_false_positives": 0,
+      "cleanup_ms_mean": 1.2108047720375907,
+      "cost_status": [
+        "measured"
+      ],
+      "cost_usd_per_usable_case": 0.010123825999999999,
+      "cost_usd_total": 2.5309565,
+      "defect_episodes": 230,
+      "descriptive_recall_at": {
+        "1": 0.7347826086956522,
+        "3": 0.7608695652173914,
+        "6": 0.7608695652173914
+      },
+      "episodes": 250,
+      "execution_ms_mean": 86.23526888402921,
+      "failed_invocations": 0,
+      "invocations_max": 12,
+      "invocations_mean": 5.748,
+      "measurement_modes": [
+        "live"
+      ],
+      "reason_codes": {
+        "confirmed_evidence": 175,
+        "coverage_complete": 75
+      },
+      "sandbox_startup_ms_mean": 18.877140172002328,
+      "usable_episodes": 250,
+      "verdicts": {
+        "confirmed_existing_defect": 25,
+        "confirmed_regression": 150,
+        "no_defect_found": 75
+      },
+      "wall_ms_p50": 1687.09865,
+      "wall_ms_p95": 9339.812452,
+      "wall_ms_per_usable_case": 3753.54719272
+    }
+  },
+  "arms_requested": [
+    "frontier_agent"
+  ],
+  "cases": 50,
+  "dataset_checks": {
+    "clean_cases_with_exposing_pool_input": [],
+    "defect_cases": 46,
+    "defect_cases_without_exposing_pool_input": [
+      "a-27ba7c1768a5e1201a97",
+      "a-595d7d84ac252fdf30b8",
+      "a-829fa8ed542177321c90",
+      "a-c7250c554d4374ef4451",
+      "a-5701adda7cbaba10a3b1",
+      "a-46fe128adcc348370c9b",
+      "a-aa9653bcd1001e4a6758",
+      "a-bd76e01fc4635bed529f",
+      "a-4ce52366fd52f4388b0d",
+      "a-1cddbc4824c56ed7933e",
+      "a-233cf89e71ef825c5b18"
+    ],
+    "eig_applicable_defect_cases": 17,
+    "labelled_cases": 50,
+    "source_review_failures": {},
+    "witness_not_reproduced": [],
+    "witness_reproduced": 46
+  },
+  "degraded_by_arm": {},
+  "implementation_sha": "4e9d74d5ded2a4b367a46815ea1b1234b26cbdae",
+  "manifest_cases_sha256": "ba3d927d994c4c54944ab42a03b2b253ac97bbfa0193fca37e28b22c87b21520",
+  "manifest_version": "track-a-cases-v1",
+  "measurement_mode": "live",
+  "pilot_wall_ms": 1078131.207292,
+  "projection": {
+    "arms": 13,
+    "arms_with_unknown_cost": [
+      "builtin_eig",
+      "builtin_ranker",
+      "fixed_order",
+      "frontier_agent_free_input",
+      "frontier_reviewer",
+      "meta_muse_spark_eig",
+      "qwen_tuned_eig",
+      "qwen_tuned_ranker",
+      "qwen_untuned_eig",
+      "qwen_untuned_ranker",
+      "simple_heuristic",
+      "uniform_random"
+    ],
+    "cases": 639,
+    "cases_source": "manifest test split (defect+clean)",
+    "expected_executions_per_episode": 5.748,
+    "expected_executions_total": 238743.18000000002,
+    "formula": "cases x arms x repetitions x executions_per_episode",
+    "note": "Execution is local reviewed template code in isolated child processes (0 USD). Model-arm dollars stay unknown until their lanes report measured per-episode costs.",
+    "projected_usd_by_arm": {
+      "frontier_agent": 32.34562407
+    },
+    "projected_usd_measured_arms": 32.34562407,
+    "repetitions": 5,
+    "worst_case_executions_total": 623025
+  },
+  "protocol_version": "research-protocol-v1",
+  "rows_sha256": "d36e3c678dd6a82c00ba85ecc4aec346f46cddab4e0ddd959323b2bbb19b8d55",
+  "schema": "research-pilot-report-v1",
+  "seeds": [
+    1633385816,
+    3469185555,
+    2611436028,
+    2392925855,
+    277584464
+  ],
+  "skipped_arms": {},
+  "split": "validation"
+}

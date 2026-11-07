@@ -1,0 +1,587 @@
+[
+  {
+    "case_id": "a-9645144c309d0a6e6f45",
+    "eig_applicable": false,
+    "eig_modeled_exposures": {},
+    "label_kind": "introduced_regression",
+    "pool_exposing_inputs": 1,
+    "pool_sha256": "ee0ef50389128a7e982cefe58d8799fbea12044fd9c1c04170ba20c5c6963a5d",
+    "pool_size": 64,
+    "source_review": "ok",
+    "witness_reproduced": true
+  },
+  {
+    "case_id": "a-98f79a068ab41215345c",
+    "eig_applicable": false,
+    "eig_modeled_exposures": {},
+    "label_kind": "clean",
+    "pool_exposing_inputs": 0,
+    "pool_sha256": "30c18e672ee2a3c699b625bd6ae4055f582e4e28aa6d88e8d39f1839a0250a76",
+    "pool_size": 64,
+    "source_review": "ok"
+  },
+  {
+    "case_id": "a-21041ea1a7a679a73bcd",
+    "eig_applicable": true,
+    "eig_modeled_exposures": {
+      "half_even_rounding": 3
+    },
+    "label_kind": "introduced_regression",
+    "pool_exposing_inputs": 9,
+    "pool_sha256": "074689f8465fc948c7e4816901a0a0ee77c415d4970449d0abae7fe26a102548",
+    "pool_size": 64,
+    "source_review": "ok",
+    "witness_reproduced": true
+  },
+  {
+    "case_id": "a-8c7298134a512cc6eea3",
+    "eig_applicable": false,
+    "eig_modeled_exposures": {},
+    "label_kind": "existing_defect",
+    "pool_exposing_inputs": 4,
+    "pool_sha256": "2019bd2b30b02492a75bf607325e7313b6a0dd9e6ca77fb4443dc0ff404de3c3",
+    "pool_size": 64,
+    "source_review": "ok",
+    "witness_reproduced": true
+  },
+  {
+    "case_id": "a-27ba7c1768a5e1201a97",
+    "eig_applicable": false,
+    "eig_modeled_exposures": {},
+    "label_kind": "introduced_regression",
+    "pool_exposing_inputs": 0,
+    "pool_sha256": "01797aa32f41d3885823c01caa5175ec02afc213a5dfb5461a85026219bb9f3c",
+    "pool_size": 64,
+    "source_review": "ok",
+    "witness_reproduced": true
+  },
+  {
+    "case_id": "a-595d7d84ac252fdf30b8",
+    "eig_applicable": false,
+    "eig_modeled_exposures": {},
+    "label_kind": "introduced_regression",
+    "pool_exposing_inputs": 0,
+    "pool_sha256": "10167e1cdcfce3c8e55c22216659ee1742e8912114916f721637e30ec93660e2",
+    "pool_size": 64,
+    "source_review": "ok",
+    "witness_reproduced": true
+  },
+  {
+    "case_id": "a-a894103328b00e589d23",
+    "eig_applicable": true,
+    "eig_modeled_exposures": {
+      "half_even_rounding": 5
+    },
+    "label_kind": "introduced_regression",
+    "pool_exposing_inputs": 32,
+    "pool_sha256": "85d6703341787c9286259d48803760ac12b618ecf698c16ee7441558d44ae51a",
+    "pool_size": 64,
+    "source_review": "ok",
+    "witness_reproduced": true
+  },
+  {
+    "case_id": "a-829fa8ed542177321c90",
+    "eig_applicable": false,
+    "eig_modeled_exposures": {},
+    "label_kind": "introduced_regression",
+    "pool_exposing_inputs": 0,
+    "pool_sha256": "f5840957780b336440d7855d383ae701a91d10ec61c7d5347bbc83d84e13583f",
+    "pool_size": 64,
+    "source_review": "ok",
+    "witness_reproduced": true
+  },
+  {
+    "case_id": "a-9ba092c2feefd328381d",
+    "eig_applicable": false,
+    "eig_modeled_exposures": {},
+    "label_kind": "introduced_regression",
+    "pool_exposing_inputs": 5,
+    "pool_sha256": "2241406a379a5e460d20df1cb72e76143215e1445d3358b87a55f6d99c1fb5cc",
+    "pool_size": 64,
+    "source_review": "ok",
+    "witness_reproduced": true
+  },
+  {
+    "case_id": "a-ed2c7bb7a0280d08c6e5",
+    "eig_applicable": true,
+    "eig_modeled_exposures": {
+      "half_even_rounding": 2
+    },
+    "label_kind": "introduced_regression",
+    "pool_exposing_inputs": 17,
+    "pool_sha256": "ca9707a6d5680c1ba04166204e9311ea97284facf0b1f472a26f402580460eb1",
+    "pool_size": 64,
+    "source_review": "ok",
+    "witness_reproduced": true
+  },
+  {
+    "case_id": "a-58fd756465e5328df466",
+    "eig_applicable": true,
+    "eig_modeled_exposures": {
+      "per_item_rounding": 2
+    },
+    "label_kind": "existing_defect",
+    "pool_exposing_inputs": 6,
+    "pool_sha256": "8a76a794bcd53cc3a84abaeb06fcef3aab170348d60c241b73da37b1f413be35",
+    "pool_size": 64,
+    "source_review": "ok",
+    "witness_reproduced": true
+  },
+  {
+    "case_id": "a-20dda6d04b388d9decfc",
+    "eig_applicable": true,
+    "eig_modeled_exposures": {
+      "half_even_rounding": 1,
+      "per_item_rounding": 1
+    },
+    "label_kind": "existing_defect",
+    "pool_exposing_inputs": 2,
+    "pool_sha256": "57dd3991d2c72fb4850b16a4fad724bf9ff365c1537af8255beb738d394aa19a",
+    "pool_size": 64,
+    "source_review": "ok",
+    "witness_reproduced": true
+  },
+  {
+    "case_id": "a-d04c6ae5048a83294408",
+    "eig_applicable": true,
+    "eig_modeled_exposures": {
+      "half_even_rounding": 1
+    },
+    "label_kind": "introduced_regression",
+    "pool_exposing_inputs": 35,
+    "pool_sha256": "645936c3db1d3239656efdef26729b6d02db321218d058cbf304ce43459e3d18",
+    "pool_size": 64,
+    "source_review": "ok",
+    "witness_reproduced": true
+  },
+  {
+    "case_id": "a-c7250c554d4374ef4451",
+    "eig_applicable": false,
+    "eig_modeled_exposures": {},
+    "label_kind": "introduced_regression",
+    "pool_exposing_inputs": 0,
+    "pool_sha256": "51abeb8ff4e4be32772ae014137e62165243851490a5ab1e6779da6ce17c4003",
+    "pool_size": 64,
+    "source_review": "ok",
+    "witness_reproduced": true
+  },
+  {
+    "case_id": "a-5701adda7cbaba10a3b1",
+    "eig_applicable": false,
+    "eig_modeled_exposures": {},
+    "label_kind": "introduced_regression",
+    "pool_exposing_inputs": 0,
+    "pool_sha256": "8538d01bf5e194b22548415acdefb936a00f53203f1f64c43353911974a662c5",
+    "pool_size": 64,
+    "source_review": "ok",
+    "witness_reproduced": true
+  },
+  {
+    "case_id": "a-8b2185c4ff76858f18f0",
+    "eig_applicable": true,
+    "eig_modeled_exposures": {
+      "half_even_rounding": 1
+    },
+    "label_kind": "existing_defect",
+    "pool_exposing_inputs": 39,
+    "pool_sha256": "ebdf107da9faa7da5c8188bc5e5e54f6a2538d1d28baf7f1dd9d9897c299a3ef",
+    "pool_size": 64,
+    "source_review": "ok",
+    "witness_reproduced": true
+  },
+  {
+    "case_id": "a-2f62cf9ec0d8c26b1492",
+    "eig_applicable": true,
+    "eig_modeled_exposures": {
+      "half_even_rounding": 1
+    },
+    "label_kind": "introduced_regression",
+    "pool_exposing_inputs": 10,
+    "pool_sha256": "ae37bc89445ef6e9b463761b672ce962125a16f5a9649eda195e0e4e4a70e5fd",
+    "pool_size": 64,
+    "source_review": "ok",
+    "witness_reproduced": true
+  },
+  {
+    "case_id": "a-47209be9297f1804222d",
+    "eig_applicable": false,
+    "eig_modeled_exposures": {},
+    "label_kind": "introduced_regression",
+    "pool_exposing_inputs": 4,
+    "pool_sha256": "6d6b09882c2a81eadd09d44d99b346f243a4a8073578a226a8e3e9a788c11942",
+    "pool_size": 64,
+    "source_review": "ok",
+    "witness_reproduced": true
+  },
+  {
+    "case_id": "a-6c3e8cd47025297004f7",
+    "eig_applicable": false,
+    "eig_modeled_exposures": {},
+    "label_kind": "clean",
+    "pool_exposing_inputs": 0,
+    "pool_sha256": "c4b678c1d9550198a2d9de368345dc7c99920572a0917fdb02397b0ca581981d",
+    "pool_size": 64,
+    "source_review": "ok"
+  },
+  {
+    "case_id": "a-a46b30c4b1d70ac898a0",
+    "eig_applicable": false,
+    "eig_modeled_exposures": {},
+    "label_kind": "clean",
+    "pool_exposing_inputs": 0,
+    "pool_sha256": "fce4c52a58467136a4612e583b429a2e00fccf068cc134d2d5983fa63ead3518",
+    "pool_size": 64,
+    "source_review": "ok"
+  },
+  {
+    "case_id": "a-befccc2eb190b2748b27",
+    "eig_applicable": true,
+    "eig_modeled_exposures": {
+      "half_even_rounding": 3
+    },
+    "label_kind": "introduced_regression",
+    "pool_exposing_inputs": 31,
+    "pool_sha256": "3b7fe91c8d313f2f38f3a8ba8ef7349787299b0d19da1b732cb6a27a991c881c",
+    "pool_size": 64,
+    "source_review": "ok",
+    "witness_reproduced": true
+  },
+  {
+    "case_id": "a-288c07d22c21e7d13f3a",
+    "eig_applicable": false,
+    "eig_modeled_exposures": {},
+    "label_kind": "introduced_regression",
+    "pool_exposing_inputs": 1,
+    "pool_sha256": "2c9dace726ecd047020b9456de0370b539d76e00c640b5ed9a3e65401f0d30d1",
+    "pool_size": 64,
+    "source_review": "ok",
+    "witness_reproduced": true
+  },
+  {
+    "case_id": "a-46fe128adcc348370c9b",
+    "eig_applicable": false,
+    "eig_modeled_exposures": {},
+    "label_kind": "introduced_regression",
+    "pool_exposing_inputs": 0,
+    "pool_sha256": "60935fb6c7647ac06bc745eb47992494c4a15b5b9dec96b8efc303d1aca3b508",
+    "pool_size": 64,
+    "source_review": "ok",
+    "witness_reproduced": true
+  },
+  {
+    "case_id": "a-aa9653bcd1001e4a6758",
+    "eig_applicable": false,
+    "eig_modeled_exposures": {},
+    "label_kind": "introduced_regression",
+    "pool_exposing_inputs": 0,
+    "pool_sha256": "63d07e8855834ca1a9fb3f83110bdeac3a1bcecb67d4276c79739ae697387023",
+    "pool_size": 64,
+    "source_review": "ok",
+    "witness_reproduced": true
+  },
+  {
+    "case_id": "a-3f69629c5b083a4dd173",
+    "eig_applicable": false,
+    "eig_modeled_exposures": {},
+    "label_kind": "introduced_regression",
+    "pool_exposing_inputs": 16,
+    "pool_sha256": "66adc8eb461c761c7597dd456c42abdea6086222c88e1d207887503d2a153ea5",
+    "pool_size": 64,
+    "source_review": "ok",
+    "witness_reproduced": true
+  },
+  {
+    "case_id": "a-80e2c862bb848c0cae4f",
+    "eig_applicable": false,
+    "eig_modeled_exposures": {},
+    "label_kind": "introduced_regression",
+    "pool_exposing_inputs": 5,
+    "pool_sha256": "8a8e5b712180a1be58903cda8a3d9ec9cd0483887c2a1902f7e835be6b304b00",
+    "pool_size": 64,
+    "source_review": "ok",
+    "witness_reproduced": true
+  },
+  {
+    "case_id": "a-685fe996bb346b16aaac",
+    "eig_applicable": true,
+    "eig_modeled_exposures": {
+      "half_even_rounding": 1
+    },
+    "label_kind": "introduced_regression",
+    "pool_exposing_inputs": 10,
+    "pool_sha256": "b22cd40cf08d0446a466de0e6222dfed79312948bf689f76349886939da82331",
+    "pool_size": 64,
+    "source_review": "ok",
+    "witness_reproduced": true
+  },
+  {
+    "case_id": "a-77445befa6ed0790d10b",
+    "eig_applicable": false,
+    "eig_modeled_exposures": {},
+    "label_kind": "existing_defect",
+    "pool_exposing_inputs": 14,
+    "pool_sha256": "c721685424510991f64160692e31ad25d7f8d30ff9c9d7c96c3177439221900e",
+    "pool_size": 64,
+    "source_review": "ok",
+    "witness_reproduced": true
+  },
+  {
+    "case_id": "a-79c71490a49443c704e9",
+    "eig_applicable": true,
+    "eig_modeled_exposures": {
+      "half_even_rounding": 4,
+      "per_item_rounding": 1
+    },
+    "label_kind": "introduced_regression",
+    "pool_exposing_inputs": 43,
+    "pool_sha256": "bc0933e780b670f4b598079c896ba8bba3e097b84a683ce615ec48e3198eb4fa",
+    "pool_size": 64,
+    "source_review": "ok",
+    "witness_reproduced": true
+  },
+  {
+    "case_id": "a-a9b0d94e28d1f3d82c26",
+    "eig_applicable": true,
+    "eig_modeled_exposures": {
+      "half_even_rounding": 1
+    },
+    "label_kind": "introduced_regression",
+    "pool_exposing_inputs": 11,
+    "pool_sha256": "98dff649e3fbe2da4ca474cc13fce869d8084fdaeead3eebd3674cc9a48f25b7",
+    "pool_size": 64,
+    "source_review": "ok",
+    "witness_reproduced": true
+  },
+  {
+    "case_id": "a-bf31af35044130b90cc0",
+    "eig_applicable": true,
+    "eig_modeled_exposures": {
+      "half_even_rounding": 4,
+      "per_item_rounding": 1
+    },
+    "label_kind": "introduced_regression",
+    "pool_exposing_inputs": 29,
+    "pool_sha256": "709b3c9350e38be5f344b7cfb64b425024ad1f2b1fc4c9b0723122da8553a69c",
+    "pool_size": 64,
+    "source_review": "ok",
+    "witness_reproduced": true
+  },
+  {
+    "case_id": "a-f6281207cb9a2d811a85",
+    "eig_applicable": false,
+    "eig_modeled_exposures": {},
+    "label_kind": "introduced_regression",
+    "pool_exposing_inputs": 1,
+    "pool_sha256": "4bc4f623bde3821063787e2b629c8fb6d2b4db40e5ee182619da30b855226fef",
+    "pool_size": 64,
+    "source_review": "ok",
+    "witness_reproduced": true
+  },
+  {
+    "case_id": "a-489b7d1f3f0068393ee9",
+    "eig_applicable": true,
+    "eig_modeled_exposures": {
+      "half_even_rounding": 4,
+      "per_item_rounding": 1
+    },
+    "label_kind": "introduced_regression",
+    "pool_exposing_inputs": 34,
+    "pool_sha256": "34233d0a763c1b8ed0a26440084c083b3eb5944440390c4e0ddd342655878448",
+    "pool_size": 64,
+    "source_review": "ok",
+    "witness_reproduced": true
+  },
+  {
+    "case_id": "a-bd76e01fc4635bed529f",
+    "eig_applicable": false,
+    "eig_modeled_exposures": {},
+    "label_kind": "existing_defect",
+    "pool_exposing_inputs": 0,
+    "pool_sha256": "593c7d9f03aea70733b92b6db0a0e331b9bf48566eda736833b8c5240442f05e",
+    "pool_size": 64,
+    "source_review": "ok",
+    "witness_reproduced": true
+  },
+  {
+    "case_id": "a-6ddaf9fe833b8bdd4190",
+    "eig_applicable": false,
+    "eig_modeled_exposures": {},
+    "label_kind": "introduced_regression",
+    "pool_exposing_inputs": 15,
+    "pool_sha256": "a95f5d52de57d70472d8fc76fc1c169e5bd53f7081fc41af63f5a7276bbcb56e",
+    "pool_size": 64,
+    "source_review": "ok",
+    "witness_reproduced": true
+  },
+  {
+    "case_id": "a-fa5a15f5edddaf7959fb",
+    "eig_applicable": false,
+    "eig_modeled_exposures": {},
+    "label_kind": "clean",
+    "pool_exposing_inputs": 0,
+    "pool_sha256": "0fbfeffa2fcb215a901937fbbbbbc33b1c8511fc1ce3648d4fd55bbaf867c88b",
+    "pool_size": 64,
+    "source_review": "ok"
+  },
+  {
+    "case_id": "a-67dac10259fe5ce9de3d",
+    "eig_applicable": false,
+    "eig_modeled_exposures": {},
+    "label_kind": "introduced_regression",
+    "pool_exposing_inputs": 9,
+    "pool_sha256": "9ee20a9054cbd74172cc357008a0211dacb071e326b8c7cecc4fe8529e7ce8af",
+    "pool_size": 64,
+    "source_review": "ok",
+    "witness_reproduced": true
+  },
+  {
+    "case_id": "a-20ca38fdd62a55703f14",
+    "eig_applicable": true,
+    "eig_modeled_exposures": {
+      "half_even_rounding": 2
+    },
+    "label_kind": "introduced_regression",
+    "pool_exposing_inputs": 15,
+    "pool_sha256": "b1ac7109d645d9a1640aadc0a2c31d9bdd98980ab621187a414c0c81e8c60843",
+    "pool_size": 64,
+    "source_review": "ok",
+    "witness_reproduced": true
+  },
+  {
+    "case_id": "a-4ce52366fd52f4388b0d",
+    "eig_applicable": false,
+    "eig_modeled_exposures": {},
+    "label_kind": "introduced_regression",
+    "pool_exposing_inputs": 0,
+    "pool_sha256": "8bf4e4ac58d2482ac591e9c2bad0ca6d7acfe54b78d6dd9946b1dab5ca681432",
+    "pool_size": 64,
+    "source_review": "ok",
+    "witness_reproduced": true
+  },
+  {
+    "case_id": "a-1cddbc4824c56ed7933e",
+    "eig_applicable": false,
+    "eig_modeled_exposures": {},
+    "label_kind": "introduced_regression",
+    "pool_exposing_inputs": 0,
+    "pool_sha256": "4a1ed03050d826bf05ea47c97c430dd3e9dbe317a00c04f01032c1d5fc4cafec",
+    "pool_size": 64,
+    "source_review": "ok",
+    "witness_reproduced": true
+  },
+  {
+    "case_id": "a-233cf89e71ef825c5b18",
+    "eig_applicable": false,
+    "eig_modeled_exposures": {},
+    "label_kind": "introduced_regression",
+    "pool_exposing_inputs": 0,
+    "pool_sha256": "6f02d748caaa17130988b4beef557c381917191a443d3b1c628c3345c147e159",
+    "pool_size": 64,
+    "source_review": "ok",
+    "witness_reproduced": true
+  },
+  {
+    "case_id": "a-9ba8c48e58b818465888",
+    "eig_applicable": true,
+    "eig_modeled_exposures": {
+      "half_even_rounding": 1
+    },
+    "label_kind": "introduced_regression",
+    "pool_exposing_inputs": 26,
+    "pool_sha256": "afbe9eddc6168f337b03d26290e050ef0b37bf25b6546dd6a1dfc516d05c05d4",
+    "pool_size": 64,
+    "source_review": "ok",
+    "witness_reproduced": true
+  },
+  {
+    "case_id": "a-90d96aeb61e03a843f7f",
+    "eig_applicable": false,
+    "eig_modeled_exposures": {},
+    "label_kind": "introduced_regression",
+    "pool_exposing_inputs": 3,
+    "pool_sha256": "00f3e7cf20df7fc11ae434459446d9a0368294d8de4e41a1982930d423012a44",
+    "pool_size": 64,
+    "source_review": "ok",
+    "witness_reproduced": true
+  },
+  {
+    "case_id": "a-fd0ef48ce96be5fd9ca8",
+    "eig_applicable": false,
+    "eig_modeled_exposures": {},
+    "label_kind": "introduced_regression",
+    "pool_exposing_inputs": 10,
+    "pool_sha256": "0560cd1cf062f48ce9d479c04c3b4665e3c8ba2db5e447485012a989b179be3f",
+    "pool_size": 64,
+    "source_review": "ok",
+    "witness_reproduced": true
+  },
+  {
+    "case_id": "a-23b7b4ad4de98f2e1511",
+    "eig_applicable": true,
+    "eig_modeled_exposures": {
+      "half_even_rounding": 4,
+      "per_item_rounding": 1
+    },
+    "label_kind": "introduced_regression",
+    "pool_exposing_inputs": 48,
+    "pool_sha256": "877d58747d69d0834d52de2ef47f9d5b2b51eedef15e7723e06216ea22bcf68e",
+    "pool_size": 64,
+    "source_review": "ok",
+    "witness_reproduced": true
+  },
+  {
+    "case_id": "a-73ce38ebfa0fca94ece3",
+    "eig_applicable": false,
+    "eig_modeled_exposures": {},
+    "label_kind": "introduced_regression",
+    "pool_exposing_inputs": 21,
+    "pool_sha256": "3577dc9cb438b7d5b49246c9170a84465dd0a951fdc8da588a2e6da05f6ed77a",
+    "pool_size": 64,
+    "source_review": "ok",
+    "witness_reproduced": true
+  },
+  {
+    "case_id": "a-aae2f0d43eba098a2f10",
+    "eig_applicable": false,
+    "eig_modeled_exposures": {},
+    "label_kind": "introduced_regression",
+    "pool_exposing_inputs": 35,
+    "pool_sha256": "8228f901ac58e400827533caa981a2123dfb313f2acfab103e0aed144a6f02ba",
+    "pool_size": 64,
+    "source_review": "ok",
+    "witness_reproduced": true
+  },
+  {
+    "case_id": "a-d26fd17c87f651b2f812",
+    "eig_applicable": false,
+    "eig_modeled_exposures": {},
+    "label_kind": "introduced_regression",
+    "pool_exposing_inputs": 25,
+    "pool_sha256": "eda709b6f7f0f38b6e42f2c8e04fd4b777dbf42d74dbb249ef7c9081be6f66d0",
+    "pool_size": 64,
+    "source_review": "ok",
+    "witness_reproduced": true
+  },
+  {
+    "case_id": "a-de966112dd033963e113",
+    "eig_applicable": false,
+    "eig_modeled_exposures": {},
+    "label_kind": "introduced_regression",
+    "pool_exposing_inputs": 3,
+    "pool_sha256": "0979f430c9def94eb8ba157465dfe43dc54896686790159d9c7d9158ad00b55c",
+    "pool_size": 64,
+    "source_review": "ok",
+    "witness_reproduced": true
+  },
+  {
+    "case_id": "a-4a0fd4eaea2dc041170e",
+    "eig_applicable": false,
+    "eig_modeled_exposures": {},
+    "label_kind": "introduced_regression",
+    "pool_exposing_inputs": 13,
+    "pool_sha256": "53438af71b4a18c40c9511aecd5dc77852703dc1f1897d2c3bd102e19658de2f",
+    "pool_size": 64,
+    "source_review": "ok",
+    "witness_reproduced": true
+  }
+]

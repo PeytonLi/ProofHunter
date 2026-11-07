@@ -1,78 +1,116 @@
 # Integration lane handoff (LANE=integration)
 
-Branch `devin/1794090000-research/integration`, rebased on setup `cadc5b4d91828fec1adcb5341a11c2c466e57c1f`
-(schemas/interfaces from `13b96671`). No frozen file was edited: `src/`, `bench/`, `schemas/`, `fixtures/`,
-root locks, `research/cli.py`, `research/schemas/**`, `research/spec/**` are byte-identical to setup.
+Branch `devin/1794090000-research/integration` (no PR, no merge to main). Setup: originally rebased on
+`cadc5b4d91828fec1adcb5341a11c2c466e57c1f` (schemas/interfaces `13b96671`), then merged setup
+`280f28cc0cca2449179501e0e0073cd63e617a82`. `git diff --stat 280f28c HEAD` is empty for `src/ bench/ schemas/
+fixtures/ tools/ config/ pyproject.toml uv.lock .github/ research/cli.py research/schemas research/spec
+research/OWNERSHIP.md research/pyproject.toml research/uv.lock`.
 
-## Owned files
+## Merged lanes (sibling-owned files always taken from the sibling on add/add conflicts)
 
-- `research/execution/pool.py` - shared Track A pool via `proofhunter.bayes.generate` + builtin plan; checks protocol pool policy.
-- `research/execution/sandbox.py` - reviewed-template-only executor (SHA-256 allowlist, SIGALRM deadline, int64/invalid/exception mapping) and `FaultInjectingExecutor`.
-- `research/execution/runner.py` - `ResearchEpisodeRunner` (`I.EpisodeRunner`): 6 pairs, 1 confirmation, 2 retries, 15 invocations hard ceiling, production oracle/evidence/classify, strict `RawResultRow`, ledger-derived costs.
-- `research/execution/lanes.py` - lazy resolution of sibling lane modules (`LaneMissing` if absent), frozen artifact hash checks, JSONL ledger fallback.
-- `research/execution/pilot.py` - R1 pilot: source/witness/pool/EIG audits, per-arm metrics, projected full-run budget. Refuses the test split.
-- `research/execution/commands.py` - `run_pilot`, `evaluate` (dispatched by the frozen `research/cli.py`).
-- `research/execution/doubles.py` - offline self-test doubles over the reviewed bench corpus (NOT research data).
-- `research/execution/reports/r1-doubles-pilot-report.{md,json}` - pilot self-test report.
-- `tests/research/execution/test_runner.py`, `test_commands.py`.
+| lane | SHA |
+|---|---|
+| setup | `280f28c` (on `cadc5b4`) |
+| dataset | `b48a61f` -> `ac50b98` -> `c668241` (test-split leak repair; train/validation byte-identical) |
+| measurement | `e125511`, `74fac5e` |
+| ranker | `0f2cb1f` (fixture), `9e6a812` (real-v1) |
+| baselines | `4c32c49`, `9bb5859` (gpt-6.1-sol primary) |
+| generator | `069c4a6` |
+| verification | `5367464`, `a058778`, `945f9a8` |
+| execution | `ec947e1` reconciled into this layout (see below) |
 
-## Merged lanes
+## Owned files (`research/execution/**`, `tests/research/execution/**`)
 
-`generator` @ `069c4a6`, `verification` @ `5367464`. Not yet pushed by their lanes: dataset, ranker, baselines,
-measurement, execution. No conflicts so far.
+- `pool.py` shared Track A pool: `bayes.generate(builtin_plan, CaseRecord.candidate_seed)`, protocol pool checks.
+- `allowlist.py` reviewed-source allowlist (hash + rendered-template identity) and static AST screen.
+- `isolation.py` one fresh `python -I -B -S` child per invocation: empty env, rlimits (AS 256 MiB, NOFILE,
+  NPROC, FSIZE=0, CORE=0, CPU as a backstop 1 s behind the wall deadline), bounded output, process-group kill,
+  temp-dir cleanup evidence, `unshare --user --net` when available, per-phase timings.
+- `sandbox.py` `ProcessTemplateExecutor` (used by `make_runner`), in-process executor for doubles, `FaultInjectingExecutor`.
+- `budget.py` exact episode budget (6 pairs, 1 reserved confirmation, 2 retries, 15 invocations).
+- `track_b.py` Track B adapter: `plan()` returns `executed=False, execution_status="blocked_no_qualified_sandbox"`; `run()` always raises.
+- `runner.py` `ResearchEpisodeRunner` (`I.EpisodeRunner`), oracle/evidence/classify, strict `RawResultRow`,
+  phase timings, ledger-derived costs, add-on arms (`addons`: add-on id -> frozen base arm).
+- `lanes.py` lane resolution, frozen artifact hash checks, paid-arm guard (`--mode live`, `--estimate ARM=USD`,
+  refuses > 50 USD), add-on ranker checkpoints.
+- `pilot.py` R1 pilot (refuses test): audits, per-arm metrics, phase timings, `degraded.jsonl`, projection.
+- `commands.py` `run-pilot`, `evaluate` (dispatched by frozen `research/cli.py`); both write `degraded.jsonl`.
+- `doubles.py` offline bench doubles (integration evidence only, not research data).
+- `configs/pilot-ranker-real-v1.json` add-on arms `learned_ranker`, `learned_ranker_no_belief`.
+- `reports/r1-validation/**` pilot reports, ledgers, degraded files, `report/` (measurement `research report`).
+- tests: `test_runner.py`, `test_commands.py`, `test_sandbox_safety.py`, `test_budget_safety.py` (80, from
+  execution lane), `test_track_b.py`, `test_ranker_coverage.py`.
+
+Execution-lane reconciliation: its `process_sandbox.py` became `isolation.py` + `sandbox.ProcessTemplateExecutor`
+(same limits, cleanup and timings); missing cleanup maps to `infra_error` as in its version. Its
+`test_process_sandbox.py` targets its module layout and was not taken; the equivalent cases live in
+`test_sandbox_safety.py`. `track_b.py`, `test_track_b.py`, `test_budget_safety.py` taken verbatim.
+The AST screen was widened (owned file) because it refused about half of the dataset's reviewed templates: it
+now admits `while`, keyword arguments, public attribute calls and top-level imports of `operator`, `math`,
+`functools.reduce`, `fractions.Fraction`, `decimal` names only; dunder names/strings, private attributes,
+nested or other imports remain refused. All 2,693 train+validation cases pass hash, render and screen.
 
 ## Commands and results
 
 ```
-UV_OFFLINE=1 PROOFHUNTER_PROFILE=offline uv run --project research --locked pytest -q tests/research   # 137 passed, 4 skipped (skips: other lanes' pending setup checks)
+UV_OFFLINE=1 PROOFHUNTER_PROFILE=offline uv run --project research --locked pytest -q tests/research   # 341 passed, 10 skipped
 UV_OFFLINE=1 uv run --project research --locked ruff check research/execution tests/research/execution  # All checks passed
-UV_OFFLINE=1 uv run --project research --locked mypy research/execution                               # no issues (8 files)
-UV_OFFLINE=1 PROOFHUNTER_PROFILE=offline uv run --locked pytest -q                                      # 1314 passed, 4 skipped (after merging generator/verification)
-UV_OFFLINE=1 PROOFHUNTER_PROFILE=offline uv run --locked ruff check .                                   # All checks passed
+UV_OFFLINE=1 uv run --project research --locked mypy research/execution                               # no issues (12 files)
+UV_OFFLINE=1 PROOFHUNTER_PROFILE=offline uv run --locked pytest -q                                      # 1494 passed, 13 skipped
 UV_OFFLINE=1 PROOFHUNTER_PROFILE=offline uv run --locked mypy src bench tools tests/integration          # no issues (81 files)
-UV_OFFLINE=1 PROOFHUNTER_PROFILE=offline uv run --project research --locked python -m research.cli run-pilot --doubles --seeds 5
+UV_OFFLINE=1 PROOFHUNTER_PROFILE=offline uv run --locked ruff check .                                   # 6 errors, all in dataset-owned research/data/templates.py (send-back)
 ```
 
-R4 drills covered by tests: selector outage at reset and mid-episode, malformed selector choice, generator
-outage/timeout/malformed output (fallback to builtin plan, event logged), transient and persistent timeout,
-real deadline on a reviewed infinite loop, invalid output, flaky confirmation, confirmation timeout,
-exact budget (all retries spent: 14 invocations = 2x6 + 2; 16th invocation refused), unreviewed source never
-executed, unknown arm rejected, rows carry no label fields.
-
-## R1 pilot status
-
-Only the self-test ran: 12 reviewed bench cases x 3 arms x 5 seeds, offline. Witnesses reproduced 9/9, no defect
-case without an exposing pool input, no review failures. Numbers in the report are integration evidence only,
-not research results. The real pilot (smoke, then up to 50 validation cases) is blocked on the dataset lane
-(`research.data.store.open_store`, `research.data.templates`) and baselines (`research.baselines.selectors.make_selector`):
+Pilot (dataset tarball extracted to `~/research-data`; Track A manifest `ba3d927d…1520`, train/validation
+unchanged in `dcd14e3f…9340`):
 
 ```
-uv run --project research --locked python -m research.cli run-pilot --store <dataset root> --smoke
-uv run --project research --locked python -m research.cli run-pilot --store <dataset root> --cases 50 --seeds 5
+uv run --project research --locked python -m research.cli run-pilot --store ~/research-data/track_a --smoke --arms fixed_order,uniform_random,simple_heuristic,builtin_eig
+uv run --project research --locked python -m research.cli run-pilot --store ~/research-data/track_a --cases 50 --seeds 5 --arms fixed_order,uniform_random,simple_heuristic,builtin_eig --out ~/pilot-local
+# live, keys bound per command (PROOFHUNTER_OPENAI_API_KEY, MODEL_API_KEY); one job per paid arm
+uv run --project research --locked python -m research.cli run-pilot --store ~/research-data/track_a --cases 50 --seeds 5 --mode live --arms frontier_reviewer --estimate frontier_reviewer=5 --out ~/pilot-frontier_reviewer
+uv run --project research --locked python -m research.cli run-pilot ... --arms frontier_agent --estimate frontier_agent=20
+uv run --project research --locked python -m research.cli run-pilot ... --arms meta_muse_spark_eig --estimate meta_muse_spark_eig=1   # 1 = placeholder, price unpublished
+uv run --project research --locked python -m research.cli run-pilot ... --arms learned_ranker,learned_ranker_no_belief --config research/execution/configs/pilot-ranker-real-v1.json
+uv run --project research --locked python -m research.cli report --results <rows.jsonl...> --labels ~/research-data/track_a/labels/validation.json --ledger <ledger.jsonl...> --degraded <degraded.jsonl...> --out <dir>
 ```
 
-## Artifact hashes (self-test run)
+## R1 validation pilot (50 validation cases x 5 seeds = 250 episodes per arm)
 
-- rows.jsonl `7d61d999ff5ea0f3e28afe50b86e698edba5787f95d5f0711b0043ec41b81add` (contains wall-clock timings, so not byte-reproducible)
-- audits.json `5d5041c33d2c79e97efa542740056497ba610d620c187da7c73bb29c50cba92b`
-- No dataset or model artifacts exist yet on this branch.
+Cases: first 50 validation cases by sha256(case_id) (46 defect, 4 clean). Audits: 46/46 witnesses reproduced,
+11 defect cases have no exposing input in the shared pool (recall ceiling ~0.76), no source-review failures.
 
-## Costs
+PILOT_TABLE
 
-Measured: 0 USD. No paid call, no provisioned resource, ledger empty. Model-arm costs are reported as unknown
-(never zero) until their lanes write ledger entries; the runner sums ledger entries appended during each episode.
+Per-phase isolation overhead (local child process): startup ~17-26 ms, cleanup ~1.2-1.9 ms per episode-sum,
+execution ~86-173 ms per episode. Not reverted.
 
-## Known limitations
+## Projected full run (frozen test split, 650 cases after `c668241`, x 5 seeds)
 
-- `simple_heuristic`, ranker, frontier, Meta and Qwen arms run only once their lanes land; until then the pilot/evaluate skip them with the `LaneMissing` reason recorded.
-- Real research cases report `template_registry_unavailable` until `research.data.templates` (`list_templates`, `render`) exists.
-- The timeout uses `SIGALRM` (main thread, POSIX only). The executor runs reviewed templates in-process; it is not an isolation boundary and must never be pointed at untrusted code. Track B stays design-only.
-- Pilot timings are offline in-process, not cloud/sandbox timings.
+PROJECTION
 
-## Interfaces expected from other lanes (send-backs if they differ)
+## Costs (all ledger rows in `reports/r1-validation/*-ledger.jsonl`)
 
-- dataset: `research.data.store.open_store(root) -> CaseStore`; `research.data.templates.list_templates()` items with `template_id/template_version/template_sha256`, `render(template_id, params) -> (base_bytes, head_bytes)`.
-- baselines: `research.baselines.selectors.make_selector(arm_id, *, seed)`, `research.baselines.frontier.frontier_reviewer(model_id)`, `frontier_agent(model_id, *, free_input)`, `research.baselines.meta.meta_generator()`.
-- ranker: `research.ranker.selector.load_ranker_selector(checkpoint, *, arm_id)`.
-- generator: `research.generator.model.load_generator(kind, *, adapter, revision)`, `research.generator.prompt.build_input(sources)` (both already match).
-- measurement: `research.metrics.ledger.open_ledger(path) -> Ledger` (JSONL fallback used meanwhile).
+COSTS
+
+## Send-backs / known limitations
+
+- baselines: `frontier_reviewer` raises `empty_ranking` on 20/50 cases (all 5 seeds each); the episode then
+  stops with `no_defect_found` (75 missed defect episodes). Non-degraded reviewer episodes confirmed 150/150.
+- baselines: Meta ledger rows carry `case_id=None` and no token usage; cost stays unknown.
+- dataset: 6 ruff errors in `research/data/templates.py` (RUF005 x5, E501).
+- ranker: logged-IPS checkpoints were re-featurized on `pool_seed(candidate_seed, seed)` pools; the runner (protocol)
+  uses `candidate_seed` pools, matching dense_full. Ranker history-tag coverage counts mismatch tags; the oracle
+  counts match only. They agree on every decision state (runner stops after a mismatch), tested on bench and
+  validation pools.
+- Grid arms `<role>:<model>`: `RawResultRow.arm_id` (Ident) accepts them, `ArmSpec.arm_id` (Slug) and frozen
+  protocol-v1 do not. Add-on mechanism can run them on base specs once baselines exports a factory; adding them
+  to the final evaluation needs a protocol version bump (setup lane).
+- `isolation.py` is a bounded wrapper for reviewed first-party templates, not a qualified untrusted-code sandbox.
+  Track B stays design-only. Test split never touched; evaluate on test waits for the verifier re-audit.
+- Pilot latencies are local child-process timings plus provider wall time; not cloud sandbox timings.
+
+## Remaining dependencies
+
+Baselines grid SHA (muse-wonder-1.0, gpt-6-astra, role x model factory); reviewer empty-ranking fix; ranker v2;
+generator (Qwen) frozen adapters for qwen_* arms; verifier sign-off on test split `c668241` before `evaluate --split test`.

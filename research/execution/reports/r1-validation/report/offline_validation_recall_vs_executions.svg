@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="400" viewBox="0 0 640 400" font-family="sans-serif" font-size="11">
+<rect width="640" height="400" fill="white"/>
+<text x="320.0" y="20" text-anchor="middle" font-size="14">Confirmed recall vs paired executions (offline)</text>
+<text x="267.0" y="388" text-anchor="middle">paired executions (k)</text>
+<text x="16" y="192.0" text-anchor="middle" transform="rotate(-90 16 192.0)">confirmed recall</text>
+<line x1="64" y1="344" x2="470" y2="344" stroke="black"/>
+<line x1="64" y1="40" x2="64" y2="344" stroke="black"/>
+<text x="58" y="348.0" text-anchor="end">0</text>
+<line x1="64" y1="344.0" x2="470" y2="344.0" stroke="#eee"/>
+<text x="58" y="287.2" text-anchor="end">0.2</text>
+<line x1="64" y1="283.2" x2="470" y2="283.2" stroke="#eee"/>
+<text x="58" y="226.4" text-anchor="end">0.4</text>
+<line x1="64" y1="222.4" x2="470" y2="222.4" stroke="#eee"/>
+<text x="58" y="165.6" text-anchor="end">0.6</text>
+<line x1="64" y1="161.6" x2="470" y2="161.6" stroke="#eee"/>
+<text x="58" y="104.8" text-anchor="end">0.8</text>
+<line x1="64" y1="100.8" x2="470" y2="100.8" stroke="#eee"/>
+<text x="58" y="44.0" text-anchor="end">1</text>
+<line x1="64" y1="40.0" x2="470" y2="40.0" stroke="#eee"/>
+<text x="64.0" y="360" text-anchor="middle">0</text>
+<text x="145.2" y="360" text-anchor="middle">1.2</text>
+<text x="226.4" y="360" text-anchor="middle">2.4</text>
+<text x="307.6" y="360" text-anchor="middle">3.6</text>
+<text x="388.8" y="360" text-anchor="middle">4.8</text>
+<text x="470.0" y="360" text-anchor="middle">6</text>
+<polyline fill="none" stroke="#1f77b4" stroke-width="2" points="64.0,344.0 131.7,271.3 199.3,271.3 267.0,271.3 334.7,211.8 402.3,211.8 470.0,211.8"/>
+<circle cx="64.0" cy="344.0" r="2.5" fill="#1f77b4"/>
+<circle cx="131.7" cy="271.3" r="2.5" fill="#1f77b4"/>
+<circle cx="199.3" cy="271.3" r="2.5" fill="#1f77b4"/>
+<circle cx="267.0" cy="271.3" r="2.5" fill="#1f77b4"/>
+<circle cx="334.7" cy="211.8" r="2.5" fill="#1f77b4"/>
+<circle cx="402.3" cy="211.8" r="2.5" fill="#1f77b4"/>
+<circle cx="470.0" cy="211.8" r="2.5" fill="#1f77b4"/>
+<rect x="480" y="45" width="10" height="10" fill="#1f77b4"/>
+<text x="494" y="54">fixed_order</text>
+<polyline fill="none" stroke="#d62728" stroke-width="2" points="64.0,344.0 131.7,283.2 199.3,246.2 267.0,226.4 334.7,213.1 402.3,202.6 470.0,199.9"/>
+<circle cx="64.0" cy="344.0" r="2.5" fill="#d62728"/>
+<circle cx="131.7" cy="283.2" r="2.5" fill="#d62728"/>
+<circle cx="199.3" cy="246.2" r="2.5" fill="#d62728"/>
+<circle cx="267.0" cy="226.4" r="2.5" fill="#d62728"/>
+<circle cx="334.7" cy="213.1" r="2.5" fill="#d62728"/>
+<circle cx="402.3" cy="202.6" r="2.5" fill="#d62728"/>
+<circle cx="470.0" cy="199.9" r="2.5" fill="#d62728"/>
+<rect x="480" y="61" width="10" height="10" fill="#d62728"/>
+<text x="494" y="70">uniform_random</text>
+<polyline fill="none" stroke="#2ca02c" stroke-width="2" points="64.0,344.0 131.7,185.4 199.3,178.8 267.0,178.8 334.7,178.8 402.3,172.2 470.0,172.2"/>
+<circle cx="64.0" cy="344.0" r="2.5" fill="#2ca02c"/>
+<circle cx="131.7" cy="185.4" r="2.5" fill="#2ca02c"/>
+<circle cx="199.3" cy="178.8" r="2.5" fill="#2ca02c"/>
+<circle cx="267.0" cy="178.8" r="2.5" fill="#2ca02c"/>
+<circle cx="334.7" cy="178.8" r="2.5" fill="#2ca02c"/>
+<circle cx="402.3" cy="172.2" r="2.5" fill="#2ca02c"/>
+<circle cx="470.0" cy="172.2" r="2.5" fill="#2ca02c"/>
+<rect x="480" y="77" width="10" height="10" fill="#2ca02c"/>
+<text x="494" y="86">simple_heuristic</text>
+<polyline fill="none" stroke="#9467bd" stroke-width="2" points="64.0,344.0 131.7,271.3 199.3,244.9 267.0,238.3 334.7,238.3 402.3,225.0 470.0,211.8"/>
+<circle cx="64.0" cy="344.0" r="2.5" fill="#9467bd"/>
+<circle cx="131.7" cy="271.3" r="2.5" fill="#9467bd"/>
+<circle cx="199.3" cy="244.9" r="2.5" fill="#9467bd"/>
+<circle cx="267.0" cy="238.3" r="2.5" fill="#9467bd"/>
+<circle cx="334.7" cy="238.3" r="2.5" fill="#9467bd"/>
+<circle cx="402.3" cy="225.0" r="2.5" fill="#9467bd"/>
+<circle cx="470.0" cy="211.8" r="2.5" fill="#9467bd"/>
+<rect x="480" y="93" width="10" height="10" fill="#9467bd"/>
+<text x="494" y="102">builtin_eig</text>
+<text x="64" y="34" fill="#555">offline measurements only</text>
+</svg>
