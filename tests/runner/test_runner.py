@@ -14,7 +14,7 @@ from fixtures import adapters, catalog
 from proofhunter import contracts as c
 from proofhunter.config import load_settings
 from proofhunter.runner import DaytonaRunner, ReviewedFixtureRunner, create_runner_port
-from proofhunter.runner.daytona import CANARY_COMMAND, ENV, OBSERVE_COMMAND
+from proofhunter.runner.daytona import CANARY_COMMAND, CANARY_EXPECTED, ENV, OBSERVE_COMMAND
 
 
 def request(
@@ -75,14 +75,11 @@ class FakeSandbox:
         assert command in (CANARY_COMMAND, OBSERVE_COMMAND)
         if command == CANARY_COMMAND:
             assert not self.uploads
-            result = {
-                "egress_denied": True,
-                "metadata_denied": True,
-                "secrets_absent": True,
-                "restricted_child": True,
-            }
+            result = json.loads(json.dumps(CANARY_EXPECTED))
             if self.client.fault == "canary":
                 result["egress_denied"] = False
+            if self.client.fault in result["probes_denied"]:
+                result["probes_denied"][self.client.fault] = False
             return SimpleNamespace(exit_code=0, result=json.dumps(result))
         assert timeout is not None
         assert timeout <= 6
@@ -182,10 +179,81 @@ def configured(tmp_path: Path) -> tuple[DaytonaRunner, FakeSDK]:
                 "config_fingerprint": runner.fingerprint,
                 "image_digest": runner.image_digest,
                 "effective_policy_reviewed": True,
+                "daytona_account_tier": 3,
+                "canary_result": CANARY_EXPECTED,
             }
         )
     )
     return runner, sdk
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "reason"),
+    [
+        ("daytona_account_tier", None, "account_tier_invalid"),
+        ("daytona_account_tier", True, "account_tier_invalid"),
+        ("daytona_account_tier", "3", "account_tier_invalid"),
+        ("daytona_account_tier", 3.0, "account_tier_invalid"),
+        ("daytona_account_tier", 0, "account_tier_invalid"),
+        ("daytona_account_tier", 1, "account_tier_insufficient"),
+        ("daytona_account_tier", 2, "account_tier_insufficient"),
+        ("canary_result", None, "canary_result_missing"),
+        ("canary_result", {}, "canary_result_not_denied"),
+        ("canary_result", "secret-like hostile input", "canary_result_not_denied"),
+        ("effective_policy_reviewed", 1, "approval_invalid"),
+    ],
+)
+async def test_approval_refusals(tmp_path: Path, field: str, value: Any, reason: str) -> None:
+    runner, sdk = configured(tmp_path)
+    path = tmp_path / "runner-isolation-approval.json"
+    approval = json.loads(path.read_text())
+    if value is None:
+        del approval[field]
+    else:
+        approval[field] = value
+    path.write_text(json.dumps(approval))
+    assert (await runner.attest()).status is c.IsolationStatus.UNVERIFIED
+    assert runner.approval_refusal_reason == reason
+    assert (await runner.observe(request(runner=runner))).outcome is c.ObservationOutcome.DENIED
+    assert not sdk.created
+
+
+@pytest.mark.parametrize("host", list(CANARY_EXPECTED["probes_denied"]))
+@pytest.mark.parametrize("value", [False, 1, None])
+async def test_each_recorded_probe_required(tmp_path: Path, host: str, value: Any) -> None:
+    runner, sdk = configured(tmp_path)
+    path = tmp_path / "runner-isolation-approval.json"
+    approval = json.loads(path.read_text())
+    probes = approval["canary_result"]["probes_denied"]
+    if value is None:
+        del probes[host]
+    else:
+        probes[host] = value
+    path.write_text(json.dumps(approval))
+    assert (await runner.attest()).status is c.IsolationStatus.UNVERIFIED
+    assert runner.approval_refusal_reason == "canary_result_not_denied"
+    assert not sdk.created
+
+
+async def test_approval_revocation_after_attestation(tmp_path: Path) -> None:
+    runner, sdk = configured(tmp_path)
+    assert (await runner.attest()).status is c.IsolationStatus.VERIFIED
+    path = tmp_path / "runner-isolation-approval.json"
+    approval = json.loads(path.read_text())
+    approval["daytona_account_tier"] = 2
+    path.write_text(json.dumps(approval))
+    assert (await runner.observe(request(runner=runner))).outcome is c.ObservationOutcome.DENIED
+    assert runner.approval_refusal_reason == "account_tier_insufficient"
+    assert len(sdk.created) == 1
+
+
+@pytest.mark.parametrize("host", list(CANARY_EXPECTED["probes_denied"]))
+async def test_live_probe_failure_overrides_approval(tmp_path: Path, host: str) -> None:
+    runner, sdk = configured(tmp_path)
+    sdk.fault = host
+    assert (await runner.attest()).status is c.IsolationStatus.UNVERIFIED
+    assert sdk.created == sdk.deleted
+    assert not any(s.uploads for s in sdk.created)
 
 
 async def test_fresh_instances_and_no_oracle_payload(tmp_path: Path) -> None:

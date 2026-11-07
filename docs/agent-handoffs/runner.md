@@ -22,8 +22,9 @@ an adjacent-boundary stand-in in tests, not a production fallback.
 observation and per attestation. Private ingress, block-all network, empty
 volumes/secrets, minimal environment, fixed commands, bounded source and request
 uploads, execution/control deadlines, TTL and stop/delete policies are explicit.
-Snapshot CPU/memory are checked before upload; stable snapshot params do not
-accept resource overrides. Strict host parsing checks nonce, attempt, side,
+Snapshot CPU/memory are checked before upload; daytona 0.231.0
+`CreateSnapshotParams` accepts `resources`, whereas
+`CreateSandboxFromSnapshotParams` does not. Strict host parsing checks nonce, attempt, side,
 commit/source/input hashes, exact keys, output size, signed integer type/range
 and truncation. It rejects duplicate keys and multiple JSON envelopes. Oracle
 values and receipt/ledger data never enter the sandbox.
@@ -90,6 +91,62 @@ skip the canary. The stable SDK does not independently prove snapshot digest:
 the operator must verify the immutable snapshot-to-digest mapping and effective
 policy before approving its fingerprint. A failed/unapproved gate denies all
 target uploads. No setting silently selects fixture execution for a live request.
+
+Approval now additionally requires strict integer `daytona_account_tier >= 3`
+and `canary_result` containing the exact four successful checks and per-host
+`probes_denied` booleans documented in the sandbox README. Tier 1/2 is refused
+even if the provider echoes `network_block_all=True`. Every essential-service,
+generic IP and metadata probe runs without short-circuiting. Both recorded and
+fresh canary evidence are required. Missing/invalid evidence fails before
+allocation; approval is rechecked before observations. Fixed sanitized local
+diagnostics are exposed through `approval_refusal_reason`; frozen public DTOs
+still report `isolation_unverified`. No Daytona calls were made for this change.
+
+## Operator provisioning follow-up
+
+The proposed one-sandbox shared-key diagnostic was cancelled before any Daytona
+API call. No sandbox/snapshot was created, no probe ran and no deletion or
+confirmation call was necessary. Official docs were read: Tier 1/2 organization
+policy takes precedence and essential services remain reachable; Tier 3/4
+supports strict sandbox block-all without an essential-service bypass. Actual
+account tier and enforcement remain unverified. Do not treat docs as live evidence.
+
+The exact post-authorization provisioning sequence is maintained in
+`ops/sandbox/README.md`, under **Operator provisioning sequence** and **Preflight**:
+
+1. Keep intake/live execution disabled; obtain a fresh resource/region/budget
+   authorization and dedicated minimally scoped ProofHunter key. Never reuse the
+   shared ForkSafe key or modify other projects' snapshots. Separate provisioning
+   privileges from runtime privileges; secrets stay in operator process env only.
+2. Independently verify tier >= 3, strict policy, private ingress and external
+   controlled-host availability. Tier 1/2 or uncertainty stops provisioning.
+3. Build a team-owned Python 3.12 image from a reviewed digest-pinned compatible
+   base; install the exact wrapper/canary/host files root-owned and read-only,
+   narrow sudoers, daytona-owned 0700 request directory and distinct nobody UID.
+   Retain an immutable published image digest and verify file/harness hashes.
+4. Separately authorize `client.snapshot.create(CreateSnapshotParams(name=...,
+   image="registry/image@sha256:...", resources=Resources(cpu=1, memory=1, disk=3)))`.
+   Confirm image fit/readiness and immutable digest mapping, with no mutable alias
+   or resource fallback. The cancelled diagnostic permitted zero snapshot creates.
+5. Configure that snapshot/digest and persistent private ledger state. Run only
+   the bootstrap canary in a fresh labeled sandbox: `_create("preflight", 15)`,
+   `_policy`, fixed `CANARY_COMMAND` with `cwd="/", env=ENV, timeout=10`, strict
+   bounded JSON and `valid_canary`. Always `_delete(..., "preflight")` in
+   `finally`; confirm exact allocation absence by both-label filtered list.
+6. Independently validate other isolation controls before atomically writing
+   0600 approval. Required exact keys: `config_fingerprint`, `image_digest`,
+   `effective_policy_reviewed: true`, strict integer `daytona_account_tier >= 3`,
+   and `canary_result` with four true checks and the exact all-true nine-host
+   `probes_denied` map. The full JSON and per-host schema are in the README.
+7. Call `await runner.attest()` for another fresh canary; require verified status
+   and confirmed deletion before target uploads/intake. Refresh within 15 minutes,
+   revoke on changes/failures, and drain threads on shutdown. Use the ledger,
+   both labels and expired leases for bounded orphan cleanup; never sweep other
+   resources by name prefix alone.
+
+No image builder or host-side canary CLI is shipped or live-validated here. The
+documented Dockerfile layout and SDK snippets require an operator-reviewed base,
+registry, controlled host, real digest and new authorization before execution.
 
 ## Checks
 
