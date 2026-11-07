@@ -17,6 +17,26 @@ changes cwd before Agent construction, so both SDK state and the reply ledger us
 that directory. Use an absolute, private writable directory and one process per seed.
 No secret values are placed in its JSON ledger. The seed is always supplied explicitly.
 
+**Publication hold (default OFF):** Both normal mailbox startup and `register`
+refuse before Agent construction unless `PROOFHUNTER_ACP_PUBLISH=true`. Leave it
+unset until the operator confirms the actual isolated three-run gate has passed.
+Render hosting approval is not publication approval. `--address` and offline/local
+chat do not require publication approval and do not instantiate a network agent.
+`build_agent` defaults manifest/details publication off; the gated entrypoint
+explicitly enables them only after this approval. With the flag off the process
+does NOT poll the mailbox, register endpoints, publish a manifest, or send startup
+telemetry. This intentionally blocks the whole network startup rather than
+pretending `publish_manifest=False` disables all public advertising.
+
+SDK evidence: `Agent.include(..., publish_manifest=True)` schedules a POST to
+Almanac `/manifests`; `Agent.setup()` starts the default registration loop when
+mailbox endpoints exist, and startup tasks update active status. Passing
+`registration_policy=None` selects the default policy, NOT disabled registration.
+After approval, the normal mailbox process may publish a manifest, advertise its
+mailbox endpoint/protocols in Almanac, update active status and send SDK telemetry;
+these actions do not require an Agentverse user API key. No separate non-advertising
+poll-only mode is implemented. Do not run this process before the gate.
+
 Run with `PROOFHUNTER_PROFILE=live`, `AGENT_SEED_PHRASE`,
 `PROOFHUNTER_API_TOKEN`, `PROOFHUNTER_API_BASE`, optionally `AGENT_PORT` and
 `PROOFHUNTER_AGENT_STORAGE_DIR`, then `uv run --locked python -m proofhunter.acp`.
@@ -30,6 +50,36 @@ Identity references are `secret:personal:AGENT_SEED_PHRASE` and
 `secret:personal:PROOFHUNTER_API_TOKEN`; never paste their values into documentation.
 
 ### Exact connection and discovery prerequisites
+
+**Render/headless path:** `uv run --locked python -m proofhunter.acp register` is
+now a one-shot command. Supply the same live role settings as the mailbox process
+and `AGENTVERSE_API_KEY` only to this command, plus the post-gate explicit
+`PROOFHUNTER_ACP_PUBLISH=true` approval. It builds the SDK inspector's
+registration payload, signs the identity challenge with the saved seed, connects
+as `agent_type="mailbox"`, and exits. It never starts polling, runs a control API
+request, or prints remote error bodies. Success exits 0; missing configuration 2;
+SDK/registration failure 1 with a fixed sanitized failure description. The normal
+mailbox process does not read or require `AGENTVERSE_API_KEY`. Remove it from the
+long-running service after this one-shot task. Do not pass it in argv.
+
+**Minimal operator action:** Peyton signs in at https://agentverse.ai/ → avatar
+→ Profile → API Keys → **+ New API Key**, create a ProofHunter-only key with an explicit
+expiry. Select **Write access on the resources you register** (read-only is not
+enough); choose only the ProofHunter resource if the UI offers it. Click Generate
+API Key, allow the re-authentication popup, and save the once-shown value directly
+as secret `AGENTVERSE_API_KEY` (prefer qualified reference
+`secret:personal:AGENTVERSE_API_KEY`). Send only the saved reference, never the key,
+password, OAuth token or browser cookie in chat. The official guide does not give
+granular scope names for identity challenge versus new-agent creation; if the UI
+cannot scope a new resource, report that limitation before broadening access.
+No interactive login/session is needed in the registering process once the API key
+exists. No wallet, FET or payment is required for this SDK connection flow.
+Source: https://innovationlab.fetch.ai/resources/docs/agentverse/agentverse-api-key
+and https://docs.agentverse.ai/documentation/launch-agents/agentverse-sdk/u-agents.
+Manifest publication and Almanac registration use the seed identity, not this user
+API key; a published manifest alone is not proof of account connection or discovery.
+
+**Local alternative (inspector):**
 
 Operator login: open `https://agentverse.ai/`, sign in to your own account, then
 run the process locally with the SAME saved seed. Open
@@ -47,9 +97,9 @@ endpoints, protocols, metadata)` and calls
 agent_details)`. That function GETs the identity challenge, POSTs the signed proof,
 and POSTs agent details, using the user token as a bearer credential. This is the
 SDK-supported headless primitive, not a `register(api_key=...)` method on Agent.
-No headless CLI is added: no registration credential exists and the inspector
-already exposes the supported path. Never pass a token on a command line or log
-the SDK response detail (it contains provider-controlled text).
+The headless command mirrors this handler, including profile, protocols and
+metadata; private SDK attributes are used only where 0.26.1 exposes no public
+equivalent. Never log the SDK response detail (provider-controlled text).
 
 The official launch guide also describes Agents → Launch an Agent → Connect Agent
 → Chat Protocol, with a public HTTPS endpoint and a generated registration script.
@@ -77,7 +127,8 @@ An eight-second local mailbox process used only the two saved role credentials,
 live profile and loopback API base. No control API request was sent (no inbound
 chat); no API server was needed. SDK logs were suppressed; aiohttp instrumentation
 recorded no bodies or secret headers. No account registration/Connect request was
-made. Normal SDK startup can automatically advertise the protocol to Almanac;
+made. This earlier smoke ran before the publication hold was implemented and may
+already have advertised via Almanac. Normal SDK startup advertises the protocol to Almanac;
 that is NOT a connected mailbox or ASI:One publication pass.
 Observed statuses (UTC, status, latency ms; request IDs unavailable):
 
@@ -107,7 +158,16 @@ in-memory GitHub PEM; the predecessor's claims that these are missing are stale.
 The remaining ACP entrypoint bug was using the default ALL role and implicit API
 base. No config.py edit was needed. Deployment, enrollment pins, runner isolation,
 provider gates, Agentverse account connection and ASI:One discovery remain external
-prerequisites. No recurring charges or deployment are authorized here.
+prerequisites. The user subsequently approved Render deployment; this ACP-only
+follow-up creates no hosting resource or charge and leaves hosting to the parent.
+
+Headless/publication follow-up verification: owned suite `124 passed in 0.75s`; owned Ruff
+`All checks passed!`; owned mypy `Success: no issues found in 16 source files`.
+Aggregate Ruff passed; aggregate mypy checked 73 files; setup and integrated gates passed.
+Registration tests mock the SDK for success, missing/empty key, remote failure,
+exception redaction, conflicting arguments, normal mailbox credential isolation,
+and default-off/missing/invalid publication approval for both network entrypoints.
+No live registration was attempted; no Agentverse API key has been supplied.
 
 Checks: owned ACP suite `108 passed in 1.68s`; full suite `898 passed, 1 warning in
 14.40s`; Ruff `All checks passed!`; aggregate mypy `Success: no issues found in 72

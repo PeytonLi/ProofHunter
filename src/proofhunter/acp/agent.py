@@ -82,7 +82,7 @@ def build_chat_protocol(service: ChatService) -> Any:
 
 
 def build_agent(seed_phrase: str, service_factory: Any, *, port: int = 8001,
-                mailbox: bool = True, publish_agent_details: bool = True) -> Any:
+                mailbox: bool = True, publish_agent_details: bool = False) -> Any:
     """Create the agent and include the chat protocol with its manifest.
 
     ``service_factory(storage)`` builds the ``ChatService`` with the agent's persistent
@@ -93,7 +93,7 @@ def build_agent(seed_phrase: str, service_factory: Any, *, port: int = 8001,
                   description=AGENT_DESCRIPTION, readme_path=str(AGENT_README),
                   publish_agent_details=publish_agent_details)
     service = service_factory(agent.storage)
-    agent.include(build_chat_protocol(service), publish_manifest=True)
+    agent.include(build_chat_protocol(service), publish_manifest=publish_agent_details)
     return agent
 
 

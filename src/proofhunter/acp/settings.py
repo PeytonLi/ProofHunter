@@ -41,3 +41,10 @@ def prepare_storage(environ: Mapping[str, str] | None = None) -> None:
         os.chdir(path)
     except OSError:
         raise ConfigError("PROOFHUNTER_AGENT_STORAGE_DIR is unavailable") from None
+
+
+def require_publication_approval() -> None:
+    if os.environ.get("PROOFHUNTER_ACP_PUBLISH", "").strip().lower() != "true":
+        raise ConfigError(
+            "ACP publication is disabled; PROOFHUNTER_ACP_PUBLISH=true requires "
+            "operator approval after the isolated three-run gate")
