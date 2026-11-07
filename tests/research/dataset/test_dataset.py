@@ -10,6 +10,7 @@ from research.data import execute as X
 from research.data import observations, sft
 from research.data import templates as T
 from research.data.build import build_cases
+from research.data.splits import diff_fingerprint
 from research.data.store import SealedLabelsError, open_store, unseal_token
 from research.data.swe_smith import prepare_swe_smith_manifest
 from research.schemas import models as M
@@ -87,6 +88,20 @@ def test_manifest_grouped_labels_witnessed_and_test_sealed(small_root: Path) -> 
     assert all(not v for v in audit["grouping_key_violations"].values())
     assert audit["source_sha256_shared_across_splits"] == 0
     assert audit["behavior_fingerprint_shared_across_splits"] == 0
+    assert audit["diff_fingerprint_shared_across_splits"] == 0
+    assert audit["grouping_key_violations"]["diff_fingerprint_cross_split"] == []
+
+
+def test_diff_fingerprint_normalises_names_whitespace_and_comments() -> None:
+    base = b'"""Doc."""\ndef f(prices_cents, discount_percent):\n    items = list(prices_cents)\n'
+    head = b'"""Doc."""\ndef f(prices_cents, discount_percent):\n    items = sorted(prices_cents)\n'
+    renamed = (base.replace(b"items", b"basket").replace(b"Doc.", b"Other doc."),
+               head.replace(b"items", b"basket").replace(b"    ", b"      ")
+               .replace(b"\n", b"  # note\n", 2).replace(b"Doc.", b"Other doc."))
+    assert diff_fingerprint(base, head) == diff_fingerprint(*renamed)
+    role_changed = head.replace(b"items =", b"d =")
+    assert diff_fingerprint(base, head) != diff_fingerprint(base, role_changed)
+    assert diff_fingerprint(base, head) != diff_fingerprint(base, head.replace(b"sorted", b"max"))
 
 
 def test_build_is_deterministic(small_root: Path, tmp_path: Path) -> None:

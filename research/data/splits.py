@@ -2,6 +2,12 @@
 
 from __future__ import annotations
 
+import builtins
+import difflib
+import hashlib
+import json
+import keyword
+import re
 from collections import Counter, defaultdict
 from collections.abc import Mapping, Sequence
 
@@ -9,6 +15,66 @@ from research.data import templates as T
 from research.schemas import models as M
 
 GROUP_KEYS = ("family_id", "defect_origin", "near_dup_cluster", "template_id")
+DIFF_FINGERPRINT_VERSION = "normalized-diff-v1"
+_TOKEN = re.compile(
+    r'''[rbuRBU]{0,2}("""|\'\'\'|"|\')(?:\\.|(?!\1).)*\1'''
+    r'''|\d[\d_]*(?:\.\d*)?|[A-Za-z_]\w*|\S''')
+
+_SEMANTIC_NAMES = frozenset(dir(builtins)) | {
+    "Decimal", "Fraction", "ROUND_HALF_UP", "ROUND_FLOOR", "ROUND_CEILING", "ROUND_HALF_EVEN",
+    "ROUND_DOWN", "ROUND_HALF_DOWN", "decimal", "fractions", "functools", "math", "operator",
+    "floor", "ceil", "reduce", "add", "quantize", "numerator", "denominator"}
+
+_ROLES = ("ITEMS", "DISCOUNT", "SUBTOTAL", "TOTAL", "HELPER")
+_ROLE_OF = {name: role for names in T.NAMES for name, role in zip(names, _ROLES, strict=True)}
+_ROLE_OF[T.ALT_HELPER] = "HELPER"
+
+
+def _normalize_line(line: str) -> list[str]:
+    tokens: list[str] = []
+    for match in _TOKEN.finditer(line):
+        tok = match.group(0)
+        if tok == "#":
+            break
+        if match.group(1):
+            tokens.append("STR")
+        elif tok[0].isalpha() or tok[0] == "_":
+            semantic = keyword.iskeyword(tok) or tok in _SEMANTIC_NAMES
+            tokens.append(tok if semantic else _ROLE_OF.get(tok, "ID"))
+        else:
+            tokens.append(tok)
+    return tokens
+
+
+def _tokens(line: str) -> list[str]:
+    tokens: list[str] = []
+    for match in _TOKEN.finditer(line):
+        if match.group(0) == "#":
+            break
+        tokens.append(match.group(0))
+    return tokens
+
+
+def _code_lines(source: bytes) -> list[str]:
+    lines = (" ".join(_tokens(line)) for line in source.decode().splitlines())
+    return [line for line in lines if line]
+
+
+def diff_fingerprint(base: bytes, head: bytes) -> str:
+    """Hash of the base->head changed lines. Lines are compared with whitespace and comments
+    removed, so formatting-only edits vanish; the changed lines are then hashed with string
+    contents as ``STR``, template renames collapsed to their role and other names to ``ID``.
+    Renamed or reformatted copies of the same change collide across splits."""
+    old, new = _code_lines(base), _code_lines(head)
+    removed: list[list[str]] = []
+    added: list[list[str]] = []
+    matcher = difflib.SequenceMatcher(None, old, new, autojunk=False)
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        if tag != "equal":
+            removed.extend(_normalize_line(line) for line in old[i1:i2])
+            added.extend(_normalize_line(line) for line in new[j1:j2])
+    payload = json.dumps([DIFF_FINGERPRINT_VERSION, removed, added], separators=(",", ":"))
+    return hashlib.sha256(payload.encode()).hexdigest()
 
 
 def template_split(template_id: str) -> M.Split:
@@ -37,7 +103,8 @@ def assign_splits(cases: Sequence[M.CaseRecord], protocol: M.ProtocolV1, *,
 
 def leakage_audit(manifest: M.CaseManifest, labels: Mapping[M.Split, M.LabelFile],
                   clusters: Mapping[str, str], fingerprints: Mapping[str, str],
-                  bench_hashes: set[str]) -> dict[str, object]:
+                  bench_hashes: set[str],
+                  diff_fingerprints: Mapping[str, str] | None = None) -> dict[str, object]:
     by_split: dict[str, list[M.CaseRecord]] = defaultdict(list)
     for case in manifest.cases:
         by_split[case.split.value].append(case)
@@ -48,6 +115,15 @@ def leakage_audit(manifest: M.CaseManifest, labels: Mapping[M.Split, M.LabelFile
         for case in manifest.cases:
             owners[str(getattr(case, key))].add(case.split.value)
         checks[f"{key}_cross_split"] = sorted(k for k, v in owners.items() if len(v) > 1)
+    diff_owner: dict[str, set[str]] = defaultdict(set)
+    diff_cases: dict[str, list[str]] = defaultdict(list)
+    for case in manifest.cases:
+        fp = (diff_fingerprints or {}).get(case.case_id)
+        if fp:
+            diff_owner[fp].add(case.split.value)
+            diff_cases[fp].append(f"{case.split.value}:{case.case_id}")
+    shared_diffs = sorted(k for k, v in diff_owner.items() if len(v) > 1)
+    checks["diff_fingerprint_cross_split"] = shared_diffs
     src_owner: dict[str, set[str]] = defaultdict(set)
     for case in manifest.cases:
         src_owner[case.head_source_sha256].add(case.split.value)
@@ -81,6 +157,10 @@ def leakage_audit(manifest: M.CaseManifest, labels: Mapping[M.Split, M.LabelFile
         "manifest_cases_sha256": manifest.cases_sha256,
         "summary": summary,
         "grouping_key_violations": checks,
+        "diff_fingerprint_version": DIFF_FINGERPRINT_VERSION,
+        "diff_fingerprints_recorded": len(diff_owner),
+        "diff_fingerprint_shared_across_splits": len(shared_diffs),
+        "diff_fingerprint_shared_examples": {k: sorted(diff_cases[k]) for k in shared_diffs[:5]},
         "source_sha256_shared_across_splits": len(shared_sources),
         "source_sha256_shared_examples": shared_sources[:5],
         "behavior_fingerprint_shared_across_splits": sum(len(v) > 1 for v in fp_owner.values()),

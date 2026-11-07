@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Final
 
 from research.data import execute as X
+from research.data import splits as S
 from research.data import templates as T
 from research.data.splits import assign_splits, leakage_audit
 from research.schemas import models as M
@@ -178,6 +179,107 @@ def _bench_source_hashes() -> set[str]:
     return {h for case in manifest.cases for h in (case.base_sha256, case.head_sha256)}
 
 
+def enumerate_test_clean_backfill(master_seed: int) -> list[Raw]:
+    """Test-only clean variants that also refactor the base's subtotal/numerator form.
+
+    Used only to backfill test clean controls dropped for cross-split diff duplicates; base and
+    head code shapes never equal a train/validation shape.
+    """
+    other = {(o.rounding, o.subtotal, o.numerator) for o in T.SHAPES if o.split is not M.Split.TEST}
+    out: list[Raw] = []
+    for shape in T.SHAPES:
+        if shape.split is not M.Split.TEST:
+            continue
+        for guard in (0, 1):
+            for head_guard in (0, 1):
+                for bsub in T.SUBTOTALS:
+                    for bnum in T.NUMERATORS:
+                        if (shape.rounding, bsub, bnum) in other or (bsub, bnum) == (
+                                shape.subtotal, shape.numerator):
+                            continue
+                        for sub in T.SUBTOTALS:
+                            for num in T.NUMERATORS:
+                                if ((shape.rounding, sub, num) in other
+                                        or (sub, num) == (bsub, bnum)):
+                                    continue
+                                pkey = (master_seed, "backfill", shape.shape_id, guard, head_guard,
+                                        bsub, bnum, sub, num)
+                                names = int(_pick(range(3), "names", *pkey))
+                                params: dict[str, T.ParamValue] = {
+                                    "names": names, "doc": int(_pick(range(3), "doc", *pkey)),
+                                    "guard": guard, "subtotal": bsub, "numerator": bnum,
+                                    "head_names": (names + 1) % 3,
+                                    "head_doc": int(_pick(range(3), "hdoc", *pkey)),
+                                    "head_guard": head_guard, "head_subtotal": sub,
+                                    "head_numerator": num}
+                                out.append(Raw(
+                                    f"clean__{shape.shape_id}", T.clean_family_id(shape.shape_id),
+                                    shape.split, M.LabelKind.CLEAN, params,
+                                    cluster="c-" + _h("clean-backfill", shape.shape_id, guard,
+                                                      head_guard, bsub, bnum, sub, num)[:20]))
+    return out
+
+
+def repair_test_split(chosen: list[Raw], validated: Sequence[Raw], backfill: Sequence[Raw],
+                      protocol: M.ProtocolV1,
+                      bench_hashes: set[str]) -> tuple[list[Raw], list[Raw]]:
+    """Drop test cases whose normalised diff fingerprint appears in train/validation and
+    backfill them with test-only cases. Train and validation selections are left untouched."""
+    blocked_fp = {S.diff_fingerprint(r.base, r.head) for r in chosen if r.split is not M.Split.TEST}
+    blocked_src = {_sha(x) for r in validated if r.split is not M.Split.TEST and r.base
+                   for x in (r.base, r.head)} | bench_hashes
+    kept: list[Raw] = []
+    dropped: list[Raw] = []
+    for raw in chosen:
+        if raw.split is M.Split.TEST and S.diff_fingerprint(raw.base, raw.head) in blocked_fp:
+            raw.reason = "cross_split_diff_duplicate"
+            dropped.append(raw)
+        else:
+            kept.append(raw)
+    used_fp = {S.diff_fingerprint(r.base, r.head) for r in kept if r.split is M.Split.TEST}
+    used_clusters = {r.cluster for r in kept}
+    used_pairs = {(r.base, r.head) for r in kept}
+    target = protocol.split_targets[M.Split.TEST.value]
+    excluded: list[Raw] = list(dropped)
+    pools = {
+        False: [r for r in validated if r.split is M.Split.TEST and r.kind is not M.LabelKind.CLEAN
+                and r.reason == "over_split_target"],
+        True: list(backfill),
+    }
+    for clean, want in ((False, target.defect_cases), (True, target.clean_controls)):
+        have = sum(r.split is M.Split.TEST and (r.kind is M.LabelKind.CLEAN) == clean for r in kept)
+        if have >= want:
+            continue
+        by_family: dict[str, list[Raw]] = defaultdict(list)
+        for raw in sorted(pools[clean], key=lambda r: _h(protocol.master_seed, "backfill", r.key)):
+            if raw.reason not in (None, "over_split_target"):
+                excluded.append(raw)
+                continue
+            fp = S.diff_fingerprint(raw.base, raw.head)
+            if fp in blocked_fp or {_sha(raw.base), _sha(raw.head)} & blocked_src:
+                raw.reason = "cross_split_diff_duplicate" if fp in blocked_fp else (
+                    "cross_split_source_duplicate")
+            elif (fp in used_fp or raw.cluster in used_clusters
+                  or (raw.base, raw.head) in used_pairs):
+                raw.reason = "near_duplicate_behavior"
+            else:
+                raw.reason = None
+                used_fp.add(fp)
+                used_clusters.add(raw.cluster)
+                used_pairs.add((raw.base, raw.head))
+                by_family[raw.family_id].append(raw)
+                continue
+            if clean:
+                excluded.append(raw)
+        picked, rest = _round_robin(by_family, max(0, want - have))
+        for raw in rest:
+            raw.reason = "over_split_target"
+        kept += picked
+        if clean:
+            excluded += rest
+    return kept, excluded
+
+
 def _round_robin(by_family: Mapping[str, list[Raw]], target: int) -> tuple[list[Raw], list[Raw]]:
     queues = {f: list(v) for f, v in sorted(by_family.items())}
     chosen: list[Raw] = []
@@ -304,7 +406,14 @@ def build_cases(protocol: M.ProtocolV1, out_dir: Path, *, workers: int | None = 
     ctx = multiprocessing.get_context("fork")
     with ctx.Pool(workers, initializer=_init, initargs=(probes, expected)) as pool:
         validated = pool.map(validate, raws, chunksize=32)
-    chosen, excluded = select(validated, protocol, _bench_source_hashes())
+    bench = _bench_source_hashes()
+    chosen, excluded = select(validated, protocol, bench)
+    with ctx.Pool(workers, initializer=_init, initargs=(probes, expected)) as pool:
+        backfill = pool.map(validate, enumerate_test_clean_backfill(protocol.master_seed),
+                            chunksize=32)
+    chosen, backfill_excluded = repair_test_split(chosen, validated, backfill, protocol, bench)
+    picked_ids = {id(r) for r in chosen}
+    excluded = [r for r in excluded if id(r) not in picked_ids] + backfill_excluded
     records = [to_record(r, protocol.master_seed) for r in chosen]
     manifest = assign_splits(records, protocol, dataset_commit=dataset_commit or _git_head())
     by_id = {case_id(r): r for r in chosen}
@@ -350,7 +459,8 @@ def build_cases(protocol: M.ProtocolV1, out_dir: Path, *, workers: int | None = 
         out_dir / "reports" / "exclusion-report.json", report)
     fingerprints = {case_id(r): r.cluster for r in chosen}
     audit = leakage_audit(manifest, label_files, fingerprints,
-                          {case_id(r): r.fingerprint for r in chosen}, _bench_source_hashes())
+                          {case_id(r): r.fingerprint for r in chosen}, bench,
+                          {case_id(r): S.diff_fingerprint(r.base, r.head) for r in chosen})
     hashes["reports/split-audit.json"] = _write_json(out_dir / "reports" / "split-audit.json",
                                                      audit)
     provenance = {
