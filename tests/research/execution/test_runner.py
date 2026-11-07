@@ -9,7 +9,7 @@ from bench.corpus import ROOT, load
 from proofhunter.contracts import ObservationOutcome, Side
 from research.execution import commands
 from research.execution.allowlist import ReviewedSourceAllowlist
-from research.execution.pool import shared_pool
+from research.execution.pool import seeded_pool, shared_pool
 from research.execution.runner import TrackARunner, make_runner
 from research.execution.sandbox import LocalTemplateSandbox
 from research.schemas.interfaces import EpisodeRunner
@@ -161,9 +161,9 @@ def test_selector_cannot_escape_pool(protocol, allowlist, case_sources):
 
 def test_pool_identical_across_arms_and_seed_dependent(protocol, allowlist, case_sources):
     case = case_sources("per_line").case
-    assert shared_pool(case, protocol, SEED) == shared_pool(case, protocol, SEED)
-    other = shared_pool(case, protocol, 1)
-    assert shared_pool(case, protocol, SEED).bank_sha256 != other.bank_sha256
+    assert seeded_pool(case, protocol, SEED) == seeded_pool(case, protocol, SEED)
+    other = seeded_pool(case, protocol, 1)
+    assert seeded_pool(case, protocol, SEED).bank_sha256 != other.bank_sha256
     rows = [_runner(protocol, allowlist).run(case_sources("per_line"), Picker(a), None, arm_id=a,
                                              seed=SEED, repetition=0,
                                              mode=MeasurementMode.OFFLINE)
@@ -198,3 +198,11 @@ def test_run_pilot_bench_plumbing(tmp_path):
 def test_run_pilot_refuses_test_split(tmp_path):
     with pytest.raises(SystemExit):
         commands.run_pilot(["--store", str(tmp_path), "--splits", "test"])
+
+
+def test_shared_pool_frozen_signature(protocol, case_sources):
+    import inspect
+
+    assert list(inspect.signature(shared_pool).parameters) == ["case", "protocol"]
+    case = case_sources("per_line").case
+    assert shared_pool(case, protocol) == seeded_pool(case, protocol, None)

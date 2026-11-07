@@ -48,7 +48,7 @@ from proofhunter.contracts import (
 )
 from research.execution.allowlist import ReviewedSourceAllowlist, from_template_render
 from research.execution.budget import EpisodeBudget
-from research.execution.pool import builtin_plan, plan_from_payload, shared_pool
+from research.execution.pool import builtin_plan, plan_from_payload, seeded_pool
 from research.execution.sandbox import LocalTemplateSandbox, PhaseTiming
 from research.schemas.interfaces import (
     CaseSources,
@@ -169,7 +169,7 @@ class TrackARunner:
         gen0 = time.perf_counter()
         plan, payload = self._plan(sources, generator, trace)
         generation_ms = (time.perf_counter() - gen0) * 1000 if generator is not None else None
-        bank = shared_pool(case, self.protocol, seed)
+        bank = seeded_pool(case, self.protocol, seed)
         diff = unified_diff(sources.base_source, sources.head_source)
         selector.reset(EpisodeContext(case.case_id, seed, sources.base_source,
                                       sources.head_source, diff, bank,
