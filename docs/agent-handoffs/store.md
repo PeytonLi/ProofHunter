@@ -1,181 +1,198 @@
 # Store and control API handoff
 
-VERDICT: store checks PASS; full/integrated checks need integration readiness update.
+VERDICT: PASS_OFFLINE. Live composition/publication remains cross-owner work.
 
-- Starting freeze: `e504f140e20eb74ad7f2847206ad4b289a6e5482`.
-- Assigned branch: `devin/1794078900-proofhunter/store-refreeze`.
-- All ProofHunter interactions were offline and fixture-backed. No provider keys,
-  provider calls, PR code execution, deployment, publication, checks or webhooks
-  were enabled in a deployed service. No frozen files were modified.
+- Base: `4140bf0dfab8d090181b6aea37cbb7e574eb75a6`.
+- Branch: `devin/1794083400-proofhunter-live/live-store`.
+- Owned changes: `src/proofhunter/store/`, `src/proofhunter/api.py`, `tests/store/`,
+  and this handoff. Shared contracts, oracle, ports, configuration, dependency
+  files and benchmark snapshots are unchanged.
+- All verification was offline and fixture-backed. No provider requests, live PR
+  execution, publication, deployment or live visual verification was performed.
 
-## Implementation and wiring
+## Composition and existing guarantees
 
-`proofhunter.store.create_store(settings)` returns `SQLiteStore`, implementing
-RunStore, ControlStore and HeartbeatStore protocols. Its constructor also accepts
-Clock and IdFactory; production defaults are UTC wall clock and UUIDv4.
-`proofhunter.api.create_app(ApiDependencies(...))` creates the FastAPI app.
-Bind the repository validator and optional webhook verifier through their ports;
-the API never imports fixture implementations or calls provider services.
+`create_store(settings)` returns `SQLiteStore`, implementing RunStore,
+ControlStore and HeartbeatStore. Clock and IdFactory remain injectable.
+`create_app(ApiDependencies(...))` accepts offline or live settings and injected
+repository validation, webhook verification, store, heartbeat store and matching
+configuration fingerprint; it does not contact providers at startup/readiness.
 
-SQLite uses per-operation connections, WAL, foreign keys, 100 ms busy_timeout and
-three bounded BEGIN IMMEDIATE acquisition attempts. Writes and snapshot load_run
-use explicit transactions. Idempotency, quota reservation and queue creation are
-atomic. Same scope/key/body returns current status even after quota exhaustion;
-changed body raises IdempotencyConflictError. Worker mutation transactions fence
-owner, epoch, stored expiry and terminal state. Expired claims increment epoch.
-Stage checkpoints validate the frozen state machine and append ordered events.
-Attempt lifecycle updates preserve identity and monotonic charges; logical probes
-are deduplicated separately. A failed probe transaction leaves no observations,
-probe or budget update. finish revalidates the sealed hash and run provenance,
-and atomically stores receipt, optional bound live check intent and terminal status.
+SQLite uses WAL, foreign keys, 100 ms busy_timeout and three bounded
+BEGIN IMMEDIATE acquisition attempts. Intake/idempotency/quota and sealed
+receipt/optional outbox/terminal status commit atomically. Worker mutations fence
+owner, epoch, stored expiry and nonterminal state. Recovery preserves the exact
+pin and monotonic provider allocation counters; legacy NULL checkpoints fail
+closed. Attempt lifecycle updates preserve identity/monotonic charges, while
+logical observations and probes are separately deduplicated.
 
-### Migration 1
+## Schema v4
 
-`schema_version` records applied migrations; reopen is idempotent and unknown
-future versions are rejected. Tables: runs, idempotency_keys, inbound_messages,
-webhook_deliveries, run_events, attempts, probes, observations, receipts,
-check_outbox, quota_reservations. Indexed rolling quota reservations provide the
-hourly counter. Constraints include unique scope/key, delivery ID, run/attempt ID,
-run/probe number, run/input hash, run/input hash/side and one receipt/outbox per run.
-Webhook delivery plus queued run plus quota reservation commit together.
+The constructor applies ordered transactional migrations from v1/v2/v3, reopens
+idempotently and rejects unknown versions. `ready()` requires v4.
 
-### Migration 2 and recovery
+1. Runs, idempotency keys, inbound messages, webhook deliveries, run events,
+   attempts, probes, observations, receipts, check_outbox, quota_reservations and
+   quota/active-run indexes.
+2. Durable worker_heartbeats and nullable runs.checkpoint. Historical v1 rows
+   retain checkpoint=NULL rather than receiving a fabricated allocation ledger.
+3. Outbox check ID, owner/epoch/expiry, in-flight operation, reconciliation flag,
+   call/ambiguity counters, append-only outbox_attempts; immutable UPDATE triggers
+   on receipts, observations, run_events, probes and outbox_attempts. Terminal run
+   status/provenance UPDATEs are rejected, including JSON containing receipt hash.
+4. A singleton main-schema retention_gate and retention-only DELETE triggers on
+   those five append-only tables. New runs also persist their trusted enrollment
+   snapshot in runs.enrollment; replay intake copies it. Historical rows remain
+   NULL where the original enrollment was never captured; migration does not
+   invent historical configuration. Existing receipt/pins/source hashes/target
+   remain unchanged, and the frozen contract's enrolled source is checkout.py.
+   Terminal enrollment updates are also fenced.
 
-Migration 1 is unchanged. Migration 2 adds nullable runs.checkpoint and a durable
-worker_heartbeats table keyed by worker_id. New databases apply both migrations;
-v1 upgrades in place; v2 reopen is idempotent. ready() now requires version 2.
-New verification and replay runs start with RunCheckpoint(). Migrated v1 rows
-retain SQL NULL, load as checkpoint=None / recoverable=False, and reject progress
-reservations rather than synthesizing a ledger from events.
+Terminal run owner/expiry cleanup remains permitted: finish stores terminal status
+then clears its worker lease. Publish state/check IDs/history are separate from
+the immutable run and receipt. DELETE protection is separate from UPDATE
+protection, so reviewed retention does not require disabling immutability triggers.
 
-reserve_progress revalidates copied DTOs and uses one BEGIN IMMEDIATE transaction
-to fence owner, epoch, stored expiry against the trusted clock and nonterminal
-state. It rejects mismatches on every PrTarget field, changing/clearing an existing
-pin (including resolved_at), replay base/head mismatches, decreasing counts,
-duplicates and counts above the run's lower caps. Errors leave checkpoint and
-budget unchanged; injected SQL failures roll both back. Success persists the
-checkpoint and budget.used.meta_requests/snap_requests together. load_run returns
-the exact original pin/counters across reopen and epoch reclaim without probes.
+## Step A: auth, readiness and original-input replay
 
-write_heartbeat revalidates TTL (0 < ttl <= 60 seconds), ignores submitted absolute
-timestamps, and atomically upserts using trusted store time. Clock regression is
-rejected. Equal time is a no-op for identical profile/fingerprint without expiry
-extension, or rejected for changed configuration. Newer mode/config replaces the
-record. read_heartbeat returns the newest matching fresh record
-(observed_at <= now < expires_at), ties by greatest worker_id. SQLite persistence
-is shared across independent connections/processes and restarts.
+- Every `/v1/*` request returns sanitized 401 if either transport credential is
+  missing or they are equal. Constant-time bearer comparison is retained.
+- Service routes accept only API token; replay and retention POSTs accept only
+  operator token. ACP receives only API token/API base, never operator token.
+- `/healthz` is process liveness. Internal `/readyz` checks schema, distinct
+  configured credentials, offline/live-flag exclusions and a fresh heartbeat
+  matching profile/fingerprint. Missing heartbeat store/fingerprint, absent,
+  expired, future or mismatched heartbeat fails closed with sanitized 503.
+- Heartbeats use trusted store time, bounded TTL, clock-regression rejection and
+  deterministic newest matching selection. CLI already injects the store and
+  mode_config_fingerprint; VerificationWorker refreshes before claims and while
+  working/idle. Live CLI startup is still rejected outside this lane.
+- Replay intake delegates eligibility/integrity to oracle.validate_replay for any
+  eligible probe number, not only the designated counterexample. The new replay
+  run binds the stored original SHAs/input/source hashes, parent receipt hash and
+  its own quota/idempotency reservation. Missing/corrupt bindings produce sanitized
+  409 replay_unavailable. Replay requests cannot override pins or source hashes.
 
-## Interface assumptions
+Other routes remain POST /v1/runs, GET /v1/runs/{run_id}, GET
+/v1/runs/{run_id}/receipt (sealed projection/ETag/304) and optional POST
+/webhooks/github (disabled unless configured and verifier injected). JSON is
+bounded at 8 KiB; webhook bodies at 256 KiB, including chunked requests. Public
+errors use ErrorEnvelope without provider details. X-ProofHunter-Requester is a
+hashed quota bucket, not a separate identity assertion. Webhooks verify raw HMAC
+before parsing and atomically deduplicate/enqueue; event-head recovery remains an
+integration concern.
 
-- **Requester scope:** the authenticated ACP client may supply
-  `X-ProofHunter-Requester` containing its sender bucket. The API SHA-256 hashes
-  that value into `acp:<digest>`; absent/empty uses `service:default`. This is a
-  rate-limit bucket, not an identity assertion. Service-wide caps apply regardless.
-  ACP must preserve the same bucket and inbound-message Idempotency-Key on retries.
-- **Quota/budget:** Settings.quota supplies hourly, global active and per-requester
-  active caps; Settings.budget initializes each run. Charged attempts and committed
-  probes update recoverable sandbox/pair/confirmation usage. Quota check alone is
-  advisory, matching the fixture reserve_quota semantics; intake reserves atomically.
-  AdapterError has no retry-after field, so HTTP uses the fixture's 60-second retry
-  hint, also returned by QuotaDecision. Disabled intake rejects new runs, not retries.
-- **Webhooks:** require both settings.github.enable_webhook and an injected verifier.
-  Tests explicitly inject a fake-enabled settings object, never enable a live service.
-  Verify exact raw bytes before JSON parsing, validate enrollment IDs through the
-  repository validator, then transactionally dedupe and enqueue. Duplicate delivery
-  returns 200 even when quota is full. Event SHAs are persisted with the delivery,
-  but the frozen load_run does not expose the triggering event. Integration needs
-  a reviewed event accessor/stale-head policy before enabling webhook intake;
-  it must not silently claim verification of the event's original head.
-- **Replay:** mirror the fixture's eligible replay: only receipt.replay.probe_no is
-  accepted; no eligible sealed parent returns replay_unavailable. Replays have their
-  own operator bucket, idempotency key, quota reservation, run_kind and parent hash.
-  load_run returns the bound Replay. Source retrieval/availability and replay command
-  rebinding for the new receipt are worker responsibilities, not API provider calls.
-- **Auth:** `/v1/*` uses constant-time bearer comparison. Replay POSTs accept only
-  the separate operator token; service endpoints accept only the service token.
-  Missing tokens fail closed. Frozen offline load_settings intentionally reads no
-  tokens: fixture composition must explicitly inject test-only tokens into Settings;
-  do not read live keys to make an offline server ready.
-- **Readiness:** SQLiteStore.ready checks schema version; API checks that plus distinct
-  configured transport tokens and offline live-feature exclusions. Fixture stores
-  without ready() get a local get_status read check. It also requires non-None
-  heartbeat_store and config_fingerprint and a fresh matching heartbeat; missing,
-  absent, expired, future or mismatched records fail closed with sanitized 503.
-  No providers are contacted. Integration must inject heartbeat_store=store and
-  mode_config_fingerprint(settings, loaded_enrollments), computed against the same
-  trusted enabled registry as the worker, and refresh at startup and throughout
-  polling/work. Otherwise readyz is 503, including offline mode.
-- **HTTP:** 8 KiB input and 256 KiB webhook limits include chunked requests. Errors
-  use sanitized ErrorEnvelope, including framework 404/405/422 and internal 500.
-  Receipts use frozen public projections, hash-derived ETags and exact-match 304.
+## Step B: durable publisher lifecycle
 
-## Integration recovery obligations
+Checks remain default off (`PROOFHUNTER_ENABLE_GITHUB_CHECKS=false`). Claims return
+None unless settings explicitly enable checks AND profile is live. Mutations also
+recheck this fence; offline can never publish through these store methods.
+finish's existing optional intent creation behavior is unchanged.
 
-The refreeze resolves the former missing progress/heartbeat contracts. Integration
-must reserve the resolved pin before fetching source and reserve allocations
-before every provider call/retry, preserving ambiguous charges. On reclaim reuse
-the durable pin rather than resolving a moving head. A duplicate reservation or
-lost acknowledgement does not authorize I/O. Legacy checkpoint=None must fail
-closed. No frozen-contract blocker remains.
+Publisher API:
 
-## Fixtures and tests
+1. claim_outbox(owner, lease_seconds=30) returns a fenced OutboxLease, or None.
+2. begin_outbox_attempt(lease, CREATE/RECONCILE) reserves durably BEFORE external I/O.
+3. mark_outbox_published(lease, check_run_id, http_status=...) persists a successful
+   create and check ID; record_outbox_attempt records RETRYABLE or AMBIGUOUS.
+   mark_outbox_ambiguous is the ambiguity shortcut.
+4. After an ambiguous/interrupted create, CREATE is refused until a reserved
+   reconciliation completes. reconcile_outbox requires original head_sha and
+   external_id, successful bounded lookup status, and either the verified check
+   ID or a definitive absence result. A match publishes without another create;
+   definitive absence permits a later create. Uncertain create failures cannot
+   be marked directly retryable; only definitive HTTP 429 can retry directly.
+5. Five external-call reservations maximum; two ambiguous outcomes cause held
+   state for operator review. Lease expiry/reclaim preserves uncertainty and
+   rejects stale owners/epochs. No automatic held-state release is provided.
 
-Adjacent boundaries use FixtureRepositoryValidator, FixtureWebhookVerifier,
-InMemoryRunStore, SteppingClock and SequentialIds. Sealed evidence derives from
-`fixtures/demo/receipts/buggy.seed17.json`; a live-shaped mock receipt/check pair
-tests atomic outbox behavior without any provider or publisher interaction.
-The same intake/conflict/quota/checkpoint/reserve_progress/attempt/probe/finish/replay scenario runs
-against SQLite and InMemoryRunStore. Tests additionally cover each stale, expired,
-wrong-owner and terminal worker write, lease renewal/reclaim, reopen/migrations,
-concurrent intake, bounded busy handling, injected SQL rollback failures, quota
-windows, budget enforcement, auth separation, body limits, public projection,
-webhook enqueue/dedupe and readyz/error behavior.
-New tests/store/test_progress.py covers heartbeat TTL, regression, equal-time
-semantics, config replacement, deterministic selection, reopen persistence,
-readiness predicates, progress rejection atomicity, all target fields, lower caps,
-concurrent duplicate reservations, injected rollback, v1 upgrades and replay pins.
+outbox_attempts(run_id) returns append-only numbered UTC audit events: operation,
+bounded sanitized outcome, optional validated HTTP status. Start and completion
+are separate immutable records, not rewritten provider responses. No provider
+bodies, arbitrary messages or credentials are stored. No publisher loop/provider
+calls were added; the publisher must perform and verify the actual lookup.
+
+## Step C: bounded retention
+
+`purge_expired(now, operations_ttl=timedelta(days=7),
+receipts_ttl=timedelta(days=30), batch_limit=500, dry_run=False)` returns sanitized
+per-table deletion counts plus retained_outbox and retained_replay_parents counts.
+Batch limit is 1..5000. Time must be timezone-aware; TTLs positive and ordered.
+
+- One BEGIN IMMEDIATE transaction; at most batch_limit deletions per table per
+  call, deterministic terminal-time/run-ID/row order. Repeated calls converge.
+- Nonterminal runs and live worker/outbox leases are protected. Active replay
+  ancestors are protected transitively, including their operational records.
+- At seven days from terminal updated_at, delete run events, attempts,
+  observations/probes, intake/delivery/idempotency records and terminal quota
+  reservations. Settled outbox history is eligible; pending/held history remains.
+  Heartbeats expire from retention seven days after their heartbeat expiry.
+- Retain runs, sealed receipt (including original probes/replay/source hashes),
+  target/checkpoint and enrollment snapshot until receipt retention. A ten-day
+  original receipt still creates a 202 replay with its original bindings.
+- At thirty days, remove settled/unclaimed outbox, receipt and finally run only
+  after remaining FK children are removed. Pending/claimed/held or unknown outbox
+  state is retained and counted. Any retained replay child protects its parent's
+  receipt/run; later calls can remove parents after children expire and are purged.
+  Reported retained-parent counts describe blockers at the start of receipt cleanup.
+- After complete expiry, receipt GET is 404 and new replay intake is 409. Bounded
+  cleanup may require multiple calls before an entire expired run can disappear.
+- Protected-table DELETEs require retention_gate.enabled=1. Purge sets/clears it
+  inside its writer transaction. Failure rolls back deletes AND gate changes.
+  Dry run simulates the same bounded deletes under a savepoint and rolls them back,
+  returning counts without changing data or leaving the gate enabled. This gate
+  protects ordinary code/ad-hoc DELETEs, not a malicious administrator who can
+  explicitly modify the gate/schema.
+
+Operator endpoint: `POST /v1/retention/purge` with `{}` defaults to dry_run=true,
+batch_limit=500. `{ "dry_run": false, "batch_limit": 500 }` applies cleanup.
+It uses trusted injected clock/default TTLs, returns only dry_run and count maps,
+rejects extra fields and enforces the same missing/equal/cross-token auth fences.
+No scheduler is installed.
 
 ## Verification
 
-All commands use `PROOFHUNTER_PROFILE=offline UV_OFFLINE=1 uv run --locked`:
+All commands prefixed `UV_OFFLINE=1 PROOFHUNTER_PROFILE=offline uv run --locked`:
 
-- `pytest -q tests/store`: `87 passed, 1 warning in 2.53s`.
-- `pytest -q`: `1 failed, 857 passed, 1 warning in 14.38s`.
-  Sole failure: tests/integration/test_pipeline.py:413,
-  test_readyz_current_contract_defect, `assert 503 == 200`. It constructs
-  ApiDependencies without heartbeat_store/fingerprint and expects the obsolete
-  heartbeat-unavailable 200 response. This file is outside permitted ownership
-  and was not edited; integration must update its expectation and wiring.
-- `ruff check src/proofhunter/store src/proofhunter/api.py tests/store`:
-  `All checks passed!`.
-- `mypy src/proofhunter/store src/proofhunter/api.py tests/store`:
-  `Success: no issues found in 4 source files`.
-  The configured setup gate does not typecheck role tests; this is an additional check.
-- `python tools/gate.py setup`: `251 passed in 2.25s`, `All checks passed!`,
-  `Success: no issues found in 14 source files`, `[gate] setup PASSED`.
-- `python tools/gate.py integrated`: required implementations present (15 modules),
-  setup passes, then `1 failed, 857 passed, 1 warning in 12.61s` on the same
-  integration assertion. Final output:
-  `[gate] integrated FAILED: full offline suite: exit 1, expected zero`.
-  Subsequent demo/benchmark steps were not reached.
-- No pre-commit configuration is present. CI calls the setup gate and, after
-  pipeline exists, integrated gate. No ruff format stage is configured;
-  owned Python files were formatted with ruff.
-- Existing pinned TestClient stack emits one warning:
-  `StarletteDeprecationWarning: Using httpx with starlette.testclient is deprecated;
-  install httpx2 instead.` Environment checked: correct repo .venv with fastapi
-  0.162.2, httpx 0.28.1 and starlette 1.10.0. Lock/dependencies were not changed and
-  the warning was not suppressed.
+- pytest -q: `980 passed, 1 warning in 21.00s`.
+- ruff check .: `All checks passed!`.
+- mypy src bench tools tests/integration:
+  `Success: no issues found in 73 source files`.
+- mypy tests/store: `Success: no issues found in 5 source files`.
+- python tools/gate.py setup: `271 passed in 2.67s`, `[gate] setup PASSED`.
+- python tools/gate.py integrated: `980 passed, 1 warning in 16.15s`, demos for
+  buggy/fixed, counterexample replay, tamper refusal and 120 sample bench rows;
+  `[gate] integrated PASSED`.
 
-Environment provisioning initially needed the locked mypy wheel; the user
-completed dependency sync. All subsequent checks ran with UV_OFFLINE=1, and setup
-confirmed the environment matches the unchanged lock (103 packages).
+Store tests cover credential fences, injected live readiness, arbitrary eligible
+replay, missing bindings, populated v1/v2/v3 upgrades, terminal immutability,
+outbox concurrency/fencing/lost acknowledgements/reconciliation/retry bounds,
+retention age boundaries, active/replay-parent protection, settled versus held
+outboxes, bounded convergence, dry run, operator auth and SQL rollback/gate safety.
+No pre-commit configuration or active hooks found. uv.lock/pyproject.toml unchanged.
+The existing StarletteDeprecationWarning about httpx/testclient remains; correct
+repo .venv and locked dependency versions were checked, not modified/suppressed.
 
-## Remaining integration/operational work
+## Cross-owner follow-ups
 
-No autonomous retention sweeper is installed; apply reviewed seven-day operational
-and thirty-day public receipt retention in integration/operations, preserving any
-archived demo replay artifacts. No live behavior or UI was visually verified.
-Worker reservation/recovery orchestration, heartbeat refresh, source availability, webhook stale-head
-handling and outbox publishing/reconciliation remain integration-owned. No new
-store-role blockers remain.
+- **cli.py live composition:** bind real validator/webhook/provider dependencies
+  and enable live CLI only through authorized gates. Preserve common fingerprint
+  computation and worker heartbeat injection/refresh.
+- **Publisher integration:** call fenced outbox methods, reserve before I/O,
+  recheck current PR head, perform commit/external-ID reconciliation and honor
+  held state. The existing GitHub adapter's in-memory ambiguity set alone is not
+  durable integration with this outbox. No network I/O belongs in DB transactions.
+- **Retention scheduler:** call the store/operator endpoint from reviewed cli/worker
+  scheduling; run bounded batches until converged and monitor retained blockers.
+- **In-memory PEM:** GitHub/config owners must handle in-memory App private-key PEM
+  support; no credentials or configuration files were changed in this lane.
+- **Source availability:** pre-fetch replay 409 checks are store/API-level only:
+  missing/corrupt archived bindings are rejected without providers. GitHub source
+  deletion/access loss cannot be detected here without external fetch; worker
+  fetch/provenance checks and original enrollment/archive availability remain
+  integration/operator responsibilities. Keep any operator demo bundle outside
+  database retention if replay after receipt expiry is required.
+- **Legacy enrollment snapshots/webhooks:** old rows without captured enrollment
+  still need the reviewed registry/archive; webhook intake lacks enrollment in
+  its frozen port. Do not fabricate historical configuration or claim the event's
+  original head without reviewed recovery wiring.

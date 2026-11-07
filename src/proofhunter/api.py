@@ -7,12 +7,13 @@ import hmac
 import json
 import uuid
 from collections.abc import Awaitable, Callable, Mapping
+from datetime import datetime
 from typing import Protocol, runtime_checkable
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
-from pydantic import ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from starlette.exceptions import HTTPException
 
 from proofhunter.contracts import (
@@ -30,6 +31,20 @@ from proofhunter.ports import AdapterError, ApiDependencies, IdempotencyConflict
 @runtime_checkable
 class _DatabaseReadiness(Protocol):
     def ready(self) -> bool: ...
+
+
+@runtime_checkable
+class _RetentionStore(Protocol):
+    def purge_expired(
+        self, now: datetime, *, batch_limit: int = 500, dry_run: bool = False
+    ) -> dict[str, int]: ...
+
+
+class RetentionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    dry_run: bool = True
+    batch_limit: int = Field(default=500, ge=1, le=5000)
 
 
 def _error(
@@ -66,8 +81,22 @@ def create_app(deps: ApiDependencies) -> FastAPI:
     ) -> Response:
         try:
             if request.url.path.startswith("/v1/") or request.url.path == "/v1":
-                operator = request.method == "POST" and request.url.path.rstrip("/").endswith(
-                    "/replays"
+                api_token = deps.settings.api_token
+                operator_token = deps.settings.operator_token
+                if (
+                    api_token is None
+                    or operator_token is None
+                    or hmac.compare_digest(
+                        api_token.get_secret_value().encode(),
+                        operator_token.get_secret_value().encode(),
+                    )
+                ):
+                    return _error(
+                        401, ReasonCode.UNAUTHORIZED, headers={"WWW-Authenticate": "Bearer"}
+                    )
+                operator = request.method == "POST" and (
+                    request.url.path.rstrip("/").endswith("/replays")
+                    or request.url.path.rstrip("/") == "/v1/retention/purge"
                 )
                 token = deps.settings.operator_token if operator else deps.settings.api_token
                 auth = request.headers.get("authorization", "")
@@ -196,6 +225,19 @@ def create_app(deps: ApiDependencies) -> FastAPI:
     @app.post("/v1/runs/{run_id}/replays", status_code=202, response_model=RunStatus)
     def replay(run_id: str, request: Request, body: ReplayRequest) -> RunStatus:
         return deps.store.create_replay(run_id, body, idempotency_key=_key(request))
+
+    @app.post("/v1/retention/purge")
+    def retention(body: RetentionRequest) -> dict[str, bool | dict[str, int]]:
+        if not isinstance(deps.store, _RetentionStore):
+            raise AdapterError(
+                "store", ReasonCode.PROVIDER_UNAVAILABLE, "retention unavailable", retryable=False
+            )
+        return {
+            "dry_run": body.dry_run,
+            "counts": deps.store.purge_expired(
+                deps.clock.now(), batch_limit=body.batch_limit, dry_run=body.dry_run
+            ),
+        }
 
     @app.post("/webhooks/github")
     async def webhook(request: Request) -> Response:
