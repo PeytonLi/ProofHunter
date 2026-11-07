@@ -23,6 +23,7 @@ from fixtures import catalog
 from fixtures.reference import oracle_expected
 from proofhunter import bayes
 from proofhunter import contracts as c
+from proofhunter.meta import build_request
 from research.baselines import frontier, meta, selectors
 from research.baselines.config import load_models
 from research.baselines.ledger import JsonlLedger, model_call_entry
@@ -37,6 +38,7 @@ from research.schemas.models import (
     ContextFile,
     CostStatus,
     GeneratorInput,
+    LedgerEntry,
     LedgerPhase,
     MeasurementMode,
     Outcome,
@@ -148,6 +150,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--case", action="append", choices=sorted({x for x, _ in CASES}))
     parser.add_argument("--tag", default="")
     parser.add_argument("--max-cases", type=int, default=len(CASES))
+    parser.add_argument("--meta-only", action="store_true",
+                        help="skip the frontier arms (Meta + deterministic arms only)")
+    parser.add_argument("--meta-arm", action="append", default=[],
+                        help="restrict to these Meta arm ids (default: all enabled)")
     args = parser.parse_args(argv)
     args.out.mkdir(parents=True, exist_ok=True)
     ledger: Ledger = JsonlLedger(args.out / "ledger.jsonl")
@@ -161,28 +167,33 @@ def main(argv: list[str] | None = None) -> int:
         arms: list[tuple[Selector, EpisodeContext]] = [
             (selectors.make_selector(a, seed=seed), ctx) for a in
             ("fixed_order", "uniform_random", "simple_heuristic", "builtin_eig")]
-        meta_row: dict[str, Any] = {}
+        meta_rows: dict[str, dict[str, Any]] = {}
         if args.live:
-            gen = meta.meta_generator(ledger=ledger)
-            assert isinstance(gen, meta.MetaGenerator)
-            gen.case_id, gen.estimated_job_usd = ctx.case_id, ESTIMATED_JOB_USD
-            t0 = time.monotonic()
-            plan = gen.propose(generator_input(ctx))
-            last = gen.last
-            meta_row = {"meta_wall_ms": round((time.monotonic() - t0) * 1000, 1),
-                        "meta_mode": last.mode.value if last else None,
-                        "meta_attempts": last.attempts if last else 0,
-                        "meta_reason": last.reason_code.value if last and last.reason_code
-                        else None, "meta_hypotheses": [h.mode.value for h in plan.hypotheses]}
-            arms.append((selectors.make_selector("meta_muse_spark_eig", seed=seed),
-                         make_context(case, seed, plan)))
-            for factory in (frontier.frontier_reviewer, frontier.frontier_agent):
+            for arm_id, model_id in meta.meta_arms().items():
+                if args.meta_arm and arm_id not in args.meta_arm:
+                    continue
+                gen = meta.meta_generator(ledger=ledger, model_id=model_id)
+                assert isinstance(gen, meta.MetaGenerator)
+                gen.case_id, gen.estimated_job_usd = ctx.case_id, ESTIMATED_JOB_USD
+                t0 = time.monotonic()
+                plan = gen.propose(generator_input(ctx))
+                last = gen.last
+                meta_rows[arm_id] = {
+                    "meta_model_id": gen.model,
+                    "meta_wall_ms": round((time.monotonic() - t0) * 1000, 1),
+                    "meta_mode": last.mode.value if last else None,
+                    "meta_attempts": last.attempts if last else 0,
+                    "meta_reason": last.reason_code.value if last and last.reason_code
+                    else None, "meta_hypotheses": [h.mode.value for h in plan.hypotheses]}
+                arms.append((selectors.make_selector(arm_id, seed=seed),
+                             make_context(case, seed, plan)))
+            for factory in () if args.meta_only else (frontier.frontier_reviewer,
+                                                       frontier.frontier_agent):
                 sel = factory(args.model, estimated_job_usd=ESTIMATED_JOB_USD, **common)
                 arms.append((sel, ctx))
         for sel, sctx in arms:
             row = run_episode(sel, sctx, case) | _usage(sel)
-            if sel.arm_id == "meta_muse_spark_eig":
-                row |= meta_row
+            row |= meta_rows.get(sel.arm_id, {})
             if sel.arm_id.startswith("frontier"):
                 row["frontier_model_id"] = args.model
             rows.append(row)
@@ -204,6 +215,40 @@ def record_exploratory_call(ledger: Ledger, cost_usd: float, model_id: str) -> N
         pricing_reference=f"{cfg['pricing_reference']}; model={model_id}; upper bound, usage "
         "not retained", pricing_date=cfg["pricing_date"], wall_ms=None, estimated_job_usd=0.01,
         phase=LedgerPhase.PILOT, mode=MeasurementMode.LIVE, run_id=None, case_id=None))
+
+
+def reprice_meta_rows(path: Path) -> int:
+    """Price legacy Meta rows recorded as ``unknown`` (no usage kept) at the upper bound.
+
+    Rewrites ``path`` in place (same entry ids); returns the number of rows repriced.
+    """
+    cfg = load_models()["meta"]
+    builtin = c.builtin_hypothesis_payload()
+    entries = [LedgerEntry.model_validate_json(line)
+               for line in path.read_text().splitlines() if line.strip()]
+    repriced = 0
+    out = []
+    for entry in entries:
+        if (entry.provider == "meta" and entry.cost_status is CostStatus.UNKNOWN
+                and entry.unit == "http_attempts" and entry.case_id):
+            _, case, seed = entry.case_id.split("-")
+            ctx = make_context(case, int(seed), builtin)
+            body = build_request(meta.planning_context(generator_input(ctx)), cfg["model_id"])
+            usage = meta.AttemptUsage(request_bytes=len(json.dumps(body).encode()))
+            price = cfg["pricing_usd_per_1m_tokens"][cfg["model_id"]]
+            entry = entry.model_copy(update={
+                "cost_usd": entry.quantity * meta.attempt_cost(usage, price),
+                "cost_status": CostStatus.ESTIMATED,
+                "pricing_reference": f"{cfg['pricing_reference']}; model={cfg['model_id']}; "
+                "repriced 2026-11-07, no usage recorded: upper bound per attempt "
+                "(input=ceil(request_bytes/3), output=max_completion_tokens)"})
+            entry = LedgerEntry.model_validate_json(entry.model_dump_json())
+            repriced += 1
+        out.append(entry.model_dump_json())
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text("".join(line + "\n" for line in out))
+    tmp.replace(path)
+    return repriced
 
 
 Main = Callable[[list[str] | None], int]

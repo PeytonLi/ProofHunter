@@ -1,13 +1,18 @@
 """``meta_muse_spark_eig`` generator: the production Meta port (muse-spark), Snap disabled.
 
 Uses ``proofhunter.meta.create_meta_port`` read-only. Any adapter error falls back to the built-in
-plan exactly as the production pipeline does; the fallback reason is kept on ``last``.
+plan exactly as the production pipeline does; the fallback reason is kept on ``last``. A delegating
+transport reads token usage from each HTTP attempt for the cost ledger (bodies are not retained).
+Arms (both on by default, same settings): ``meta_muse_spark_eig`` (muse-spark-1.3) and
+``meta_muse_wonder_eig`` (muse-wonder-1.0).
 """
 
 from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
+import math
 import time
 import uuid
 from collections.abc import Awaitable, Callable
@@ -20,13 +25,96 @@ from pydantic import SecretStr
 from fixtures import catalog
 from proofhunter import contracts as c
 from proofhunter.config import META_DEFAULT_MODEL, MetaSettings
-from proofhunter.meta import MAX_COMPLETION_TOKENS, REASONING_EFFORT, MetaError, create_meta_port
+from proofhunter.meta import (
+    MAX_COMPLETION_TOKENS,
+    REASONING_EFFORT,
+    RESPONSE_BYTES,
+    MetaError,
+    create_meta_port,
+)
 from research.baselines.config import load_models
 from research.baselines.ledger import model_call_entry
 from research.schemas.interfaces import HypothesisGenerator, Ledger
 from research.schemas.models import CostStatus, GeneratorInput, LedgerPhase, MeasurementMode
 
 GENERATOR_ID = "meta_muse_spark"
+GENERATOR_IDS = {"muse-spark-1.3": GENERATOR_ID, "muse-wonder-1.0": "meta_muse_wonder"}
+_HOP_HEADERS = ("content-encoding", "content-length", "transfer-encoding")
+
+
+@dataclass
+class AttemptUsage:
+    request_bytes: int
+    prompt_tokens: int | None = None
+    cached_tokens: int | None = None
+    completion_tokens: int | None = None
+
+    @property
+    def complete(self) -> bool:
+        return self.prompt_tokens is not None and self.completion_tokens is not None
+
+
+def _count(value: object) -> int | None:
+    ok = isinstance(value, int) and not isinstance(value, bool) and value >= 0
+    return value if ok else None  # type: ignore[return-value]
+
+
+def parse_usage(body: bytes) -> tuple[int | None, int | None, int | None]:
+    """``(prompt, cached, completion)`` tokens from a chat-completions body, ``None`` if absent."""
+    try:
+        outer = json.loads(body)
+    except ValueError:
+        return None, None, None
+    usage = outer.get("usage") if isinstance(outer, dict) else None
+    if not isinstance(usage, dict):
+        return None, None, None
+    details = usage.get("prompt_tokens_details")
+    cached = _count(details.get("cached_tokens")) if isinstance(details, dict) else None
+    return _count(usage.get("prompt_tokens")), cached, _count(usage.get("completion_tokens"))
+
+
+class UsageTransport(httpx.AsyncBaseTransport):
+    """Delegates every request and records per-attempt token usage; caps the body it buffers."""
+
+    def __init__(self, inner: httpx.AsyncBaseTransport | None = None) -> None:
+        self._inner = inner or httpx.AsyncHTTPTransport()
+        self.attempts: list[AttemptUsage] = []
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        usage = AttemptUsage(request_bytes=len(request.content))
+        self.attempts.append(usage)
+        response = await self._inner.handle_async_request(request)
+        raw = bytearray()
+        try:
+            async for chunk in response.aiter_bytes():
+                raw.extend(chunk)
+                if len(raw) > RESPONSE_BYTES:
+                    break
+        finally:
+            await response.aclose()
+        body = bytes(raw)
+        usage.prompt_tokens, usage.cached_tokens, usage.completion_tokens = parse_usage(body)
+        headers = [(k, v) for k, v in response.headers.multi_items()
+                   if k.lower() not in _HOP_HEADERS]
+        return httpx.Response(response.status_code, headers=headers, content=body,
+                              request=request)
+
+    async def aclose(self) -> None:
+        await self._inner.aclose()
+
+
+def attempt_cost(usage: AttemptUsage, price: dict[str, float]) -> float:
+    """Exact from usage; otherwise an upper bound (request bytes / 3 in, max completion out)."""
+    if usage.complete:
+        assert usage.prompt_tokens is not None
+        assert usage.completion_tokens is not None
+        cached = min(usage.cached_tokens or 0, usage.prompt_tokens)
+        tokens = ((usage.prompt_tokens - cached) * price["input"]
+                  + cached * price["cached_input"] + usage.completion_tokens * price["output"])
+    else:
+        tokens = (math.ceil(usage.request_bytes / 3) * price["input"]
+                  + MAX_COMPLETION_TOKENS * price["output"])
+    return tokens / 1_000_000
 
 
 @dataclass(frozen=True)
@@ -88,37 +176,66 @@ class MetaGenerator:
 
     def propose(self, prompt: GeneratorInput) -> c.HypothesisPlanPayload:
         context = planning_context(GeneratorInput.model_validate(prompt.model_dump()))
-        port = create_meta_port(self._settings, transport=self.transport, sleep=self.sleep)
+        usage = UsageTransport(self.transport)
+        port = create_meta_port(self._settings, transport=usage, sleep=self.sleep)
         start = time.monotonic()
         try:
             plan = asyncio.run(port.propose(context))
         except MetaError as error:
-            self._record(error.attempts, start)
+            self._record(usage.attempts, start)
             self.calls.append(MetaCall(c.ProviderMode.FALLBACK, error.attempts, None,
                                        error.code, self.model))
             return c.builtin_hypothesis_payload()
-        self._record(plan.provenance.attempts, start)
+        self._record(usage.attempts, start)
         self.calls.append(MetaCall(c.ProviderMode.LIVE, plan.provenance.attempts,
                                    plan.provenance.latency_ms, None, self.model))
         return c.HypothesisPlanPayload(hypotheses=plan.hypotheses)
 
-    def _record(self, attempts: int, start: float) -> None:
-        if self.ledger is None or attempts == 0:
+    def _record(self, attempts: list[AttemptUsage], start: float) -> None:
+        if self.ledger is None or not attempts:
             return
         meta = load_models()["meta"]
+        price = meta["pricing_usd_per_1m_tokens"][self.model]
+        complete = all(a.complete for a in attempts)
+        if complete:
+            unit, quantity = "tokens", float(sum(
+                (a.prompt_tokens or 0) + (a.completion_tokens or 0) for a in attempts))
+            note = "usage from responses"
+        else:
+            unit, quantity = "http_attempts", float(len(attempts))
+            bounded = sum(not a.complete for a in attempts)
+            note = (f"{bounded}/{len(attempts)} attempts without usage priced at upper bound "
+                    "(input=ceil(request_bytes/3), output=max_completion_tokens)")
+        status = (CostStatus.MEASURED if complete and price["verified"]
+                  else CostStatus.ESTIMATED)
         self.ledger.append(model_call_entry(
-            provider="meta", unit="http_attempts", quantity=float(attempts), cost_usd=None,
-            cost_status=CostStatus.UNKNOWN, pricing_reference=meta["pricing_reference"],
+            provider="meta", unit=unit, quantity=quantity,
+            cost_usd=sum(attempt_cost(a, price) for a in attempts), cost_status=status,
+            pricing_reference=f"{meta['pricing_reference']}; model={self.model}; {note}",
             pricing_date=meta["pricing_date"], wall_ms=(time.monotonic() - start) * 1000,
             estimated_job_usd=self.estimated_job_usd, phase=self.phase, mode=self.mode,
             run_id=None, case_id=self.case_id))
 
 
 def meta_generator(*, api_key: str | None = None, ledger: Ledger | None = None,
-                   transport: httpx.AsyncBaseTransport | None = None) -> HypothesisGenerator:
-    """Production Meta port; ``api_key`` defaults to ``MODEL_API_KEY``. Snap is never called."""
+                   transport: httpx.AsyncBaseTransport | None = None,
+                   model_id: str | None = None) -> HypothesisGenerator:
+    """Production Meta port; ``api_key`` defaults to ``MODEL_API_KEY``. Snap is never called.
+
+    ``model_id`` defaults to muse-spark-1.3; any model in ``models.json`` meta ``arms``
+    (muse-wonder-1.0) uses the same adapter settings.
+    """
     import os
 
+    cfg = load_models()["meta"]
+    model = model_id or cfg["model_id"]
+    if model not in cfg["arms"].values():
+        raise ValueError(f"unknown Meta model: {model}")
     key = api_key if api_key is not None else os.environ.get("MODEL_API_KEY")
-    return MetaGenerator(api_key=key, model=load_models()["meta"]["model_id"], ledger=ledger,
-                         transport=transport)
+    return MetaGenerator(api_key=key, model=model, ledger=ledger, transport=transport,
+                         generator_id=GENERATOR_IDS[model])
+
+
+def meta_arms() -> dict[str, str]:
+    """Selector arm id -> Meta model id, for every enabled Meta arm."""
+    return dict(load_models()["meta"]["arms"])

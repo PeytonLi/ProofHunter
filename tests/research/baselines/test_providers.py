@@ -10,10 +10,12 @@ import httpx
 import pytest
 
 from proofhunter import contracts as c
+from proofhunter.meta import RESPONSE_BYTES
 from research.baselines import frontier as f
 from research.baselines import meta as m
+from research.baselines.config import load_models
 from research.baselines.ledger import MemoryLedger
-from research.baselines.selectors import fixed_choice
+from research.baselines.selectors import fixed_choice, make_selector
 from research.baselines.smoke import generator_input, run_episode
 from research.schemas.interfaces import EpisodeContext, EpisodeState, PairFeedback, Selector
 from research.schemas.models import CostStatus, MeasurementMode, Outcome
@@ -239,7 +241,11 @@ def test_meta_success_uses_production_request(ctx: EpisodeContext) -> None:
     assert seen[0]["model"] == "muse-spark-1.3"
     (entry,) = ledger.entries()
     assert entry.provider == "meta"
-    assert entry.cost_status is CostStatus.UNKNOWN
+    assert entry.unit == "tokens"
+    assert entry.quantity == 1026
+    assert entry.cost_status is CostStatus.ESTIMATED
+    assert entry.cost_usd == pytest.approx((812 * 1.25 + 214 * 4.25) / 1e6)
+    assert "pending page verification" in (entry.pricing_reference or "")
 
 
 @pytest.mark.parametrize(("handler", "reason", "attempts"), [
@@ -256,7 +262,12 @@ def test_meta_failures_fall_back_to_builtin(ctx: EpisodeContext, handler: Any,
     assert gen.last.mode is c.ProviderMode.FALLBACK
     assert gen.last.reason_code is reason
     assert gen.last.attempts == attempts
-    assert ledger.entries()[0].quantity == attempts
+    (entry,) = ledger.entries()
+    assert entry.quantity == attempts
+    assert entry.unit == "http_attempts"
+    assert entry.cost_status is CostStatus.ESTIMATED
+    assert entry.cost_usd is not None
+    assert entry.cost_usd >= attempts * 4096 * 4.25 / 1e6
 
 
 def test_meta_without_key_is_offline_fallback(ctx: EpisodeContext) -> None:
@@ -281,3 +292,78 @@ def test_agent_told_eligible_ids_after_feedback(ctx: EpisodeContext) -> None:
     nudge = script.bodies[1]["input"][-1]
     assert nudge["role"] == "user"
     assert "c02, c07" in nudge["content"]
+
+
+def test_meta_usage_counts_cached_tokens(ctx: EpisodeContext) -> None:
+    body = json.loads((PROVIDERS / "meta_response.json").read_bytes())
+    body["usage"] = {"prompt_tokens": 1000, "completion_tokens": 100,
+                     "prompt_tokens_details": {"cached_tokens": 400}}
+    ledger = MemoryLedger()
+    meta_gen(lambda r: httpx.Response(200, json=body), ledger).propose(generator_input(ctx))
+    (entry,) = ledger.entries()
+    assert entry.cost_usd == pytest.approx((600 * 1.25 + 400 * 0.15 + 100 * 4.25) / 1e6)
+
+
+def test_meta_oversized_body_still_rejected(ctx: EpisodeContext) -> None:
+    big = httpx.Response(200, content=b"x" * (RESPONSE_BYTES * 2))
+    gen = meta_gen(lambda r: big, MemoryLedger())
+    assert gen.propose(generator_input(ctx)) == c.builtin_hypothesis_payload()
+    assert gen.last is not None
+    assert gen.last.reason_code is c.ReasonCode.PROVIDER_INVALID_RESPONSE
+
+
+def test_meta_wonder_arm_enabled_by_default() -> None:
+    cfg = load_models()["meta"]
+    assert m.meta_arms() == {"meta_muse_spark_eig": "muse-spark-1.3",
+                             "meta_muse_wonder_eig": "muse-wonder-1.0"}
+    assert cfg["pricing_usd_per_1m_tokens"]["muse-wonder-1.0"] == {
+        "input": 4.0, "cached_input": 0.2, "output": 20.0, "verified": False}
+    with pytest.raises(ValueError, match="unknown"):
+        m.meta_generator(api_key="k", model_id="muse-other")
+    gen = m.meta_generator(api_key="k", model_id="muse-wonder-1.0")
+    assert isinstance(gen, m.MetaGenerator)
+    assert (gen.model, gen.generator_id) == ("muse-wonder-1.0", "meta_muse_wonder")
+    assert m.meta_generator(api_key="k").generator_id == "meta_muse_spark"
+    assert make_selector("meta_muse_wonder_eig", seed=1).arm_id == "meta_muse_wonder_eig"
+
+
+def test_meta_wonder_request_uses_same_settings(ctx: EpisodeContext) -> None:
+    seen: list[dict[str, Any]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(json.loads(request.content))
+        return meta_ok()
+
+    gen = m.meta_generator(api_key="k", model_id="muse-wonder-1.0",
+                           transport=httpx.MockTransport(handler))
+    assert isinstance(gen, m.MetaGenerator)
+    gen.sleep = _no_sleep
+    gen.propose(generator_input(ctx))
+    assert seen[0]["model"] == "muse-wonder-1.0"
+    assert (seen[0]["max_completion_tokens"], seen[0]["reasoning_effort"]) == (4096, "low")
+
+
+def test_reprice_legacy_meta_rows(tmp_path: Path) -> None:
+    from research.baselines.ledger import JsonlLedger, model_call_entry
+    from research.baselines.smoke import reprice_meta_rows
+    from research.schemas.models import LedgerPhase
+
+    path = tmp_path / "ledger.jsonl"
+    ledger = JsonlLedger(path)
+    common: dict[str, Any] = {"pricing_date": "2026-11-07", "wall_ms": 1.0,
+                              "estimated_job_usd": 2.0, "phase": LedgerPhase.PILOT,
+                              "mode": MeasurementMode.LIVE, "run_id": None}
+    ledger.append(model_call_entry(provider="meta", unit="http_attempts", quantity=2.0,
+                                   cost_usd=None, cost_status=CostStatus.UNKNOWN,
+                                   pricing_reference="unpublished",
+                                   case_id="demo-buggy-1633385816", **common))
+    ledger.append(model_call_entry(provider="openai", unit="tokens", quantity=5.0,
+                                   cost_usd=0.1, cost_status=CostStatus.MEASURED,
+                                   pricing_reference="ref", case_id=None, **common))
+    assert reprice_meta_rows(path) == 1
+    meta_row, other = ledger.entries()
+    assert meta_row.cost_status is CostStatus.ESTIMATED
+    assert meta_row.cost_usd is not None
+    assert meta_row.cost_usd > 2 * 4096 * 4.25 / 1e6
+    assert other.cost_usd == 0.1
+    assert reprice_meta_rows(path) == 0

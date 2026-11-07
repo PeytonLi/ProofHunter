@@ -1,0 +1,260 @@
+{
+  "generated_at": "2026-11-07T23:15:13.262462+00:00",
+  "measurement_mode": "live",
+  "phase": "pilot",
+  "frontier_model_id": "gpt-6.1-sol",
+  "cases": [
+    [
+      "buggy",
+      1633385816
+    ],
+    [
+      "half_even",
+      1633385816
+    ],
+    [
+      "fixed",
+      1633385816
+    ]
+  ],
+  "rows": [
+    {
+      "arm_id": "fixed_order",
+      "case_id": "demo-buggy-1633385816",
+      "expected_verdict": "confirmed_regression",
+      "pairs": 4,
+      "first_mismatch_step": 4,
+      "outcomes": [
+        "match",
+        "match",
+        "match",
+        "mismatch"
+      ],
+      "degraded": null,
+      "episode_wall_ms": 0.1
+    },
+    {
+      "arm_id": "uniform_random",
+      "case_id": "demo-buggy-1633385816",
+      "expected_verdict": "confirmed_regression",
+      "pairs": 3,
+      "first_mismatch_step": 3,
+      "outcomes": [
+        "match",
+        "match",
+        "mismatch"
+      ],
+      "degraded": null,
+      "episode_wall_ms": 0.1
+    },
+    {
+      "arm_id": "simple_heuristic",
+      "case_id": "demo-buggy-1633385816",
+      "expected_verdict": "confirmed_regression",
+      "pairs": 1,
+      "first_mismatch_step": 1,
+      "outcomes": [
+        "mismatch"
+      ],
+      "degraded": null,
+      "episode_wall_ms": 0.1
+    },
+    {
+      "arm_id": "builtin_eig",
+      "case_id": "demo-buggy-1633385816",
+      "expected_verdict": "confirmed_regression",
+      "pairs": 1,
+      "first_mismatch_step": 1,
+      "outcomes": [
+        "mismatch"
+      ],
+      "degraded": null,
+      "episode_wall_ms": 0.8
+    },
+    {
+      "arm_id": "meta_muse_wonder_eig",
+      "case_id": "demo-buggy-1633385816",
+      "expected_verdict": "confirmed_regression",
+      "pairs": 1,
+      "first_mismatch_step": 1,
+      "outcomes": [
+        "mismatch"
+      ],
+      "degraded": null,
+      "episode_wall_ms": 0.6,
+      "meta_model_id": "muse-wonder-1.0",
+      "meta_wall_ms": 10295.5,
+      "meta_mode": "live",
+      "meta_attempts": 1,
+      "meta_reason": null,
+      "meta_hypotheses": [
+        "per_item_rounding"
+      ]
+    },
+    {
+      "arm_id": "fixed_order",
+      "case_id": "demo-half_even-1633385816",
+      "expected_verdict": "confirmed_regression",
+      "pairs": 4,
+      "first_mismatch_step": 4,
+      "outcomes": [
+        "match",
+        "match",
+        "match",
+        "mismatch"
+      ],
+      "degraded": null,
+      "episode_wall_ms": 0.1
+    },
+    {
+      "arm_id": "uniform_random",
+      "case_id": "demo-half_even-1633385816",
+      "expected_verdict": "confirmed_regression",
+      "pairs": 1,
+      "first_mismatch_step": 1,
+      "outcomes": [
+        "mismatch"
+      ],
+      "degraded": null,
+      "episode_wall_ms": 0.0
+    },
+    {
+      "arm_id": "simple_heuristic",
+      "case_id": "demo-half_even-1633385816",
+      "expected_verdict": "confirmed_regression",
+      "pairs": 1,
+      "first_mismatch_step": 1,
+      "outcomes": [
+        "mismatch"
+      ],
+      "degraded": null,
+      "episode_wall_ms": 0.1
+    },
+    {
+      "arm_id": "builtin_eig",
+      "case_id": "demo-half_even-1633385816",
+      "expected_verdict": "confirmed_regression",
+      "pairs": 1,
+      "first_mismatch_step": 1,
+      "outcomes": [
+        "mismatch"
+      ],
+      "degraded": null,
+      "episode_wall_ms": 0.7
+    },
+    {
+      "arm_id": "meta_muse_wonder_eig",
+      "case_id": "demo-half_even-1633385816",
+      "expected_verdict": "confirmed_regression",
+      "pairs": 1,
+      "first_mismatch_step": 1,
+      "outcomes": [
+        "mismatch"
+      ],
+      "degraded": null,
+      "episode_wall_ms": 0.6,
+      "meta_model_id": "muse-wonder-1.0",
+      "meta_wall_ms": 9304.5,
+      "meta_mode": "live",
+      "meta_attempts": 1,
+      "meta_reason": null,
+      "meta_hypotheses": [
+        "half_even_rounding"
+      ]
+    },
+    {
+      "arm_id": "fixed_order",
+      "case_id": "demo-fixed-1633385816",
+      "expected_verdict": "no_defect_found",
+      "pairs": 6,
+      "first_mismatch_step": null,
+      "outcomes": [
+        "match",
+        "match",
+        "match",
+        "match",
+        "match",
+        "match"
+      ],
+      "degraded": null,
+      "episode_wall_ms": 0.4
+    },
+    {
+      "arm_id": "uniform_random",
+      "case_id": "demo-fixed-1633385816",
+      "expected_verdict": "no_defect_found",
+      "pairs": 6,
+      "first_mismatch_step": null,
+      "outcomes": [
+        "match",
+        "match",
+        "match",
+        "match",
+        "match",
+        "match"
+      ],
+      "degraded": null,
+      "episode_wall_ms": 0.1
+    },
+    {
+      "arm_id": "simple_heuristic",
+      "case_id": "demo-fixed-1633385816",
+      "expected_verdict": "no_defect_found",
+      "pairs": 6,
+      "first_mismatch_step": null,
+      "outcomes": [
+        "match",
+        "match",
+        "match",
+        "match",
+        "match",
+        "match"
+      ],
+      "degraded": null,
+      "episode_wall_ms": 0.9
+    },
+    {
+      "arm_id": "builtin_eig",
+      "case_id": "demo-fixed-1633385816",
+      "expected_verdict": "no_defect_found",
+      "pairs": 6,
+      "first_mismatch_step": null,
+      "outcomes": [
+        "match",
+        "match",
+        "match",
+        "match",
+        "match",
+        "match"
+      ],
+      "degraded": null,
+      "episode_wall_ms": 3.7
+    },
+    {
+      "arm_id": "meta_muse_wonder_eig",
+      "case_id": "demo-fixed-1633385816",
+      "expected_verdict": "no_defect_found",
+      "pairs": 6,
+      "first_mismatch_step": null,
+      "outcomes": [
+        "match",
+        "match",
+        "match",
+        "match",
+        "match",
+        "match"
+      ],
+      "degraded": null,
+      "episode_wall_ms": 3.3,
+      "meta_model_id": "muse-wonder-1.0",
+      "meta_wall_ms": 15027.9,
+      "meta_mode": "live",
+      "meta_attempts": 1,
+      "meta_reason": null,
+      "meta_hypotheses": [
+        "per_item_rounding",
+        "half_even_rounding"
+      ]
+    }
+  ]
+}

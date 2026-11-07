@@ -24,6 +24,7 @@ ARM_SELECTORS: Final = {
     "simple_heuristic": "simple_heuristic",
     "builtin_eig": "eig",
     "meta_muse_spark_eig": "eig",
+    "meta_muse_wonder_eig": "eig",
     "qwen_untuned_eig": "eig",
     "qwen_tuned_eig": "eig",
 }
