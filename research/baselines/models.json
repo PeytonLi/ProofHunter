@@ -5,10 +5,10 @@
     "provider": "openai",
     "endpoint": "https://api.openai.com/v1/responses",
     "key_env": "PROOFHUNTER_OPENAI_API_KEY",
-    "listing_check": "GET https://api.openai.com/v1/models with PROOFHUNTER_OPENAI_API_KEY on 2026-11-07 listed gpt-6-sol, gpt-6.1-sol and gpt-6-astra",
-    "primary_model_id": "gpt-6-sol",
+    "listing_check": "GET https://api.openai.com/v1/models with PROOFHUNTER_OPENAI_API_KEY on 2026-11-07 listed gpt-6.1-sol and gpt-6-astra",
+    "primary_model_id": "gpt-6.1-sol",
     "optional_model_id": "gpt-6-astra",
-    "selection_note": "Coordinator-pinned primary gpt-6-sol (listed by /v1/models). It is absent from the public pricing table on 2026-11-07, so its rate (assessment pin 2/0.2/10 USD per 1M) is unverified and its costs are recorded as cost_status=estimated; gpt-6-astra and gpt-6.1-sol rates were verified on the pricing page.",
+    "selection_note": "Coordinator decision 2026-11-07: primary gpt-6.1-sol (price verified on the public pricing page), optional gpt-6-astra; gpt-6-sol dropped (listed but unpriced). Earlier pilot ledger rows for gpt-6-sol remain as historical estimated spend.",
     "reasoning_effort": "low",
     "max_output_tokens": 4096,
     "temperature": null,
@@ -16,15 +16,9 @@
     "include": [
       "reasoning.encrypted_content"
     ],
-    "pricing_reference": "https://developers.openai.com/api/docs/pricing (Standard, short context <=272K input tokens)",
+    "pricing_reference": "https://developers.openai.com/api/docs/pricing (Standard tier, short context)",
     "pricing_date": "2026-11-07",
     "pricing_usd_per_1m_tokens": {
-      "gpt-6-sol": {
-        "input": 2.0,
-        "cached_input": 0.2,
-        "output": 10.0,
-        "verified": false
-      },
       "gpt-6.1-sol": {
         "input": 2.0,
         "cached_input": 0.1,
