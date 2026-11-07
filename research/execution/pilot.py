@@ -100,6 +100,11 @@ def summarize(rows: Sequence[RawResultRow], labels: Mapping[str, CaseLabel],
         invocations = [r.invocations.base + r.invocations.head + r.invocations.confirm
                        for r in arm_rows]
         walls = [r.timings.wall_ms for r in arm_rows]
+        startups = [r.timings.sandbox_startup_ms for r in arm_rows
+                    if r.timings.sandbox_startup_ms is not None]
+        cleanups = [r.timings.cleanup_ms for r in arm_rows if r.timings.cleanup_ms is not None]
+        executions = [r.timings.execution_ms for r in arm_rows
+                      if r.timings.execution_ms is not None]
         costs = [r.cost_usd for r in arm_rows]
         defect = [r for r in usable if (lab := labels.get(r.case_id)) is not None
                   and lab.kind is not LabelKind.CLEAN]
@@ -121,6 +126,9 @@ def summarize(rows: Sequence[RawResultRow], labels: Mapping[str, CaseLabel],
             "invocations_mean": statistics.fmean(invocations) if invocations else None,
             "invocations_max": max(invocations, default=None),
             "failed_invocations": sum(r.invocations.failed for r in arm_rows),
+            "sandbox_startup_ms_mean": statistics.fmean(startups) if startups else None,
+            "execution_ms_mean": statistics.fmean(executions) if executions else None,
+            "cleanup_ms_mean": statistics.fmean(cleanups) if cleanups else None,
             "wall_ms_p50": _pct(walls, 0.5), "wall_ms_p95": _pct(walls, 0.95),
             "wall_ms_per_usable_case": (sum(walls) / len(usable)) if usable else None,
             "cost_usd_total": (None if any(c is None for c in costs)
@@ -156,7 +164,7 @@ def project(summary: Mapping[str, Any], protocol: ProtocolV1) -> dict[str, Any]:
         * protocol.max_invocations_per_episode,
         "projected_usd_measured_arms": known_cost,
         "arms_with_unknown_cost": unknown,
-        "note": "Execution is local reviewed in-process code (0 USD). Model-arm dollars stay "
+        "note": "Execution is local reviewed template code in isolated child processes (0 USD). Model-arm dollars stay "
                 "unknown until their lanes report measured per-episode costs.",
     }
 
@@ -241,7 +249,7 @@ def render_markdown(report: Mapping[str, Any]) -> str:
     checks = report["dataset_checks"]
     lines = [
         "# R1 feasibility pilot", "",
-        f"Mode: {report['measurement_mode']} (in-process reviewed template execution; "
+        f"Mode: {report['measurement_mode']} (reviewed templates, one isolated local child process per invocation; "
         "not a cloud or sandbox timing). Split: "
         f"{report['split']}. Cases: {report['cases']}. Seeds: {len(report['seeds'])}. "
         f"Implementation: `{report['implementation_sha']}`.", "",
@@ -254,8 +262,8 @@ def render_markdown(report: Mapping[str, Any]) -> str:
         f"{checks['source_review_failures'] or 'none'}.", "",
         "## Arms (descriptive, small sample)", "",
         "| arm | episodes | usable | recall@1 | recall@3 | recall@6 | clean FP | mean invocations "
-        "| p50 ms | p95 ms | USD per usable case |",
-        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+        "| p50 ms | p95 ms | startup ms | exec ms | cleanup ms | USD per usable case |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
 
     def fmt(value: object) -> str:
@@ -268,7 +276,8 @@ def render_markdown(report: Mapping[str, Any]) -> str:
             f"| {arm_id} | {a['episodes']} | {a['usable_episodes']} | {fmt(recall.get('1'))} | "
             f"{fmt(recall.get('3'))} | {fmt(recall.get('6'))} | {a['clean_false_positives']} | "
             f"{fmt(a['invocations_mean'])} | {fmt(a['wall_ms_p50'])} | {fmt(a['wall_ms_p95'])} | "
-            f"{fmt(a['cost_usd_per_usable_case'])} |")
+            f"{fmt(a['sandbox_startup_ms_mean'])} | {fmt(a['execution_ms_mean'])} | "
+            f"{fmt(a['cleanup_ms_mean'])} | {fmt(a['cost_usd_per_usable_case'])} |")
     if report["skipped_arms"]:
         lines += ["", "Skipped arms: " + "; ".join(
             f"{k} ({v})" for k, v in sorted(report["skipped_arms"].items()))]

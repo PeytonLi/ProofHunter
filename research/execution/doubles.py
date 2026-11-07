@@ -13,6 +13,7 @@ from typing import Literal
 
 from bench.corpus import ROOT, load
 from bench.freeze import load_policy
+from fixtures.catalog import demo_enrollment
 from proofhunter import bayes
 from proofhunter.contracts import (
     BinaryOutcome,
@@ -26,9 +27,16 @@ from proofhunter.contracts import (
     canonical_sha256,
     input_sha256,
 )
+from research.execution.allowlist import from_bench_corpus
 from research.execution.pool import as_plan
 from research.execution.runner import ResearchEpisodeRunner
-from research.execution.sandbox import FaultInjectingExecutor, FaultKey, ReviewedTemplateExecutor
+from research.execution.sandbox import (
+    Executor,
+    FaultInjectingExecutor,
+    FaultKey,
+    ProcessTemplateExecutor,
+    ReviewedTemplateExecutor,
+)
 from research.schemas.interfaces import CaseSources, EpisodeContext, EpisodeState
 from research.schemas.models import (
     ArmSpec,
@@ -103,11 +111,16 @@ class MemoryLedger:
 
 def offline_runner(protocol: ProtocolV1, ledger: MemoryLedger | None = None, *,
                 faults: Mapping[FaultKey, ObservationOutcome | int] | None = None,
-                timeout_seconds: float | None = None) -> ResearchEpisodeRunner:
-    reviewed = set(load_policy().reviewed_source_sha256)
-    inner = ReviewedTemplateExecutor(
-        reviewed.__contains__,
-        timeout_seconds=timeout_seconds or protocol.invocation_timeout_seconds)
+                timeout_seconds: float | None = None,
+                isolated: bool = False) -> ResearchEpisodeRunner:
+    timeout = timeout_seconds or protocol.invocation_timeout_seconds
+    inner: Executor
+    if isolated:
+        inner = ProcessTemplateExecutor(from_bench_corpus(), demo_enrollment(),
+                                        timeout_seconds=timeout)
+    else:
+        reviewed = set(load_policy().reviewed_source_sha256)
+        inner = ReviewedTemplateExecutor(reviewed.__contains__, timeout_seconds=timeout)
     return ResearchEpisodeRunner(
         protocol=protocol, ledger=ledger or MemoryLedger(),
         executor=FaultInjectingExecutor(inner, dict(faults or {})), review=bench_review,

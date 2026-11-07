@@ -64,10 +64,10 @@ def _setup(
         from research.execution import doubles
 
         store = doubles.BenchStore(split)
-        runner = doubles.offline_runner(protocol)
+        runner = doubles.offline_runner(protocol, isolated=True)
         runner.ledger = ledger
         runner.implementation = implementation_sha()
-        factory = doubles.DoubleFactory()
+        factory = ArmFactory(FrozenArtifacts.load(getattr(args, "config", None)))
     else:
         if args.store is None:
             raise LaneMissing("--store is required (or --doubles for the self-test)")
@@ -134,7 +134,7 @@ def evaluate(argv: Sequence[str]) -> int:
             try:
                 generator = factory.generator(spec)
                 factory.selector(spec, protocol.replicate_seeds[0])
-            except LaneMissing as error:
+            except (LaneMissing, NotImplementedError) as error:
                 skipped[arm_id] = str(error)
                 continue
             for case in cases:

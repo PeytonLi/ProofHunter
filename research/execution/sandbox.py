@@ -11,12 +11,26 @@ import signal
 import threading
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from time import perf_counter_ns
 from types import ModuleType
 from typing import Final
 
-from proofhunter.contracts import CandidateInput, ObservationOutcome
+from pydantic import ValidationError
+
+from fixtures.adapters import SequentialIds
+from proofhunter.contracts import (
+    CandidateInput,
+    Enrollment,
+    ExecutionRequest,
+    ObservationOutcome,
+    ResourcePolicy,
+    Side,
+    input_sha256,
+    sha256_hex,
+)
+from research.execution.allowlist import ReviewedSourceAllowlist
+from research.execution.isolation import LocalTemplateSandbox
 
 INT64_MIN: Final = -(2**63)
 INT64_MAX: Final = 2**63 - 1
@@ -27,6 +41,9 @@ class Execution:
     outcome: ObservationOutcome
     value: int | None
     duration_ms: float
+    startup_ms: float = 0.0
+    cleanup_ms: float = 0.0
+    launched: bool = False
 
 
 class InvocationTimeout(Exception):
@@ -110,13 +127,56 @@ class FaultInjectingExecutor(Executor):
 
     def reset(self) -> None:
         self.counts.clear()
+        reset = getattr(self.inner, "reset", None)
+        if reset is not None:
+            reset()
 
     def __call__(self, side: str, source: bytes, candidate: CandidateInput) -> Execution:
         self.counts[side] = self.counts.get(side, 0) + 1
         fault = self.faults.get((side, self.counts[side]))
         result = self.inner(side, source, candidate)
         if isinstance(fault, ObservationOutcome):
-            return Execution(fault, None, result.duration_ms)
+            return replace(result, outcome=fault, value=None)
         if isinstance(fault, int):
-            return Execution(ObservationOutcome.OK, fault, result.duration_ms)
+            return replace(result, outcome=ObservationOutcome.OK, value=fault)
         return result
+
+
+class ProcessTemplateExecutor(Executor):
+    """One fresh isolated child per invocation (``isolation.LocalTemplateSandbox``).
+
+    The allowlist refuses anything that is not byte-identical reviewed template code before a
+    process starts. Per-phase startup, execution and cleanup timings are reported.
+    """
+
+    def __init__(self, allowlist: ReviewedSourceAllowlist, enrollment: Enrollment, *,
+                 timeout_seconds: float) -> None:
+        self.sandbox = LocalTemplateSandbox(allowlist, enrollment)
+        self.resources = ResourcePolicy(
+            execution_timeout_seconds=max(1, min(5, int(timeout_seconds))))
+        self.ids = SequentialIds(0x7E5)
+        self.run_id = self.ids.new_run_id()
+
+    def reset(self) -> None:
+        self.run_id = self.ids.new_run_id()
+
+    def __call__(self, side: str, source: bytes, candidate: CandidateInput) -> Execution:
+        e = self.sandbox.enrollment
+        digest = sha256_hex(source)
+        try:
+            request = ExecutionRequest(
+                run_id=self.run_id, attempt_id=self.ids.new_attempt_id(), side=Side(side),
+                commit_sha=hashlib.sha1(bytes.fromhex(digest)).hexdigest(),  # noqa: S324
+                source_path="checkout.py", source_content=source.decode("utf-8"),
+                source_sha256=digest, input=candidate, input_sha256=input_sha256(candidate),
+                entrypoint=e.entrypoint, resources=self.resources, snapshot_id=e.snapshot_id,
+                image_digest=e.image_digest, harness_version=e.harness_version,
+                harness_sha256=e.harness_sha256)
+        except (UnicodeDecodeError, ValidationError):
+            return Execution(ObservationOutcome.DENIED, None, 0.0)
+        observation, timing = self.sandbox.invoke(request)
+        if not timing.cleaned:
+            raise RuntimeError("sandbox cleanup evidence missing for an invocation")
+        return Execution(observation.outcome, observation.value, timing.execution_ms,
+                         startup_ms=timing.startup_ms, cleanup_ms=timing.cleanup_ms,
+                         launched=timing.refusal is None)
