@@ -1,5 +1,123 @@
 # ACP lane handoff
 
+## Live ACP follow-up (2026-11-07)
+
+Implementation PASS; Agentverse account connection and ASI:One live gate BLOCKED.
+Base: `4140bf0dfab8d090181b6aea37cbb7e574eb75a6`; branch:
+`devin/1794083400-proofhunter-live/live-acp`.
+
+The entrypoint now uses `load_acp_settings`: only profile, API base, service token,
+seed and agent port are passed to the existing `ServiceRole.AGENT` loader.
+Provider/source/operator credentials and unrelated configuration are ignored.
+Live startup requires an explicit `PROOFHUNTER_API_BASE`, seed and service token.
+It constructs the real bearer-only `HttpControlApiClient`; no fixture fallback.
+`PROOFHUNTER_AGENT_STORAGE_DIR` optionally selects the persistent directory.
+uAgents 0.26.1 has no Agent storage-directory parameter: the standalone process
+changes cwd before Agent construction, so both SDK state and the reply ledger use
+that directory. Use an absolute, private writable directory and one process per seed.
+No secret values are placed in its JSON ledger. The seed is always supplied explicitly.
+
+Run with `PROOFHUNTER_PROFILE=live`, `AGENT_SEED_PHRASE`,
+`PROOFHUNTER_API_TOKEN`, `PROOFHUNTER_API_BASE`, optionally `AGENT_PORT` and
+`PROOFHUNTER_AGENT_STORAGE_DIR`, then `uv run --locked python -m proofhunter.acp`.
+Give this process no provider, GitHub, Daytona or operator keys.
+`python -m proofhunter.acp --address` prints only the seed-derived address and
+does not instantiate an Agent or make network calls.
+
+Derived-from-saved-seed public address (NOT account-connected or verified discoverable):
+`agent1qt7qj4vrjwxjax7cd4n4ajgn9mrf97ke2lzaau72p8f4exydamxdxhxru5y`.
+Identity references are `secret:personal:AGENT_SEED_PHRASE` and
+`secret:personal:PROOFHUNTER_API_TOKEN`; never paste their values into documentation.
+
+### Exact connection and discovery prerequisites
+
+Operator login: open `https://agentverse.ai/`, sign in to your own account, then
+run the process locally with the SAME saved seed. Open
+`https://agentverse.ai/inspect/?uri=http%3A//127.0.0.1%3A8001&address=agent1qt7qj4vrjwxjax7cd4n4ajgn9mrf97ke2lzaau72p8f4exydamxdxhxru5y`
+(or the inspector link printed by the SDK if port differs). The browser must be
+able to reach the local process. Choose Connect and Mailbox and approve the
+connection while signed in. No Agentverse login/API key is available to this work;
+this step was NOT performed. An ASI:One account is also needed for the fresh-chat gate.
+
+SDK verification: in uagents 0.26.1, inspector POST `/connect` receives
+`AgentverseConnectRequest(user_token, agent_type="mailbox", endpoint=None, team=None)`.
+Its handler constructs `RegistrationRequest(address, name, handle, url, profile,
+endpoints, protocols, metadata)` and calls
+`uagents.mailbox.register_in_agentverse(request, identity, prefix, agentverse,
+agent_details)`. That function GETs the identity challenge, POSTs the signed proof,
+and POSTs agent details, using the user token as a bearer credential. This is the
+SDK-supported headless primitive, not a `register(api_key=...)` method on Agent.
+No headless CLI is added: no registration credential exists and the inspector
+already exposes the supported path. Never pass a token on a command line or log
+the SDK response detail (it contains provider-controlled text).
+
+The official launch guide also describes Agents → Launch an Agent → Connect Agent
+→ Chat Protocol, with a public HTTPS endpoint and a generated registration script.
+That endpoint-based flow is distinct from this mailbox/inspector flow; do not expose
+the private control API to satisfy it. Source read:
+https://innovationlab.fetch.ai/resources/docs/next/agentverse/agentverse-sdk-uagents
+and installed SDK `agent.py`, `mailbox.py`, `storage/__init__.py` (0.26.1).
+
+After connection, set a unique available handle (suggested `proofhunter`, not
+claimed), an owned public avatar, README, capability keywords and public toggle.
+Keep the agent active and complete at least ten genuine interactions before
+checking ASI:One discoverability; this is a prerequisite, not evidence it is listed.
+Respect the free-tier periodic login requirement (at least every 30 days).
+Use name `proofhunter`, description `AGENT_DESCRIPTION` from `agent.py`, and the
+full README text from `src/proofhunter/acp/AGENT_README.md`. Public-safe keywords:
+GitHub, pull request, PR verification, regression, counterexample, evidence receipt,
+rounding bug, Agents That Prove Their Work. Do not imply all live gates have passed.
+Use the real demo URLs `https://github.com/PeytonLi/ProofHunter-Demo/pull/1` and
+`https://github.com/PeytonLi/ProofHunter-Demo/pull/2` only once API enrollment has
+the exact original base/head pins; never use the moving demo-base tip.
+
+### Local mailbox smoke (not an end-to-end live verification)
+
+An eight-second local mailbox process used only the two saved role credentials,
+live profile and loopback API base. No control API request was sent (no inbound
+chat); no API server was needed. SDK logs were suppressed; aiohttp instrumentation
+recorded no bodies or secret headers. No account registration/Connect request was
+made. Normal SDK startup can automatically advertise the protocol to Almanac;
+that is NOT a connected mailbox or ASI:One publication pass.
+Observed statuses (UTC, status, latency ms; request IDs unavailable):
+
+```
+2026-11-07T20:38:45.153275Z 404 184
+2026-11-07T20:38:45.175083Z 200 234
+2026-11-07T20:38:45.238855Z 200 303
+2026-11-07T20:38:45.238975Z 200 301
+2026-11-07T20:38:46.335896Z 404 181
+2026-11-07T20:38:47.529579Z 404 192
+2026-11-07T20:38:48.706278Z 404 176
+2026-11-07T20:38:49.905222Z 404 198
+2026-11-07T20:38:51.105686Z 404 198
+```
+
+404 polling is consistent with an unconnected mailbox, not successful delivery.
+Endpoints/methods were not recorded, so the 200s are not attributed to a specific
+operation. No ASI:One messages, paid deployment, target execution or provider call
+was performed. The process was terminated after eight seconds, not left serving.
+Public config fingerprint inputs: uagents=0.26.1, mailbox=true,
+publish_manifest=true, profile=live, API base=http://127.0.0.1:8000, port=8001.
+Fingerprint SHA-256 (semicolon-separated key=value inputs in the order above):
+`8bc8f88386a9558675efbc40dec3c6054cb35488c2c5dbe0793febfdc5d8b556`.
+
+Cross-owner findings: the supplied base already supports `ServiceRole.AGENT` and
+in-memory GitHub PEM; the predecessor's claims that these are missing are stale.
+The remaining ACP entrypoint bug was using the default ALL role and implicit API
+base. No config.py edit was needed. Deployment, enrollment pins, runner isolation,
+provider gates, Agentverse account connection and ASI:One discovery remain external
+prerequisites. No recurring charges or deployment are authorized here.
+
+Checks: owned ACP suite `108 passed in 1.68s`; full suite `898 passed, 1 warning in
+14.40s`; Ruff `All checks passed!`; aggregate mypy `Success: no issues found in 72
+source files`; setup and integrated gates PASSED. The existing Starlette/httpx
+deprecation warning is unchanged; no dependencies were changed. No pre-commit
+configuration was found. ACP behavior is text-only; no visual verification done.
+
+The sections below describe the original offline lane; its fixture URLs are not
+live enrollment instructions and its historical branch is not this follow-up.
+
 Branch `devin/1794078900-proofhunter/acp`, based on the G0 freeze
 `5c3aecd0ec98eb7ad1a91c43d85bf940d52d67cf`. Owned paths only: `src/proofhunter/acp/`,
 `tests/acp/`, this file. No frozen contract, fixture, schema or `uv.lock` change.

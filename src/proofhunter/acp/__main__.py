@@ -13,10 +13,12 @@ import asyncio
 import sys
 from collections.abc import Sequence
 
+from uagents.crypto import Identity
+
 from proofhunter.acp.agent import build_agent, default_service_factory
 from proofhunter.acp.client import create_control_client
 from proofhunter.acp.service import ChatService, MemoryKeyValue, ReplyLedger
-from proofhunter.config import load_settings
+from proofhunter.acp.settings import load_acp_settings, prepare_storage
 from proofhunter.ports import ConfigError
 
 
@@ -34,9 +36,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m proofhunter.acp", description=__doc__)
     parser.add_argument("--local", action="store_true",
                         help="chat over stdin/stdout instead of starting the agent")
+    parser.add_argument("--address", action="store_true",
+                        help="print the seed-derived public address without connecting")
     args = parser.parse_args(argv)
     try:
-        settings = load_settings()
+        settings = load_acp_settings()
         client = create_control_client(settings)
     except ConfigError as error:
         print(f"configuration error: {error}", file=sys.stderr)
@@ -50,6 +54,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     seed = settings.agent.seed_phrase
     if seed is None:
         print("configuration error: AGENT_SEED_PHRASE is required", file=sys.stderr)
+        return 2
+    if args.address:
+        print(Identity.from_seed(seed.get_secret_value(), 0).address)
+        return 0
+    try:
+        prepare_storage()
+    except ConfigError as error:
+        print(f"configuration error: {error}", file=sys.stderr)
         return 2
     agent = build_agent(seed.get_secret_value(), default_service_factory(client),
                         port=settings.agent.port, mailbox=settings.agent.mailbox)
