@@ -88,6 +88,9 @@ def test_meta_reviewer_same_prompt_and_schema(ctx: EpisodeContext) -> None:
     assert body["response_format"] == {"type": "json_schema", "json_schema": {
         "name": fmt["name"], "strict": True, "schema": fmt["schema"]}}
     (entry,) = ledger.entries()
+    assert entry.pricing_reference is not None
+    assert entry.pricing_reference.startswith(
+        "cost_basis=user_supplied_price; price_source=user_supplied_meta_console_2026-11-07")
     assert entry.provider == "meta"
     assert entry.cost_status is CostStatus.ESTIMATED
     assert entry.cost_usd == pytest.approx((800 * 1.25 + 200 * 0.15 + 100 * 4.25) / 1e6)
@@ -194,3 +197,54 @@ def test_openai_generator_falls_back(ctx: EpisodeContext, response: Any, reason:
     assert gen.propose(generator_input(ctx)) == c.builtin_hypothesis_payload()
     assert gen.degraded == reason
     assert len(script.bodies) == calls
+
+
+def test_agent_tool_choice_identical_across_providers(ctx: EpisodeContext) -> None:
+    from tests.research.baselines.test_providers import tool_call
+
+    oa, mt = Script(tool_call("c05")), Script(chat_tool("c05"))
+    for sel in (f.FrontierAgent(f.ResponsesClient(model_id="gpt-6-astra", api_key="k",
+                                                  transport=httpx.MockTransport(oa))),
+                f.FrontierAgent(meta_client(mt))):
+        sel.reset(ctx)
+        sel.choose(state(ctx))
+    for body in (oa.bodies[0], mt.bodies[0]):
+        assert body["tool_choice"] == "auto"
+        assert "parallel_tool_calls" not in body
+    assert oa.bodies[0]["instructions"] == mt.bodies[0]["messages"][0]["content"]
+
+
+def test_unknown_meta_rows_keep_unknown_basis(ctx: EpisodeContext) -> None:
+    ledger = MemoryLedger()
+    sel = f.FrontierReviewer(meta_client(Script(httpx.Response(400)), ledger))
+    sel.reset(ctx)
+    sel.choose(state(ctx))
+    (entry,) = ledger.entries()
+    assert entry.cost_status is CostStatus.UNKNOWN
+    assert entry.pricing_reference is not None
+    assert entry.pricing_reference.startswith("cost_basis=unknown")
+
+
+def test_relabel_meta_rows(tmp_path: Any) -> None:
+    from research.baselines.ledger import JsonlLedger, model_call_entry
+    from research.baselines.smoke import relabel_meta_rows
+    from research.schemas.models import LedgerPhase
+
+    path = tmp_path / "ledger.jsonl"
+    led = JsonlLedger(path)
+    for unit, cost, status in (("tokens", 0.01, CostStatus.ESTIMATED),
+                               ("http_attempts", 0.02, CostStatus.ESTIMATED),
+                               ("tokens", None, CostStatus.UNKNOWN)):
+        led.append(model_call_entry(
+            provider="meta", unit=unit, quantity=1.0, cost_usd=cost, cost_status=status,
+            pricing_reference="old; model=muse-wonder-1.0; upper bound note",
+            pricing_date="2026-11-07", wall_ms=1.0, estimated_job_usd=1.0,
+            phase=LedgerPhase.PILOT, mode=MeasurementMode.OFFLINE, run_id=None, case_id=None))
+    assert relabel_meta_rows(path) == 2
+    refs = [e.pricing_reference or "" for e in led.entries()]
+    assert refs[0].startswith("cost_basis=user_supplied_price;")
+    assert "model=muse-wonder-1.0" in refs[0]
+    assert refs[1].startswith("cost_basis=upper_bound_estimate;")
+    assert refs[1].endswith("upper bound note")
+    assert refs[2] == "old; model=muse-wonder-1.0; upper bound note"
+    assert [e.cost_usd for e in led.entries()] == [0.01, 0.02, None]

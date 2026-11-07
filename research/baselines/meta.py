@@ -17,7 +17,7 @@ import time
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Final
 
 import httpx
 from pydantic import SecretStr
@@ -150,6 +150,17 @@ def planning_context(prompt: GeneratorInput, run_id: str | None = None) -> c.Pla
         max_hypotheses=c.MAX_PROPOSALS)
 
 
+USER_SUPPLIED: Final = "user_supplied_price"
+UPPER_BOUND: Final = "upper_bound_estimate"
+
+
+def meta_pricing_reference(model: str, basis: str, note: str = "") -> str:
+    """Ledger ``pricing_reference`` for Meta rows: ``cost_basis=<label>; price_source=...``."""
+    cfg = load_models()["meta"]
+    ref = f"cost_basis={basis}; price_source={cfg['price_source']}; model={model}"
+    return f"{ref}; {note}" if note else ref
+
+
 @dataclass
 class MetaGenerator:
     api_key: str | None
@@ -224,7 +235,8 @@ class MetaGenerator:
         self.ledger.append(model_call_entry(
             provider="meta", unit=unit, quantity=quantity,
             cost_usd=sum(attempt_cost(a, price) for a in attempts), cost_status=status,
-            pricing_reference=f"{meta['pricing_reference']}; model={self.model}; {note}",
+            pricing_reference=meta_pricing_reference(
+                self.model, USER_SUPPLIED if complete else UPPER_BOUND, note),
             pricing_date=meta["pricing_date"], wall_ms=(time.monotonic() - start) * 1000,
             estimated_job_usd=self.estimated_job_usd, phase=self.phase, mode=self.mode,
             run_id=None, case_id=self.case_id))

@@ -158,8 +158,8 @@ def test_agent_tool_loop_feedback_and_budget(ctx: EpisodeContext) -> None:
     first = sel.choose(state(ctx))
     assert first == ids["c05"].input_sha256
     body = script.bodies[0]
-    assert body["tool_choice"] == {"type": "function", "name": "run_pair"}
-    assert body["parallel_tool_calls"] is False
+    assert body["tool_choice"] == "auto"
+    assert "parallel_tool_calls" not in body
     assert [t["name"] for t in body["tools"]] == ["run_pair"]
     assert body["tools"][0]["strict"] is True
     assert "6 paired probes" in body["instructions"]
@@ -245,7 +245,7 @@ def test_meta_success_uses_production_request(ctx: EpisodeContext) -> None:
     assert entry.quantity == 1026
     assert entry.cost_status is CostStatus.ESTIMATED
     assert entry.cost_usd == pytest.approx((812 * 1.25 + 214 * 4.25) / 1e6)
-    assert "pending page verification" in (entry.pricing_reference or "")
+    assert (entry.pricing_reference or "").startswith("cost_basis=user_supplied_price;")
 
 
 @pytest.mark.parametrize(("handler", "reason", "attempts"), [
