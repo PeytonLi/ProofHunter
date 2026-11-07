@@ -141,10 +141,13 @@ def summarize(rows: Sequence[RawResultRow], labels: Mapping[str, CaseLabel],
     return {"arms": arms, "skipped_arms": dict(skipped)}
 
 
-def project(summary: Mapping[str, Any], protocol: ProtocolV1) -> dict[str, Any]:
-    targets = protocol.split_targets
-    cases = sum(t.defect_cases + t.clean_controls for t in (targets["validation"],
-                                                             targets["test"]))
+def project(summary: Mapping[str, Any], protocol: ProtocolV1,
+            test_cases: int | None = None) -> dict[str, Any]:
+    """Project the frozen test evaluation: test cases x 13 arms x 5 seeds x executions."""
+    target = protocol.split_targets["test"]
+    cases = test_cases if test_cases is not None else target.defect_cases + target.clean_controls
+    source = ("manifest test split (defect+clean)" if test_cases is not None
+              else "protocol split_targets test (defect+clean)")
     reps = len(protocol.replicate_seeds)
     n_arms = len(protocol.arms)
     measured = summary["arms"]
@@ -156,13 +159,15 @@ def project(summary: Mapping[str, Any], protocol: ProtocolV1) -> dict[str, Any]:
     known_cost = sum((v or 0.0) * cases * reps for v in per_arm_cost.values() if v is not None)
     return {
         "formula": "cases x arms x repetitions x executions_per_episode",
-        "cases": cases, "cases_source": "split_targets validation+test (defect+clean)",
+        "cases": cases, "cases_source": source,
         "arms": n_arms, "repetitions": reps,
         "expected_executions_per_episode": mean_inv,
         "expected_executions_total": (cases * n_arms * reps * mean_inv) if mean_inv else None,
         "worst_case_executions_total": cases * n_arms * reps
         * protocol.max_invocations_per_episode,
         "projected_usd_measured_arms": known_cost,
+        "projected_usd_by_arm": {k: (v * cases * reps if v is not None else None)
+                                 for k, v in sorted(per_arm_cost.items())},
         "arms_with_unknown_cost": unknown,
         "note": "Execution is local reviewed template code in isolated child processes "
                 "(0 USD). Model-arm dollars stay unknown until their lanes report measured "
@@ -270,7 +275,8 @@ def run(store: CaseStore, protocol: ProtocolV1, runner: ResearchEpisodeRunner,
         },
         **summary,
         "degraded_by_arm": degraded_by_arm(rows, degraded),
-        "projection": project(summary, protocol),
+        "projection": project(summary, protocol,
+                              sum(c.split is Split.TEST for c in manifest.cases)),
         "rows_sha256": hashlib.sha256((out / "rows.jsonl").read_bytes()).hexdigest(),
         "pilot_wall_ms": (perf_counter_ns() - start) / 1e6,
     }
