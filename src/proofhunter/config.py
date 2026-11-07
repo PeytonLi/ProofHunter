@@ -203,7 +203,7 @@ def load_settings(
         raise ConfigError("PROOFHUNTER_PROFILE must be offline or live") from error
     live = profile is Profile.LIVE
 
-    flags = {name: _flag(env, name) for name in (
+    flags = {name: False if live and role is ServiceRole.AGENT else _flag(env, name) for name in (
         "PROOFHUNTER_ENABLE_LIVE_RUNNER", "PROOFHUNTER_ENABLE_GITHUB_WEBHOOK",
         "PROOFHUNTER_ENABLE_GITHUB_CHECKS")}
     if not live and any(flags.values()):
@@ -219,21 +219,11 @@ def load_settings(
     }[role]
     if flags["PROOFHUNTER_ENABLE_GITHUB_WEBHOOK"] and role in {ServiceRole.ALL, ServiceRole.API}:
         allowed.add("GITHUB_WEBHOOK_SECRET")
-    forbidden_flags = {
-        ServiceRole.ALL: (),
-        ServiceRole.API: ("PROOFHUNTER_ENABLE_LIVE_RUNNER", "PROOFHUNTER_ENABLE_GITHUB_CHECKS"),
-        ServiceRole.WORKER: ("PROOFHUNTER_ENABLE_GITHUB_WEBHOOK",),
-        ServiceRole.AGENT: tuple(flags),
-    }[role]
-    if any(flags[name] for name in forbidden_flags):
-        raise ConfigError("service role cannot enable features: " +
-                          ", ".join(name for name in forbidden_flags if flags[name]))
-
     def secret(name: str) -> SecretStr | None:
         return _secret(env, name) if live and name in allowed else None
 
     def opt(name: str) -> str | None:
-        return _opt(env, name) if live else None
+        return _opt(env, name) if live and role is not ServiceRole.AGENT else None
 
     try:
         app_id = opt("GITHUB_APP_ID") if "GITHUB_APP_ID" in allowed else None
@@ -303,11 +293,13 @@ def _require_live(settings: Settings, role: ServiceRole) -> None:
         *required, ("AGENT_SEED_PHRASE", settings.agent.seed_phrase)
     ) if name in names and value is None]
     if settings.daytona.enable_live_runner:
+        if role in {ServiceRole.ALL, ServiceRole.WORKER} and settings.daytona.api_key is None:
+            missing.append("DAYTONA_API_KEY")
         missing += [name for name, value in (
-            ("DAYTONA_API_KEY", settings.daytona.api_key),
             ("DAYTONA_SNAPSHOT", settings.daytona.snapshot),
             ("DAYTONA_IMAGE_DIGEST", settings.daytona.image_digest)) if value is None]
-    if settings.github.enable_webhook and settings.github.webhook_secret is None:
+    if (role in {ServiceRole.ALL, ServiceRole.API} and settings.github.enable_webhook
+            and settings.github.webhook_secret is None):
         missing.append("GITHUB_WEBHOOK_SECRET")
     if missing:
         raise ConfigError(f"live profile is missing required variables: {missing}")

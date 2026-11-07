@@ -148,7 +148,8 @@ def test_nonworker_roles_do_not_read_worker_secrets(role: config.ServiceRole) ->
 
 
 @pytest.mark.parametrize(("role", "required"), [
-    (config.ServiceRole.API, ("PROOFHUNTER_API_TOKEN", "PROOFHUNTER_OPERATOR_TOKEN")),
+    (config.ServiceRole.API, ("PROOFHUNTER_API_TOKEN", "PROOFHUNTER_OPERATOR_TOKEN",
+                            "DAYTONA_SNAPSHOT", "DAYTONA_IMAGE_DIGEST")),
     (config.ServiceRole.AGENT, ("PROOFHUNTER_API_TOKEN", "AGENT_SEED_PHRASE")),
     (config.ServiceRole.WORKER, ("MODEL_API_KEY", "SUBQ_API_KEY", "GITHUB_APP_ID",
                                "GITHUB_PRIVATE_KEY_PATH", "DAYTONA_API_KEY",
@@ -158,7 +159,7 @@ def test_roles_require_each_variable(role: config.ServiceRole, required: tuple[s
     env = _live_env(AGENT_SEED_PHRASE=FAKE, PROOFHUNTER_ENABLE_LIVE_RUNNER="true",
                     DAYTONA_API_KEY=FAKE, DAYTONA_SNAPSHOT="fixture",
                     DAYTONA_IMAGE_DIGEST="sha256:" + "a" * 64)
-    if role is not config.ServiceRole.WORKER:
+    if role is config.ServiceRole.AGENT:
         env.pop("PROOFHUNTER_ENABLE_LIVE_RUNNER")
     config.load_settings(env, role=role)
     for name in required:
@@ -168,17 +169,60 @@ def test_roles_require_each_variable(role: config.ServiceRole, required: tuple[s
         assert FAKE not in str(error.value)
 
 
-@pytest.mark.parametrize(("role", "flag"), [
-    (config.ServiceRole.API, "PROOFHUNTER_ENABLE_LIVE_RUNNER"),
-    (config.ServiceRole.API, "PROOFHUNTER_ENABLE_GITHUB_CHECKS"),
-    (config.ServiceRole.WORKER, "PROOFHUNTER_ENABLE_GITHUB_WEBHOOK"),
-    (config.ServiceRole.AGENT, "PROOFHUNTER_ENABLE_LIVE_RUNNER"),
-    (config.ServiceRole.AGENT, "PROOFHUNTER_ENABLE_GITHUB_WEBHOOK"),
-    (config.ServiceRole.AGENT, "PROOFHUNTER_ENABLE_GITHUB_CHECKS"),
-])
-def test_role_rejects_foreign_flags(role: config.ServiceRole, flag: str) -> None:
-    with pytest.raises(ConfigError, match=flag):
-        config.load_settings(_live_env(**{flag: "true"}), role=role)
+def test_combined_stack_shared_flags_and_policy() -> None:
+    env = _live_env(PROOFHUNTER_ENABLE_LIVE_RUNNER="true",
+                    PROOFHUNTER_ENABLE_GITHUB_CHECKS="true",
+                    PROOFHUNTER_ENABLE_GITHUB_WEBHOOK="true",
+                    DAYTONA_API_KEY=FAKE, DAYTONA_SNAPSHOT="live-snapshot",
+                    DAYTONA_IMAGE_DIGEST="sha256:" + "a" * 64,
+                    DAYTONA_API_URL="https://example.com", GITHUB_WEBHOOK_SECRET=FAKE,
+                    AGENT_SEED_PHRASE=FAKE)
+    env.pop("GITHUB_PRIVATE_KEY_PATH")
+    env["GITHUB_PRIVATE_KEY"] = PEM
+    api = config.load_settings(env, role=config.ServiceRole.API)
+    worker = config.load_settings(env, role=config.ServiceRole.WORKER)
+    assert config.public_mode_config(api, []) == config.public_mode_config(worker, [])
+    assert config.mode_config_fingerprint(api, []) == config.mode_config_fingerprint(worker, [])
+    for settings in (api, worker):
+        assert settings.daytona.enable_live_runner
+        assert settings.github.enable_checks
+        assert settings.github.enable_webhook
+        assert settings.daytona.snapshot == env["DAYTONA_SNAPSHOT"]
+        assert settings.daytona.image_digest == env["DAYTONA_IMAGE_DIGEST"]
+        assert settings.daytona.api_url == env["DAYTONA_API_URL"]
+    assert api.meta.api_key is api.snap.api_key is api.daytona.api_key is None
+    assert api.github.app_id is api.github.private_key is api.github.private_key_path is None
+    assert api.agent.seed_phrase is None
+    assert worker.api_token is worker.operator_token is worker.agent.seed_phrase is None
+    assert worker.github.webhook_secret is None
+    assert worker.daytona.api_key is not None
+    assert worker.github.private_key is not None
+    env.pop("DAYTONA_API_KEY")
+    env.pop("GITHUB_WEBHOOK_SECRET")
+    with pytest.raises(ConfigError, match="GITHUB_WEBHOOK_SECRET"):
+        config.load_settings(env, role=config.ServiceRole.API)
+    with pytest.raises(ConfigError, match="DAYTONA_API_KEY"):
+        config.load_settings(env, role=config.ServiceRole.WORKER)
+    env["GITHUB_WEBHOOK_SECRET"] = FAKE
+    config.load_settings(env, role=config.ServiceRole.API)
+
+
+@pytest.mark.parametrize("flag_value", ["true", "not-a-boolean"])
+def test_agent_ignores_shared_live_flags_and_worker_credentials(flag_value: str) -> None:
+    env = dict.fromkeys(config.SECRET_VARIABLES, FAKE)
+    env.update(PROOFHUNTER_PROFILE="live", GITHUB_APP_ID=FAKE,
+               PROOFHUNTER_ENABLE_LIVE_RUNNER=flag_value,
+               PROOFHUNTER_ENABLE_GITHUB_CHECKS=flag_value,
+               PROOFHUNTER_ENABLE_GITHUB_WEBHOOK=flag_value,
+               DAYTONA_API_URL=FAKE, DAYTONA_SNAPSHOT=FAKE, DAYTONA_IMAGE_DIGEST=FAKE)
+    settings = config.load_settings(env, role=config.ServiceRole.AGENT)
+    clean = config.load_settings({"PROOFHUNTER_PROFILE": "live",
+                                  "PROOFHUNTER_API_TOKEN": FAKE, "AGENT_SEED_PHRASE": FAKE},
+                                 role=config.ServiceRole.AGENT)
+    assert settings == clean
+    assert not settings.daytona.enable_live_runner
+    assert not settings.github.enable_checks
+    assert not settings.github.enable_webhook
 
 
 def test_api_webhook_and_worker_tokens() -> None:
@@ -234,11 +278,12 @@ def test_public_config_equal_across_roles_without_secret_hashes() -> None:
     env = _live_env(AGENT_SEED_PHRASE=FAKE, GITHUB_PRIVATE_KEY_PATH="/private/path",
                     DAYTONA_API_URL="https://example.com", DAYTONA_SNAPSHOT="fixture",
                     DAYTONA_IMAGE_DIGEST="sha256:" + "a" * 64)
+    roles = (config.ServiceRole.ALL, config.ServiceRole.API, config.ServiceRole.WORKER)
     configurations = [config.public_mode_config(config.load_settings(env, role=role), [])
-                      for role in config.ServiceRole]
+                      for role in roles]
     assert all(value == configurations[0] for value in configurations)
     fingerprints = [config.mode_config_fingerprint(config.load_settings(env, role=role), [])
-                    for role in config.ServiceRole]
+                    for role in roles]
     assert len(set(fingerprints)) == 1
     public = json.dumps(configurations)
     for name in config.SECRET_VARIABLES:
