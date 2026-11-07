@@ -1,37 +1,45 @@
 """GitHub adapters. Offline wiring injects fixtures; live factories never fall back."""
 
-from collections.abc import Sequence
-from pathlib import Path
+from collections.abc import Callable, Sequence
 
 import httpx
-from pydantic import SecretStr
 
-from proofhunter.config import Settings
+from proofhunter.config import Settings, github_private_key_pem
 from proofhunter.contracts import Enrollment
 from proofhunter.github.checks import GithubChecks
-from proofhunter.github.client import GithubHTTP, GithubSession, InstallationTokens
+from proofhunter.github.client import CallRecord, GithubHTTP, GithubSession, InstallationTokens
 from proofhunter.github.source import GithubSource
 from proofhunter.github.validation import GithubRepositoryValidator, parse_pr_url
 from proofhunter.github.webhooks import GithubWebhookVerifier
 from proofhunter.ports import ConfigError
 
+Observer = Callable[[CallRecord], None]
 
-def _session(settings: Settings, *, checks: bool = False) -> GithubSession:
+
+def _session(
+    settings: Settings, *, checks: bool = False, observer: Observer | None = None
+) -> GithubSession:
     if settings.offline:
         raise ConfigError("offline integration must inject FixtureSource, not a GitHub HTTP client")
     config = settings.github
-    if config.app_id is None or config.private_key_path is None:
+    if config.app_id is None:
         raise ConfigError("GitHub App configuration is missing")
-    try:
-        private_key = SecretStr(Path(config.private_key_path.get_secret_value()).read_text())
-    except (OSError, UnicodeError):
-        raise ConfigError("GitHub App private key unavailable") from None
-    http = GithubHTTP(httpx.AsyncClient(trust_env=False), config.api_version)
+    # In-memory GITHUB_PRIVATE_KEY or the path fallback; errors never echo key or path.
+    private_key = github_private_key_pem(settings)
+    http = GithubHTTP(
+        httpx.AsyncClient(trust_env=False), config.api_version, observer=observer
+    )
     return GithubSession(http, InstallationTokens(http, config.app_id, private_key, checks=checks))
 
 
-def create_source_port(settings: Settings, enrollments: Sequence[Enrollment]) -> GithubSource:
-    return GithubSource(_session(settings), GithubRepositoryValidator(enrollments))
+def create_source_port(
+    settings: Settings,
+    enrollments: Sequence[Enrollment],
+    *,
+    observer: Observer | None = None,
+) -> GithubSource:
+    validator = GithubRepositoryValidator(enrollments)
+    return GithubSource(_session(settings, observer=observer), validator)
 
 
 def create_check_port(settings: Settings) -> GithubChecks:
@@ -60,6 +68,7 @@ def create_webhook_verifier(settings: Settings) -> GithubWebhookVerifier:
 
 
 __all__ = [
+    "CallRecord",
     "GithubChecks",
     "GithubRepositoryValidator",
     "GithubSource",
