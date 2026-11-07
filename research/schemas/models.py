@@ -286,7 +286,7 @@ class SweSmithTask(Model):
     schema_version: Literal["research-swe-smith-task-v1"]
     track: Literal[Track.B]
     instance_id: Ident
-    dataset_id: Literal["SWE-bench/SWE-smith"]
+    dataset_id: Literal["SWE-bench/SWE-smith", "SWE-bench/SWE-smith-py"]
     dataset_revision: GitSha
     dataset_file_sha256: Sha256
     repo: Annotated[str, StringConstraints(strict=True, pattern=r"^[\w.-]+/[\w.-]+$")]

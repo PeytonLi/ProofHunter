@@ -10,7 +10,7 @@
     }
   ],
   "dataset_file_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
-  "dataset_id": "SWE-bench/SWE-smith",
+  "dataset_id": "SWE-bench/SWE-smith-py",
   "dataset_revision": "4444444444444444444444444444444444444444",
   "defect_origin": "lm_rewrite:example/repo:x1",
   "executed": false,
