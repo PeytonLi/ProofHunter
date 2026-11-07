@@ -1,9 +1,9 @@
 # Store and control API handoff
 
-VERDICT: PASS
+VERDICT: store checks PASS; full/integrated checks need integration readiness update.
 
-- Starting freeze: `5c3aecd0ec98eb7ad1a91c43d85bf940d52d67cf`.
-- Assigned branch: `devin/1794078900-proofhunter/store`.
+- Starting freeze: `e504f140e20eb74ad7f2847206ad4b289a6e5482`.
+- Assigned branch: `devin/1794078900-proofhunter/store-refreeze`.
 - All ProofHunter interactions were offline and fixture-backed. No provider keys,
   provider calls, PR code execution, deployment, publication, checks or webhooks
   were enabled in a deployed service. No frozen files were modified.
@@ -11,7 +11,7 @@ VERDICT: PASS
 ## Implementation and wiring
 
 `proofhunter.store.create_store(settings)` returns `SQLiteStore`, implementing
-both frozen RunStore and ControlStore protocols. Its constructor also accepts
+RunStore, ControlStore and HeartbeatStore protocols. Its constructor also accepts
 Clock and IdFactory; production defaults are UTC wall clock and UUIDv4.
 `proofhunter.api.create_app(ApiDependencies(...))` creates the FastAPI app.
 Bind the repository validator and optional webhook verifier through their ports;
@@ -38,6 +38,32 @@ check_outbox, quota_reservations. Indexed rolling quota reservations provide the
 hourly counter. Constraints include unique scope/key, delivery ID, run/attempt ID,
 run/probe number, run/input hash, run/input hash/side and one receipt/outbox per run.
 Webhook delivery plus queued run plus quota reservation commit together.
+
+### Migration 2 and recovery
+
+Migration 1 is unchanged. Migration 2 adds nullable runs.checkpoint and a durable
+worker_heartbeats table keyed by worker_id. New databases apply both migrations;
+v1 upgrades in place; v2 reopen is idempotent. ready() now requires version 2.
+New verification and replay runs start with RunCheckpoint(). Migrated v1 rows
+retain SQL NULL, load as checkpoint=None / recoverable=False, and reject progress
+reservations rather than synthesizing a ledger from events.
+
+reserve_progress revalidates copied DTOs and uses one BEGIN IMMEDIATE transaction
+to fence owner, epoch, stored expiry against the trusted clock and nonterminal
+state. It rejects mismatches on every PrTarget field, changing/clearing an existing
+pin (including resolved_at), replay base/head mismatches, decreasing counts,
+duplicates and counts above the run's lower caps. Errors leave checkpoint and
+budget unchanged; injected SQL failures roll both back. Success persists the
+checkpoint and budget.used.meta_requests/snap_requests together. load_run returns
+the exact original pin/counters across reopen and epoch reclaim without probes.
+
+write_heartbeat revalidates TTL (0 < ttl <= 60 seconds), ignores submitted absolute
+timestamps, and atomically upserts using trusted store time. Clock regression is
+rejected. Equal time is a no-op for identical profile/fingerprint without expiry
+extension, or rejected for changed configuration. Newer mode/config replaces the
+record. read_heartbeat returns the newest matching fresh record
+(observed_at <= now < expires_at), ties by greatest worker_id. SQLite persistence
+is shared across independent connections/processes and restarts.
 
 ## Interface assumptions
 
@@ -72,32 +98,25 @@ Webhook delivery plus queued run plus quota reservation commit together.
   do not read live keys to make an offline server ready.
 - **Readiness:** SQLiteStore.ready checks schema version; API checks that plus distinct
   configured transport tokens and offline live-feature exclusions. Fixture stores
-  without ready() get a local get_status read check. There is no frozen heartbeat
-  read/write port, so readyz explicitly reports `worker_heartbeat: unavailable` rather
-  than claiming worker liveness. Integration must add a reviewed heartbeat contract
-  before using this endpoint as worker-health evidence. No providers are contacted.
+  without ready() get a local get_status read check. It also requires non-None
+  heartbeat_store and config_fingerprint and a fresh matching heartbeat; missing,
+  absent, expired, future or mismatched records fail closed with sanitized 503.
+  No providers are contacted. Integration must inject heartbeat_store=store and
+  mode_config_fingerprint(settings, loaded_enrollments), computed against the same
+  trusted enabled registry as the worker, and refresh at startup and throughout
+  polling/work. Otherwise readyz is 503, including offline mode.
 - **HTTP:** 8 KiB input and 256 KiB webhook limits include chunked requests. Errors
   use sanitized ErrorEnvelope, including framework 404/405/422 and internal 500.
   Receipts use frozen public projections, hash-derived ETags and exact-match 304.
 
-## Setup-owner defect (non-blocking for store)
+## Integration recovery obligations
 
-The frozen RunStore writes cannot persist a typed pinned revision or pre-call
-Meta/Snap allocations, and RunRecord cannot return the original pin before a
-committed probe. RunEvent.detail is sanitized text, not a pin/budget encoding;
-none was invented. AttemptRecord describes sandbox attempts, not provider calls.
-The reference fixture also only replaces full budget data at finish.
-
-**Mitigation for integration:** a recovering worker finding no committed probes
-must conservatively treat Meta and Snap budgets as fully spent and use labeled
-fallback/policy. Because the original pin is not recoverable through frozen ports,
-it must re-pin and fail closed / explicitly label the run rather than silently
-accept a moved head. The exact fail-closed policy is integration's decision.
-
-**Proposed setup change:** a lease-fenced typed checkpoint/reservation that stores
-the immutable pin and monotonic provider allocations before external calls, plus
-recoverable pin/allocation fields in RunRecord. Update shared fixtures/schema tests
-centrally if adopted. This does not prevent use of the implemented store behavior.
+The refreeze resolves the former missing progress/heartbeat contracts. Integration
+must reserve the resolved pin before fetching source and reserve allocations
+before every provider call/retry, preserving ambiguous charges. On reclaim reuse
+the durable pin rather than resolving a moving head. A duplicate reservation or
+lost acknowledgement does not authorize I/O. Legacy checkpoint=None must fail
+closed. No frozen-contract blocker remains.
 
 ## Fixtures and tests
 
@@ -105,28 +124,40 @@ Adjacent boundaries use FixtureRepositoryValidator, FixtureWebhookVerifier,
 InMemoryRunStore, SteppingClock and SequentialIds. Sealed evidence derives from
 `fixtures/demo/receipts/buggy.seed17.json`; a live-shaped mock receipt/check pair
 tests atomic outbox behavior without any provider or publisher interaction.
-The same intake/conflict/quota/checkpoint/attempt/probe/finish/replay scenario runs
+The same intake/conflict/quota/checkpoint/reserve_progress/attempt/probe/finish/replay scenario runs
 against SQLite and InMemoryRunStore. Tests additionally cover each stale, expired,
 wrong-owner and terminal worker write, lease renewal/reclaim, reopen/migrations,
 concurrent intake, bounded busy handling, injected SQL rollback failures, quota
 windows, budget enforcement, auth separation, body limits, public projection,
 webhook enqueue/dedupe and readyz/error behavior.
+New tests/store/test_progress.py covers heartbeat TTL, regression, equal-time
+semantics, config replacement, deterministic selection, reopen persistence,
+readiness predicates, progress rejection atomicity, all target fields, lower caps,
+concurrent duplicate reservations, injected rollback, v1 upgrades and replay pins.
 
 ## Verification
 
 All commands use `PROOFHUNTER_PROFILE=offline UV_OFFLINE=1 uv run --locked`:
 
-- `pytest -q tests/store`: `44 passed, 1 warning in 1.78s`.
-- `pytest -q`: `249 passed, 1 warning in 3.04s`.
+- `pytest -q tests/store`: `87 passed, 1 warning in 2.53s`.
+- `pytest -q`: `1 failed, 857 passed, 1 warning in 14.38s`.
+  Sole failure: tests/integration/test_pipeline.py:413,
+  test_readyz_current_contract_defect, `assert 503 == 200`. It constructs
+  ApiDependencies without heartbeat_store/fingerprint and expects the obsolete
+  heartbeat-unavailable 200 response. This file is outside permitted ownership
+  and was not edited; integration must update its expectation and wiring.
 - `ruff check src/proofhunter/store src/proofhunter/api.py tests/store`:
   `All checks passed!`.
-- `mypy src/proofhunter/store src/proofhunter/api.py`:
-  `Success: no issues found in 2 source files`.
 - `mypy src/proofhunter/store src/proofhunter/api.py tests/store`:
-  `Success: no issues found in 3 source files`.
+  `Success: no issues found in 4 source files`.
   The configured setup gate does not typecheck role tests; this is an additional check.
-- `python tools/gate.py setup`: `205 passed in 1.26s`, `All checks passed!`,
+- `python tools/gate.py setup`: `251 passed in 2.25s`, `All checks passed!`,
   `Success: no issues found in 14 source files`, `[gate] setup PASSED`.
+- `python tools/gate.py integrated`: required implementations present (15 modules),
+  setup passes, then `1 failed, 857 passed, 1 warning in 12.61s` on the same
+  integration assertion. Final output:
+  `[gate] integrated FAILED: full offline suite: exit 1, expected zero`.
+  Subsequent demo/benchmark steps were not reached.
 - No pre-commit configuration is present. CI calls the setup gate and, after
   pipeline exists, integrated gate. No ruff format stage is configured;
   owned Python files were formatted with ruff.
@@ -136,13 +167,15 @@ All commands use `PROOFHUNTER_PROFILE=offline UV_OFFLINE=1 uv run --locked`:
   0.162.2, httpx 0.28.1 and starlette 1.10.0. Lock/dependencies were not changed and
   the warning was not suppressed.
 
-Persistent logs: `/home/ubuntu/proofhunter-store-{owned,tests,lint,types,test-types,gate}.log`.
+Environment provisioning initially needed the locked mypy wheel; the user
+completed dependency sync. All subsequent checks ran with UV_OFFLINE=1, and setup
+confirmed the environment matches the unchanged lock (103 packages).
 
 ## Remaining integration/operational work
 
 No autonomous retention sweeper is installed; apply reviewed seven-day operational
 and thirty-day public receipt retention in integration/operations, preserving any
 archived demo replay artifacts. No live behavior or UI was visually verified.
-Worker recovery mitigation, heartbeat, source availability, webhook stale-head
+Worker reservation/recovery orchestration, heartbeat refresh, source availability, webhook stale-head
 handling and outbox publishing/reconciliation remain integration-owned. No new
 store-role blockers remain.

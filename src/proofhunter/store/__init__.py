@@ -23,6 +23,7 @@ from proofhunter.contracts import (
     Enrollment,
     GithubWebhookEvent,
     ProbeRecord,
+    Profile,
     PrTarget,
     QuotaDecision,
     QuotaReservation,
@@ -30,6 +31,7 @@ from proofhunter.contracts import (
     ReceiptV1,
     Replay,
     ReplayRequest,
+    RunCheckpoint,
     RunEvent,
     RunEventKind,
     RunKind,
@@ -37,6 +39,7 @@ from proofhunter.contracts import (
     RunRequest,
     RunState,
     RunStatus,
+    WorkerHeartbeat,
     canonical_json,
     canonical_sha256,
 )
@@ -112,12 +115,19 @@ class SQLiteStore:
             version = db.execute("SELECT COALESCE(MAX(version),0) FROM schema_version").fetchone()[
                 0
             ]
-            if version not in (0, 1):
+            if version not in (0, 1, 2):
                 raise ValueError("unsupported database schema")
             if version == 0:
                 for statement in _MIGRATION:
                     db.execute(statement)
                 db.execute("INSERT INTO schema_version VALUES (1)")
+            if version < 2:
+                db.execute("ALTER TABLE runs ADD COLUMN checkpoint TEXT")
+                db.execute(
+                    "CREATE TABLE worker_heartbeats (worker_id TEXT PRIMARY KEY, "
+                    "body TEXT NOT NULL)"
+                )
+                db.execute("INSERT INTO schema_version VALUES (2)")
 
     @contextmanager
     def _connection(self) -> Iterator[sqlite3.Connection]:
@@ -149,7 +159,51 @@ class SQLiteStore:
 
     def ready(self) -> bool:
         with self._connection() as db:
-            return bool(db.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] == 1)
+            return bool(db.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] == 2)
+
+    def write_heartbeat(self, heartbeat: WorkerHeartbeat) -> None:
+        heartbeat = WorkerHeartbeat.model_validate(heartbeat.model_dump())
+        ttl = heartbeat.expires_at - heartbeat.observed_at
+        with self._transaction() as db:
+            now = self.clock.now()
+            row = db.execute(
+                "SELECT body FROM worker_heartbeats WHERE worker_id=?", (heartbeat.worker_id,)
+            ).fetchone()
+            if row is not None:
+                previous = WorkerHeartbeat.model_validate_json(row[0])
+                if now < previous.observed_at:
+                    raise ValueError("trusted heartbeat time cannot regress")
+                if now == previous.observed_at:
+                    if (heartbeat.profile, heartbeat.config_fingerprint) != (
+                        previous.profile,
+                        previous.config_fingerprint,
+                    ):
+                        raise ValueError("changed heartbeat requires advancing trusted time")
+                    return
+            stored = WorkerHeartbeat(
+                worker_id=heartbeat.worker_id,
+                profile=heartbeat.profile,
+                config_fingerprint=heartbeat.config_fingerprint,
+                observed_at=now,
+                expires_at=now + ttl,
+            )
+            db.execute(
+                "INSERT INTO worker_heartbeats VALUES (?,?) "
+                "ON CONFLICT(worker_id) DO UPDATE SET body=excluded.body",
+                (stored.worker_id, _json(stored)),
+            )
+
+    def read_heartbeat(self, profile: Profile, config_fingerprint: str) -> WorkerHeartbeat | None:
+        with self._connection() as db:
+            now = self.clock.now()
+            matches = [
+                h
+                for row in db.execute("SELECT body FROM worker_heartbeats")
+                if (h := WorkerHeartbeat.model_validate_json(row[0])).is_fresh(
+                    profile, config_fingerprint, now
+                )
+            ]
+            return max(matches, key=lambda h: (h.observed_at, h.worker_id), default=None)
 
     def _quota(self, db: sqlite3.Connection, scope: str, now: datetime) -> QuotaDecision:
         recent = db.execute(
@@ -223,8 +277,8 @@ class SQLiteStore:
             receipt_sha256=None,
         )
         db.execute(
-            "INSERT INTO runs(run_id,kind,target,seed,scope,status,state,parent,replay) "
-            "VALUES (?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO runs(run_id,kind,target,seed,scope,status,state,parent,replay,checkpoint) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?)",
             (
                 run_id,
                 kind.value,
@@ -235,6 +289,7 @@ class SQLiteStore:
                 status.status.value,
                 parent,
                 None if replay is None else _json(replay),
+                _json(RunCheckpoint()),
             ),
         )
         db.execute(
@@ -442,6 +497,45 @@ class SQLiteStore:
             (_json(status), status.status.value, status.run_id),
         )
 
+    def reserve_progress(self, lease: RunLease, checkpoint: RunCheckpoint) -> RunCheckpoint:
+        with self._transaction() as db:
+            status = self._check(db, lease)
+            progress = RunCheckpoint.model_validate(checkpoint.model_dump())
+            row = db.execute(
+                "SELECT checkpoint,target,replay FROM runs WHERE run_id=?", (lease.run_id,)
+            ).fetchone()
+            if row["checkpoint"] is None:
+                raise ValueError("legacy run has no recoverable progress ledger")
+            previous = RunCheckpoint.model_validate_json(row["checkpoint"])
+            pin = progress.pinned_revision
+            if previous.pinned_revision is not None and pin != previous.pinned_revision:
+                raise ValueError("pinned revision is immutable")
+            target = PrTarget.model_validate_json(row["target"])
+            if pin is not None and any(
+                getattr(pin, name) != getattr(target, name) for name in PrTarget.model_fields
+            ):
+                raise ValueError("pinned revision must match trusted target")
+            if row["replay"] is not None and pin is not None:
+                replay = Replay.model_validate_json(row["replay"])
+                if pin.base_sha != replay.base_sha or pin.head_sha != replay.head_sha:
+                    raise ValueError("replay pin must match original revisions")
+            before, after = previous.provider_allocations, progress.provider_allocations
+            if after.meta < before.meta or after.snap < before.snap:
+                raise ValueError("provider allocations cannot decrease")
+            limits = status.budget.limits
+            if after.meta > limits.max_meta_requests or after.snap > limits.max_snap_requests:
+                raise ValueError("provider allocations exceed run caps")
+            if progress == previous:
+                raise ValueError("progress must advance; duplicate reservation authorizes no I/O")
+            used = status.budget.used.model_dump()
+            used.update(meta_requests=after.meta, snap_requests=after.snap)
+            budget = Budget.model_validate({**status.budget.model_dump(), "used": used})
+            db.execute(
+                "UPDATE runs SET checkpoint=? WHERE run_id=?", (_json(progress), lease.run_id)
+            )
+            self._save_status(db, status.model_copy(update={"budget": budget}))
+            return progress
+
     def checkpoint(self, lease: RunLease, event: RunEvent) -> None:
         with self._transaction() as db:
             status = self._check(db, lease)
@@ -603,6 +697,11 @@ class SQLiteStore:
                 seed=row["seed"],
                 status=RunStatus.model_validate_json(row["status"]),
                 parent_receipt_sha256=row["parent"],
+                checkpoint=(
+                    None
+                    if row["checkpoint"] is None
+                    else RunCheckpoint.model_validate_json(row["checkpoint"])
+                ),
                 replay=None if row["replay"] is None else Replay.model_validate_json(row["replay"]),
                 probes=tuple(
                     ProbeRecord.model_validate_json(r[0])

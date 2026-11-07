@@ -146,9 +146,17 @@ def create_app(deps: ApiDependencies) -> FastAPI:
                 database_ready = True
         except Exception:
             database_ready = False
-        if not configured or not database_ready:
+        try:
+            heartbeat = (
+                deps.heartbeat_store.read_heartbeat(settings.profile, deps.config_fingerprint)
+                if deps.heartbeat_store is not None and deps.config_fingerprint is not None
+                else None
+            )
+        except Exception:
+            heartbeat = None
+        if not configured or not database_ready or heartbeat is None:
             return _error(503, ReasonCode.INTERNAL_ERROR, retryable=True)
-        return JSONResponse({"status": "ready", "worker_heartbeat": "unavailable"})
+        return JSONResponse({"status": "ready"})
 
     @app.post("/v1/runs", status_code=202, response_model=RunStatus)
     def create(request: Request, body: RunRequest) -> RunStatus:
