@@ -1,5 +1,90 @@
 # Integration release: offline G2
 
+## Verified private live staging — 2026-11-07
+
+At integration commit `d84d86c`, two authorized real-provider runs completed on
+this VM. No whole-run retries were made. The API is loopback-only on port 8765;
+API and worker share `/home/ubuntu/ph-staging/runs.sqlite3` and the external
+mode-0600 registry. Enrollment repository/installation identity **matched** the
+authorized demo. `/healthz` and fresh-heartbeat `/readyz` returned **200**.
+
+Exact process commands run from the checkout (the private instrumentation
+wrapper calls the production CLI, sets the shared paths, binds 127.0.0.1:8765,
+forces all three feature flags false, reconstructs the collapsed PEM in memory,
+and records allowlisted HTTP metadata only):
+
+```sh
+uv run --locked python /home/ubuntu/ph-staging/launch.py enroll --profile live --repo-url https://github.com/PeytonLi/ProofHunter-Demo --out /home/ubuntu/ph-staging/enrollments.json --unprovisioned-runner
+uv run --locked python /home/ubuntu/ph-staging/launch.py serve --profile live > /home/ubuntu/ph-staging/api.log 2>&1
+uv run --locked python /home/ubuntu/ph-staging/launch.py worker --profile live > /home/ubuntu/ph-staging/worker.log 2>&1
+uv run --locked python /home/ubuntu/ph-staging/launch.py retention --profile live
+uv run --locked python /home/ubuntu/ph-staging/launch.py replay --profile live --receipt /home/ubuntu/ph-staging/pr1-receipt.json
+```
+
+Secret placeholders were bound via the process tool's `env`, never command-line
+arguments or files. Serve received `PROOFHUNTER_API_TOKEN=<service secret>` and
+`PROOFHUNTER_OPERATOR_TOKEN=<operator secret>`. Worker/enroll/retention/replay
+received `MODEL_API_KEY=<Meta secret>`, `SUBQ_API_KEY=<Snap secret>`,
+`GITHUB_APP_ID=<App ID>` and
+`PROOFHUNTER_GITHUB_APP_PRIVATE_KEY=<collapsed PEM secret>`; the wrapper exports
+`GITHUB_PRIVATE_KEY` in process memory. No Daytona credential was bound.
+Equivalent direct CLI entrypoints are documented below; the instrumentation
+wrapper is private VM state, not a packaged deployment dependency.
+
+Runs were submitted through authenticated `POST /v1/runs` with stable distinct
+idempotency keys, polled to completion and fetched through the receipt API.
+Both sealed receipts independently verified:
+
+| PR | Execution mode | Verdict / reason | Meta | Snap | Sandbox observations |
+|---|---|---|---|---|---|
+| PeytonLi/ProofHunter-Demo #1 | live | inconclusive / isolation_unverified | live, 1 call, 0 fallbacks | live, 1 call, 0 fallbacks | 0 |
+| PeytonLi/ProofHunter-Demo #2 | live | inconclusive / isolation_unverified | live, 1 call, 0 fallbacks | live, 1 call, 0 fallbacks | 0 |
+
+Pins matched exactly:
+
+- #1 base `aa8cfe2b3ec9f438363bc7de3e6aed6b4fce5db4`, head `d9d6443c5b3266cc8087b5fb30e5fe5c5198fdf6`.
+- #2 base `b2c8b83c9c150e6d85aeb5771290a95bb5410fcd`, head `9e4ed8d954edc6573cc3e592cadb64c5becb4efb`.
+
+Runner remained disabled with the explicit unprovisioned sentinel, not fixture
+snapshot/image values. There were zero sandbox invocations/probes, zero SQLite
+observations, no sandbox ledger and no Daytona HTTP calls. Meta/Snap each made
+exactly one HTTP request per run. GitHub made 20 total requests: five enrollment,
+eight first-run (including token exchange), seven second-run (cached token).
+Receipt GitHub `calls=0` is an existing pipeline accounting limitation; the
+observer, durable pins and fetched source hashes provide actual call evidence.
+
+API operator `POST /v1/retention/purge` with `{}` returned 200 and defaulted to
+dry-run. CLI dry-run matched: all 15 count categories were zero. No apply was
+performed. Replay exited 1: `live refused: isolation_unverified`, with no
+additional provider calls.
+
+Shared API/worker fingerprint:
+`287788db7f021811abcdff862758d9a3b85f84d9ce4bab8abfd7cc397ea300e2`.
+
+| Provider | UTC request start | HTTP | Header latency ms | Sanitized request ID |
+|---|---|---|---|---|
+| GitHub enrollment/pin/fetch, 20 calls | 20:57:15–20:57:58 UTC | 200/201 | 154–444 | Full per-call IDs in evidence.json |
+| Meta PR #1 | 2026-11-07T20:57:36.018790Z | 200 | 14867 | bfa920bf-7e68-44e1-86ef-e31cef5c14a5 |
+| Snap PR #1 | 2026-11-07T20:57:50.933266Z | 200 | 437 | req_proxy_mw6vxgl4_zag6ab |
+| Meta PR #2 | 2026-11-07T20:57:58.260747Z | 200 | 19135 | 6958830d-745e-4ea7-a931-9b62a357ed5c |
+| Snap PR #2 | 2026-11-07T20:58:17.428516Z | 200 | 318 | req_proxy_mw6vy0zy_rq8ks5 |
+
+Audit latency ends at response headers, not full parsing. Enrollment rows were
+assigned the resulting mode fingerprint after enrollment completed. Complete
+24-row public-safe call metadata is at `/home/ubuntu/ph-staging/evidence.json`
+and `/home/ubuntu/ph-report/evidence.json`; summary at
+`/home/ubuntu/ph-report/staging-report.md`. Evidence, report and process logs
+passed credential-pattern scanning. Raw provider bodies were not logged.
+
+Remaining live gates: independently provisioned/approved runner isolation and
+real execution/replay; public hosting and ACP/ASI:One discovery/chat; separately
+approved checks/webhooks; stack hosting and restart behavior. This staging
+proves real pin + Meta + Snap preparation, **not regression detection or clean
+coverage**. Existing API-role runner restriction and missing shared contract
+hash constant remain as documented below. No implementation change was needed.
+
+## Historical offline release baseline
+
 Starting SHA: `77c8062b17527c22d22d19d786a8f5f7933be32a`.
 No live keys, real providers, deployments, public ACP, webhooks or Check Run
 publication were exercised. Live release remains operator-gated.

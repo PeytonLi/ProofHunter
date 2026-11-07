@@ -1,7 +1,8 @@
 # Live CLI staging prerequisites
 
-The live-capable CLI is covered with offline fakes only. No provider smoke was
-performed by the integration-entrypoint change. Follow `docs/integration.md` for
+The entrypoint implementation was initially covered with offline fakes only.
+Subsequent authorized private staging exercised real GitHub, Meta and Snap (see
+the evidence log below), with runner disabled. Follow `docs/integration.md` for
 commands. Enroll real public GitHub identities to an external mode-0600 registry;
 never use `config/enrollments.example.json` for live startup. Keep checks and
 webhooks off. Until independent runner provisioning is approved, enroll with
@@ -58,11 +59,26 @@ Pinned versions (from `uv.lock`): uagents 0.26.1, uagents-core 0.4.12, daytona 0
 
 ## Evidence log
 
+Private staging verified 2026-11-07 at integration commit `d84d86c`: exactly two
+runs, real public demo PR #1/#2 pins, real Meta and real Snap, no whole-run
+retries. Both receipts are live / inconclusive / isolation_unverified, with one
+Meta call and one Snap call each and zero fallbacks or sandbox observations.
+Enrollment identity matched; checks/webhooks/runner stayed OFF. No Daytona key
+was bound and no Daytona request occurred. See `docs/integration.md` for exact
+pins, commands, limitations and the complete per-call artifact paths.
+
+Mode fingerprint for every row below:
+`287788db7f021811abcdff862758d9a3b85f84d9ce4bab8abfd7cc397ea300e2`.
+Latency is request-start to response headers. `evidence.json` contains all 24
+allowlisted call rows (20 GitHub, 2 Meta, 2 Snap); no response bodies.
+
 | Provider | UTC timestamp | Request ID (sanitized) | Status | Latency ms | Config fingerprint | Result | Operator |
 |---|---|---|---|---|---|---|---|
-| Meta | pending | | | | | | |
-| Snap models | pending | | | | | | |
-| Snap decision | pending | | | | | | |
-| GitHub pin and fetch | pending | | | | | | |
-| Daytona canary | pending | | | | | | |
-| Agentverse and ASI:One | pending | | | | | | |
+| Meta PR #1 | 2026-11-07T20:57:36.018790Z | bfa920bf-7e68-44e1-86ef-e31cef5c14a5 | 200 | 14867 | above | live hypotheses, no fallback | authorized VM staging |
+| Meta PR #2 | 2026-11-07T20:57:58.260747Z | 6958830d-745e-4ea7-a931-9b62a357ed5c | 200 | 19135 | above | live hypotheses, no fallback | authorized VM staging |
+| Snap models | not called | unavailable | not exercised | unavailable | above | discovery gate remains open; minimal usage | authorized VM staging |
+| Snap PR #1 decision | 2026-11-07T20:57:50.933266Z | req_proxy_mw6vxgl4_zag6ab | 200 | 437 | above | live decision, no fallback | authorized VM staging |
+| Snap PR #2 decision | 2026-11-07T20:58:17.428516Z | req_proxy_mw6vy0zy_rq8ks5 | 200 | 318 | above | live decision, no fallback | authorized VM staging |
+| GitHub enrollment/pin/fetch, 20 calls | 2026-11-07T20:57:15–20:57:58Z | individual IDs in evidence.json | 200/201 | 154–444 | above | expected immutable pins and bounded source hashes verified | authorized VM staging |
+| Daytona canary/execution | not authorized | unavailable | not exercised | unavailable | above | disabled; isolation gate remains closed | authorized VM staging |
+| Agentverse and ASI:One chat | not part of this staging | unavailable | not exercised | unavailable | above | public discovery/chat remains open | authorized VM staging |
