@@ -1,0 +1,7 @@
+{
+  "requester_scope": "acp:sender-bucket-0001",
+  "reserved_at": "2026-11-07T19:00:00.000000Z",
+  "run_id": "00000000-05e7-4001-8000-000000000001",
+  "run_kind": "verification",
+  "window_started_at": "2026-11-07T19:00:00.000000Z"
+}

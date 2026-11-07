@@ -1,0 +1,28 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "accepted_runs_per_hour": {
+      "default": 6,
+      "maximum": 6,
+      "minimum": 0,
+      "title": "Accepted Runs Per Hour",
+      "type": "integer"
+    },
+    "max_active_per_requester": {
+      "default": 1,
+      "maximum": 1,
+      "minimum": 1,
+      "title": "Max Active Per Requester",
+      "type": "integer"
+    },
+    "max_active_runs": {
+      "default": 2,
+      "maximum": 2,
+      "minimum": 1,
+      "title": "Max Active Runs",
+      "type": "integer"
+    }
+  },
+  "title": "QuotaPolicy",
+  "type": "object"
+}

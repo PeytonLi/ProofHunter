@@ -1,0 +1,61 @@
+{
+  "cases": {
+    "buggy": {
+      "base": "base",
+      "expected_verdict": "confirmed_regression",
+      "head": "buggy",
+      "number": 1,
+      "url": "https://github.com/proofhunter-demo/checkout-demo/pull/1"
+    },
+    "existing": {
+      "base": "buggy",
+      "expected_verdict": "confirmed_existing_defect",
+      "head": "buggy",
+      "number": 4,
+      "url": "https://github.com/proofhunter-demo/checkout-demo/pull/4"
+    },
+    "fixed": {
+      "base": "base",
+      "expected_verdict": "no_defect_found",
+      "head": "fixed",
+      "number": 2,
+      "url": "https://github.com/proofhunter-demo/checkout-demo/pull/2"
+    },
+    "half_even": {
+      "base": "base",
+      "expected_verdict": "confirmed_regression",
+      "head": "half_even",
+      "number": 3,
+      "url": "https://github.com/proofhunter-demo/checkout-demo/pull/3"
+    }
+  },
+  "contract_sha256": "f608d4b8c47ee74e1ef0fdc1f4d62c54f19d054489d4a5787809ebb1bccdbfa8",
+  "harness_sha256": "cda5f7321ea14ef6259b3487e1b0b69c14ef4b9b7d1bfc62c9f7dbb3237a0a93",
+  "repo": "proofhunter-demo/checkout-demo",
+  "revisions": {
+    "base": {
+      "blob_sha": "f903e7aa002d541af5c354dbeac854c8d1afd935",
+      "commit_sha": "ed3eac4ed8d400e24b716b163c5f281a2ffcf460",
+      "path": "fixtures/demo/revisions/base/checkout.py",
+      "source_sha256": "67ad174f81050136a42c6ffe92b823d771c8f9ad530cc5dcc731abea160f42ff"
+    },
+    "buggy": {
+      "blob_sha": "c9b7524846923b999d02a69aafce7ca7182958b0",
+      "commit_sha": "83359b9ff5a9ced05c22ee2feeaaa67e667fe34e",
+      "path": "fixtures/demo/revisions/buggy/checkout.py",
+      "source_sha256": "69918784e41323fa70c59d353f1acdfdf50cf6ddde098fee2c44b83d9c3e96b8"
+    },
+    "fixed": {
+      "blob_sha": "8f0b603c73334c603db0e1745ff0990992597add",
+      "commit_sha": "614e57b2cc8dd9c3b272fe7e74060d831ce79a21",
+      "path": "fixtures/demo/revisions/fixed/checkout.py",
+      "source_sha256": "07de083d13f35e97fd9bc24503b0490bceba65d1b3fbdd62df71cb16e6b1968f"
+    },
+    "half_even": {
+      "blob_sha": "e954b4843c2442f58e5f4b5973338eb919c5d98a",
+      "commit_sha": "e24ada385d352dcd9b28bf43d776b156b9059ec3",
+      "path": "fixtures/demo/revisions/half_even/checkout.py",
+      "source_sha256": "d476b05c347be02059185d834d48b611ca195a1287445cac7952eac33f4ba7d3"
+    }
+  }
+}

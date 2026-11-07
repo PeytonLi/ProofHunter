@@ -1,0 +1,13 @@
+{
+  "checked_at": "2026-11-07T19:00:00.000000Z",
+  "config_fingerprint": "d17d1d8297af68122d009b62f57b786ab55910569a26c0b8267ce6406b8e999b",
+  "egress_denied": null,
+  "harness_sha256": "cda5f7321ea14ef6259b3487e1b0b69c14ef4b9b7d1bfc62c9f7dbb3237a0a93",
+  "image_digest": "sha256:f19b56e7023eb77f7882ec2559faf5b031ddda0d4e0721b6fefa92808b3dd6b0",
+  "metadata_denied": null,
+  "network_block_all": true,
+  "reason_code": null,
+  "runner_mode": "offline_fixture",
+  "snapshot_id": "proofhunter-offline-fixture-v1",
+  "status": "offline_fixture"
+}

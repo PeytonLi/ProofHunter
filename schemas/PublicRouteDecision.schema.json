@@ -1,0 +1,130 @@
+{
+  "$defs": {
+    "RouteMode": {
+      "enum": [
+        "live",
+        "stub",
+        "fallback",
+        "policy"
+      ],
+      "title": "RouteMode",
+      "type": "string"
+    },
+    "RouteReasonCode": {
+      "enum": [
+        "provider_choice",
+        "stub_choice",
+        "single_eligible",
+        "call_budget",
+        "provider_unavailable",
+        "provider_timeout",
+        "rate_limited",
+        "preview_unavailable",
+        "invalid_response",
+        "invalid_choice",
+        "invalid_probabilities"
+      ],
+      "title": "RouteReasonCode",
+      "type": "string"
+    },
+    "Strategy": {
+      "enum": [
+        "boundary",
+        "constraint",
+        "seeded_fuzz"
+      ],
+      "title": "Strategy",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "choice": {
+      "$ref": "#/$defs/Strategy"
+    },
+    "confidence": {
+      "anyOf": [
+        {
+          "ge": 0.0,
+          "le": 1.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Confidence"
+    },
+    "eligible": {
+      "items": {
+        "$ref": "#/$defs/Strategy"
+      },
+      "maxItems": 3,
+      "minItems": 1,
+      "title": "Eligible",
+      "type": "array"
+    },
+    "latency_ms": {
+      "anyOf": [
+        {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Latency Ms"
+    },
+    "mode": {
+      "$ref": "#/$defs/RouteMode"
+    },
+    "model_id": {
+      "anyOf": [
+        {
+          "pattern": "^[A-Za-z0-9._:@/+=-]{1,128}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Model Id"
+    },
+    "probabilities": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "ge": 0.0,
+            "le": 1.0,
+            "type": "number"
+          },
+          "propertyNames": {
+            "$ref": "#/$defs/Strategy"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Probabilities"
+    },
+    "reason_code": {
+      "$ref": "#/$defs/RouteReasonCode"
+    }
+  },
+  "required": [
+    "choice",
+    "eligible",
+    "mode",
+    "model_id",
+    "probabilities",
+    "confidence",
+    "latency_ms",
+    "reason_code"
+  ],
+  "title": "PublicRouteDecision",
+  "type": "object"
+}

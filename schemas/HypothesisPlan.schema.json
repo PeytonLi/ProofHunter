@@ -1,0 +1,308 @@
+{
+  "$defs": {
+    "HypothesisMode": {
+      "description": "Failure modes a provider may propose (H0 is always implicit).",
+      "enum": [
+        "per_item_rounding",
+        "half_even_rounding",
+        "other"
+      ],
+      "title": "HypothesisMode",
+      "type": "string"
+    },
+    "HypothesisProposal": {
+      "additionalProperties": false,
+      "properties": {
+        "constraints": {
+          "$ref": "#/$defs/PlanConstraints"
+        },
+        "mode": {
+          "$ref": "#/$defs/HypothesisMode"
+        },
+        "rationale": {
+          "maxLength": 300,
+          "title": "Rationale",
+          "type": "string"
+        },
+        "source_refs": {
+          "items": {
+            "$ref": "#/$defs/SourceRef"
+          },
+          "maxItems": 4,
+          "title": "Source Refs",
+          "type": "array"
+        },
+        "suggested_strategy": {
+          "$ref": "#/$defs/Strategy"
+        }
+      },
+      "required": [
+        "mode",
+        "rationale",
+        "source_refs",
+        "suggested_strategy",
+        "constraints"
+      ],
+      "title": "HypothesisProposal",
+      "type": "object"
+    },
+    "PlanConstraints": {
+      "additionalProperties": false,
+      "properties": {
+        "discount_percent": {
+          "anyOf": [
+            {
+              "maximum": 100,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Discount Percent"
+        },
+        "max_items": {
+          "anyOf": [
+            {
+              "maximum": 8,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Max Items"
+        },
+        "min_items": {
+          "anyOf": [
+            {
+              "maximum": 8,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Min Items"
+        },
+        "require_fractional_cent": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Require Fractional Cent"
+        }
+      },
+      "required": [
+        "min_items",
+        "max_items",
+        "discount_percent",
+        "require_fractional_cent"
+      ],
+      "title": "PlanConstraints",
+      "type": "object"
+    },
+    "ProviderMode": {
+      "enum": [
+        "live",
+        "stub",
+        "fallback",
+        "policy",
+        "offline_fixture",
+        "disabled",
+        "not_called"
+      ],
+      "title": "ProviderMode",
+      "type": "string"
+    },
+    "ProviderName": {
+      "enum": [
+        "github",
+        "meta",
+        "snap",
+        "runner"
+      ],
+      "title": "ProviderName",
+      "type": "string"
+    },
+    "ProviderProvenance": {
+      "additionalProperties": false,
+      "description": "Sanitized metadata for one provider interaction (no bodies, no credentials).",
+      "properties": {
+        "attempts": {
+          "maximum": 3,
+          "minimum": 0,
+          "title": "Attempts",
+          "type": "integer"
+        },
+        "latency_ms": {
+          "anyOf": [
+            {
+              "maximum": 9223372036854775807,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Latency Ms"
+        },
+        "mode": {
+          "$ref": "#/$defs/ProviderMode"
+        },
+        "model_id": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9._:@/+=-]{1,128}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Model Id"
+        },
+        "provider": {
+          "$ref": "#/$defs/ProviderName"
+        },
+        "reason_code": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReasonCode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "request_id": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9._:@/+=-]{1,128}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Request Id"
+        }
+      },
+      "required": [
+        "provider",
+        "mode",
+        "model_id",
+        "request_id",
+        "latency_ms",
+        "attempts",
+        "reason_code"
+      ],
+      "title": "ProviderProvenance",
+      "type": "object"
+    },
+    "ReasonCode": {
+      "description": "Machine reason codes for errors, stop reasons and verdict reasons.",
+      "enum": [
+        "invalid_pr_url",
+        "repo_not_enrolled",
+        "fork_unsupported",
+        "revision_unavailable",
+        "oracle_unavailable",
+        "isolation_unverified",
+        "provider_unavailable",
+        "budget_exhausted",
+        "nondeterministic",
+        "coverage_insufficient",
+        "stale_event",
+        "conflicting_idempotency_key",
+        "internal_error",
+        "confirmed_evidence",
+        "coverage_complete",
+        "inputs_exhausted",
+        "deadline_exceeded",
+        "trust_failure",
+        "preexisting_mismatch_changed",
+        "unsupported_contract",
+        "source_invalid",
+        "invalid_request",
+        "unauthorized",
+        "forbidden",
+        "not_found",
+        "receipt_pending",
+        "replay_unavailable",
+        "rate_limited",
+        "payload_too_large",
+        "invalid_signature",
+        "feature_disabled",
+        "provider_timeout",
+        "provider_refused",
+        "provider_invalid_response",
+        "receipt_tampered",
+        "lease_lost"
+      ],
+      "title": "ReasonCode",
+      "type": "string"
+    },
+    "SourceRef": {
+      "additionalProperties": false,
+      "properties": {
+        "line": {
+          "maximum": 100000,
+          "minimum": 1,
+          "title": "Line",
+          "type": "integer"
+        },
+        "path": {
+          "maxLength": 200,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.?(?:/|$))[A-Za-z0-9._/-]{1,200}$",
+          "title": "Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "line"
+      ],
+      "title": "SourceRef",
+      "type": "object"
+    },
+    "Strategy": {
+      "enum": [
+        "boundary",
+        "constraint",
+        "seeded_fuzz"
+      ],
+      "title": "Strategy",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "``MetaPort.propose`` result: validated proposals plus provenance.",
+  "properties": {
+    "hypotheses": {
+      "items": {
+        "$ref": "#/$defs/HypothesisProposal"
+      },
+      "maxItems": 6,
+      "title": "Hypotheses",
+      "type": "array"
+    },
+    "provenance": {
+      "$ref": "#/$defs/ProviderProvenance"
+    }
+  },
+  "required": [
+    "hypotheses",
+    "provenance"
+  ],
+  "title": "HypothesisPlan",
+  "type": "object"
+}

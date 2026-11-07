@@ -1,0 +1,7 @@
+{
+  "counterexample_probe_no": 1,
+  "next_requirement": null,
+  "reason_code": "confirmed_evidence",
+  "verdict": "confirmed_regression",
+  "wording": "Reproduced regression on this head. Review before merging."
+}

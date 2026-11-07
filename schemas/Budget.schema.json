@@ -1,0 +1,215 @@
+{
+  "$defs": {
+    "BudgetLimits": {
+      "additionalProperties": false,
+      "description": "Per-run limits (PRD section 2 defaults); enforced before spending.",
+      "properties": {
+        "deadline_seconds": {
+          "default": 180,
+          "maximum": 180,
+          "minimum": 1,
+          "title": "Deadline Seconds",
+          "type": "integer"
+        },
+        "invocation_timeout_seconds": {
+          "default": 5,
+          "maximum": 5,
+          "minimum": 1,
+          "title": "Invocation Timeout Seconds",
+          "type": "integer"
+        },
+        "max_candidates": {
+          "default": 64,
+          "maximum": 64,
+          "minimum": 1,
+          "title": "Max Candidates",
+          "type": "integer"
+        },
+        "max_confirmations": {
+          "default": 1,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Max Confirmations",
+          "type": "integer"
+        },
+        "max_context_bytes": {
+          "default": 32768,
+          "maximum": 32768,
+          "minimum": 1,
+          "title": "Max Context Bytes",
+          "type": "integer"
+        },
+        "max_hypotheses": {
+          "default": 8,
+          "maximum": 8,
+          "minimum": 2,
+          "title": "Max Hypotheses",
+          "type": "integer"
+        },
+        "max_meta_requests": {
+          "default": 2,
+          "maximum": 2,
+          "minimum": 0,
+          "title": "Max Meta Requests",
+          "type": "integer"
+        },
+        "max_output_bytes": {
+          "default": 16384,
+          "maximum": 16384,
+          "minimum": 1,
+          "title": "Max Output Bytes",
+          "type": "integer"
+        },
+        "max_pairs": {
+          "default": 6,
+          "maximum": 6,
+          "minimum": 1,
+          "title": "Max Pairs",
+          "type": "integer"
+        },
+        "max_sandbox_invocations": {
+          "default": 15,
+          "maximum": 15,
+          "minimum": 1,
+          "title": "Max Sandbox Invocations",
+          "type": "integer"
+        },
+        "max_snap_requests": {
+          "default": 3,
+          "maximum": 3,
+          "minimum": 0,
+          "title": "Max Snap Requests",
+          "type": "integer"
+        }
+      },
+      "title": "BudgetLimits",
+      "type": "object"
+    },
+    "BudgetUsage": {
+      "additionalProperties": false,
+      "properties": {
+        "candidates_generated": {
+          "maximum": 64,
+          "minimum": 0,
+          "title": "Candidates Generated",
+          "type": "integer"
+        },
+        "confirmations": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confirmations",
+          "type": "integer"
+        },
+        "meta_requests": {
+          "maximum": 2,
+          "minimum": 0,
+          "title": "Meta Requests",
+          "type": "integer"
+        },
+        "pairs": {
+          "maximum": 6,
+          "minimum": 0,
+          "title": "Pairs",
+          "type": "integer"
+        },
+        "sandbox_invocations": {
+          "maximum": 15,
+          "minimum": 0,
+          "title": "Sandbox Invocations",
+          "type": "integer"
+        },
+        "snap_requests": {
+          "maximum": 3,
+          "minimum": 0,
+          "title": "Snap Requests",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "pairs",
+        "confirmations",
+        "sandbox_invocations",
+        "meta_requests",
+        "snap_requests",
+        "candidates_generated"
+      ],
+      "title": "BudgetUsage",
+      "type": "object"
+    },
+    "CostRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "amount_usd_micros": {
+          "anyOf": [
+            {
+              "maximum": 9223372036854775807,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Amount Usd Micros"
+        },
+        "status": {
+          "$ref": "#/$defs/CostStatus"
+        }
+      },
+      "required": [
+        "status",
+        "amount_usd_micros"
+      ],
+      "title": "CostRecord",
+      "type": "object"
+    },
+    "CostStatus": {
+      "enum": [
+        "measured",
+        "unknown"
+      ],
+      "title": "CostStatus",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Limits plus consumed counts, deadline, wall clock and cost (or unknown).",
+  "properties": {
+    "cost": {
+      "$ref": "#/$defs/CostRecord"
+    },
+    "deadline_at": {
+      "format": "date-time",
+      "title": "Deadline At",
+      "type": "string"
+    },
+    "limits": {
+      "$ref": "#/$defs/BudgetLimits"
+    },
+    "used": {
+      "$ref": "#/$defs/BudgetUsage"
+    },
+    "wall_clock_ms": {
+      "anyOf": [
+        {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Wall Clock Ms"
+    }
+  },
+  "required": [
+    "limits",
+    "used",
+    "deadline_at",
+    "wall_clock_ms",
+    "cost"
+  ],
+  "title": "Budget",
+  "type": "object"
+}

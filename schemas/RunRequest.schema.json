@@ -1,0 +1,30 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "pr_url": {
+      "maxLength": 512,
+      "minLength": 1,
+      "title": "Pr Url",
+      "type": "string"
+    },
+    "seed": {
+      "anyOf": [
+        {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Seed"
+    }
+  },
+  "required": [
+    "pr_url"
+  ],
+  "title": "RunRequest",
+  "type": "object"
+}

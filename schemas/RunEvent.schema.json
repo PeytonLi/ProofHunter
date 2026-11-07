@@ -1,0 +1,160 @@
+{
+  "$defs": {
+    "ReasonCode": {
+      "description": "Machine reason codes for errors, stop reasons and verdict reasons.",
+      "enum": [
+        "invalid_pr_url",
+        "repo_not_enrolled",
+        "fork_unsupported",
+        "revision_unavailable",
+        "oracle_unavailable",
+        "isolation_unverified",
+        "provider_unavailable",
+        "budget_exhausted",
+        "nondeterministic",
+        "coverage_insufficient",
+        "stale_event",
+        "conflicting_idempotency_key",
+        "internal_error",
+        "confirmed_evidence",
+        "coverage_complete",
+        "inputs_exhausted",
+        "deadline_exceeded",
+        "trust_failure",
+        "preexisting_mismatch_changed",
+        "unsupported_contract",
+        "source_invalid",
+        "invalid_request",
+        "unauthorized",
+        "forbidden",
+        "not_found",
+        "receipt_pending",
+        "replay_unavailable",
+        "rate_limited",
+        "payload_too_large",
+        "invalid_signature",
+        "feature_disabled",
+        "provider_timeout",
+        "provider_refused",
+        "provider_invalid_response",
+        "receipt_tampered",
+        "lease_lost"
+      ],
+      "title": "ReasonCode",
+      "type": "string"
+    },
+    "RunEventKind": {
+      "enum": [
+        "state_changed",
+        "lease_claimed",
+        "lease_renewed",
+        "lease_lost",
+        "lease_expired",
+        "recovered",
+        "ambiguous_attempt_charged",
+        "provider_fallback",
+        "coverage_guard",
+        "budget_exhausted",
+        "deadline_exceeded",
+        "sandbox_cleanup_scheduled",
+        "sandbox_cleanup_done",
+        "publish_queued",
+        "publish_held",
+        "publish_done",
+        "stale_head_detected"
+      ],
+      "title": "RunEventKind",
+      "type": "string"
+    },
+    "RunState": {
+      "enum": [
+        "queued",
+        "fetching",
+        "planning",
+        "testing",
+        "finalizing",
+        "completed",
+        "failed"
+      ],
+      "title": "RunState",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Append-only, timestamped stage checkpoint or recovery event (sanitized).",
+  "properties": {
+    "at": {
+      "format": "date-time",
+      "title": "At",
+      "type": "string"
+    },
+    "detail": {
+      "anyOf": [
+        {
+          "maxLength": 200,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Detail"
+    },
+    "from_state": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RunState"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "kind": {
+      "$ref": "#/$defs/RunEventKind"
+    },
+    "reason_code": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ReasonCode"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "run_id": {
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "seq": {
+      "maximum": 9223372036854775807,
+      "minimum": 1,
+      "title": "Seq",
+      "type": "integer"
+    },
+    "to_state": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RunState"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "run_id",
+    "seq",
+    "at",
+    "kind",
+    "from_state",
+    "to_state",
+    "reason_code",
+    "detail"
+  ],
+  "title": "RunEvent",
+  "type": "object"
+}

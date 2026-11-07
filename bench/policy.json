@@ -1,0 +1,52 @@
+{
+  "version": "bench-v2-production-anchor-boundary-constraint-fuzz-hash",
+  "manifest_sha256": "da58e11fe99e6dd2f841f5e71865fe5505a02b548b54698f5a4bb67c19d1f03a",
+  "master_seed": 17,
+  "replicate_seeds": [
+    989287554,
+    181211149,
+    710491588,
+    1880716672,
+    1319078602
+  ],
+  "max_pairs": 6,
+  "max_confirmations": 1,
+  "reviewed_first_party": true,
+  "review_rationale": "Reviewed all 24 dev base/head files as bounded first-party pure integer checkout fixtures. No PR source, imports, side effects, provider I/O or holdout labels. The legal seven-item dev mutant replaces the invalid nine-item v1 case. Candidate generation is the unchanged shipped production Bayes implementation.",
+  "reviewed_source_sha256": [
+    "18d7f10f12a9e1a2f8336c2a6b577654d75a626db3489df0690369e9aac3f935",
+    "2b43df6edbf25cc79eb7f187e07399fcc51c4781a3df9a243653195c750750c3",
+    "480dc2d1c2f551ecd687cdaee8bb0ce2e3698bf3c6633e3703eeaf8025527df0",
+    "554440c741a37a4cc1b797fdd46061c127773bc187979de28a2e366e8c1a5c3d",
+    "67ad174f81050136a42c6ffe92b823d771c8f9ad530cc5dcc731abea160f42ff",
+    "8acd28a50adcfa67e891e3d756cd26801220edfad0b83c5fce5b6d62bbf278d4",
+    "b1b7fd19c25cef2d94a3782666257411eb1e522d9cc33300d02b3ee7cea7476e",
+    "b1f08ca7e2daaa8644a6c1694f7d93d380eaf6450149ea66e0a5e9fea356b121",
+    "b2a57e53724a43559f997c88774ad23a3eef0073e3a193203330f13bd96efa14",
+    "c06d228be05c644c0354f5e615b1bf767fa8779e1ac86b8e27b203c592d68dbc",
+    "cc8738f1f1f015fcc5ab7a22ccf5bf2adb00f6a8fb30c271c1f9d9e6053a3d0d",
+    "d13dd6eb8c68b9cafa071366f7a3d9b0221aee3608b40a2da628f0d61828c2bd"
+  ],
+  "source_sha256": {
+    "bench/arms.py": "4bda363ce0ed10b55ae9467c442da432fd94c25f8f47b05eb227290ee665b101",
+    "bench/run.py": "dd7aa9f2ebc0f11c60ebfe6bed37a8c415e2d58b9c3fd013222a4c134bdafe2a",
+    "bench/scoring.py": "1662aaf5ebb61f59d6e286b170df5ce58c7a66498ec8861218ff78d4d94f4bd5",
+    "bench/harness.py": "0675587fe8c97cf524132273b6b892932f0a5b2e6ab6a34a088b072f1189d251",
+    "bench/freeze.py": "c980061c27d04361324e9bd2cc03f3be0cbae47974ed5f7186d5c906eaba6eab",
+    "bench/corpus/__init__.py": "9ff6dedaaa0ffdeeff2c48afaeef4ba1c44c4d93be7e6d4ee3539a63eab9b0e9",
+    "bench/holdout.py": "5788932f0d51f7014fab74fc3e3bbab7d63fec6f68c6e775f32c7f1912e53617",
+    "src/proofhunter/bayes/__init__.py": "3a38dfa7d428f74a2a841d31ab94b2c05fdbd41ae600e1b81f17a0a13176dbc8",
+    "src/proofhunter/oracle/__init__.py": "6e316a806ea7b89e6afda85bef03325726b5ccdd88a585e0c9b3346c2d906dc4",
+    "src/proofhunter/oracle/rounding.py": "a82cdf6f8be32bbb32faae3ebbee66f4cad9bf5da75b54cf5c8e16b0e8d05f79",
+    "src/proofhunter/oracle/evidence.py": "ddb68b221fecdd1ac55e73c9742caa47d4d4b4391abf4c1e6c0ebbe1a2d2a823",
+    "src/proofhunter/oracle/verdict.py": "2e92957ced741b3eba710f856b27854dfedb84e0bea4426858dc71d0e63141d4",
+    "src/proofhunter/contracts.py": "7c099c9f59250795712c89e43642814ab0815a0ac9ddec6d7c694df10d22fdbe",
+    "src/proofhunter/ports.py": "509f35553861b43c0b0e1569571429b27813ccec07f27ad23419842526908758",
+    "fixtures/adapters.py": "106d84ae08b5cd19ce88855053b98fbd3736397c5a196321e5983def93e08deb",
+    "fixtures/catalog.py": "5b944802a93117fea5a1fd4d669882a261f613ee832857b9453e754bc3043193",
+    "fixtures/providers/meta_plan_payload.json": "562f4a656f155a5a05978a9e6c0110137829f045c13ab233506be1091bd2ddf2",
+    "fixtures/demo/contract.json": "f608d4b8c47ee74e1ef0fdc1f4d62c54f19d054489d4a5787809ebb1bccdbfa8",
+    "fixtures/demo/harness.json": "cda5f7321ea14ef6259b3487e1b0b69c14ef4b9b7d1bfc62c9f7dbb3237a0a93"
+  },
+  "policy_sha256": "472c181a8b4db9ab799a8c2a177401283b8bde8dec6626b55cb72165ac924c13"
+}

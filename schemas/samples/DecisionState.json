@@ -1,0 +1,27 @@
+{
+  "belief": {
+    "H0": 0.6,
+    "half_even_rounding": 0.15,
+    "other": 0.1,
+    "per_item_rounding": 0.15
+  },
+  "contract_id": "checkout-rounding@1",
+  "last_outcome": null,
+  "missing_coverage": [
+    "empty",
+    "full_discount",
+    "half_cent",
+    "multi_item",
+    "zero_discount"
+  ],
+  "observed_coverage": [],
+  "remaining_pairs": 6,
+  "run_id": "00000000-05e7-4001-8000-000000000001",
+  "snap_requests_remaining": 3,
+  "step": 1,
+  "unseen_candidates": {
+    "boundary": 20,
+    "constraint": 20,
+    "seeded_fuzz": 20
+  }
+}

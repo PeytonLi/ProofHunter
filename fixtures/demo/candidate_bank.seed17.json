@@ -1,0 +1,930 @@
+{
+  "bank_sha256": "4f579e7b436adbf69ae3282a5682907f64caa1ddccb7f5364bbd62d7902af1ac",
+  "candidates": [
+    {
+      "coverage_tags": [
+        "empty"
+      ],
+      "discount_percent": 17,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "e5d16ba2d29c3098eb8d299cba83da2dc9bf8a1631adf9dc3d300f2e5ea8db67",
+      "is_anchor": true,
+      "prices_cents": [],
+      "strategy": "boundary"
+    },
+    {
+      "coverage_tags": [
+        "multi_item",
+        "zero_discount"
+      ],
+      "discount_percent": 0,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "2a0205df36e598af6bf10eca77e2b05d1a80196ffd00eecdf34332a7d098e1b4",
+      "is_anchor": true,
+      "prices_cents": [
+        1,
+        2
+      ],
+      "strategy": "boundary"
+    },
+    {
+      "coverage_tags": [
+        "full_discount",
+        "singleton"
+      ],
+      "discount_percent": 100,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "8831579cdbbbcda8592b2762b5e24022aa79d35a17514fb2a039bfa28a6ccbb5",
+      "is_anchor": true,
+      "prices_cents": [
+        99
+      ],
+      "strategy": "boundary"
+    },
+    {
+      "coverage_tags": [
+        "half_cent",
+        "multi_item"
+      ],
+      "discount_percent": 10,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "326b2a8732d3411ecd4165eeab7faf0abb8efc089d0b3f333c5ec1264635635a",
+      "is_anchor": true,
+      "prices_cents": [
+        15,
+        15,
+        15
+      ],
+      "strategy": "constraint"
+    },
+    {
+      "coverage_tags": [
+        "singleton",
+        "zero_discount"
+      ],
+      "discount_percent": 0,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "97da92b88e6a79e7b9bd10a2d0be27389a98ed59ce128e75f55d44b3ec4bf06b",
+      "is_anchor": false,
+      "prices_cents": [
+        0
+      ],
+      "strategy": "boundary"
+    },
+    {
+      "coverage_tags": [
+        "max_price",
+        "singleton",
+        "zero_discount"
+      ],
+      "discount_percent": 0,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "5e8d457993e3c01bbad616f9084d02164e6a6cde3aab002206a7473ca66987d1",
+      "is_anchor": false,
+      "prices_cents": [
+        10000
+      ],
+      "strategy": "boundary"
+    },
+    {
+      "coverage_tags": [
+        "max_items",
+        "max_price",
+        "multi_item",
+        "zero_discount"
+      ],
+      "discount_percent": 0,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "fbf51708590e5f482008dbd98cb32537a8520755f8e32c9c8822467b7744a6d8",
+      "is_anchor": false,
+      "prices_cents": [
+        10000,
+        10000,
+        10000,
+        10000,
+        10000,
+        10000,
+        10000,
+        10000
+      ],
+      "strategy": "boundary"
+    },
+    {
+      "coverage_tags": [
+        "full_discount",
+        "max_items",
+        "max_price",
+        "multi_item"
+      ],
+      "discount_percent": 100,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "7cf83fb3ed3cbcae174dd9203b6434b66fd361e8f5a5b572f64766699e8bf0e1",
+      "is_anchor": false,
+      "prices_cents": [
+        10000,
+        10000,
+        10000,
+        10000,
+        10000,
+        10000,
+        10000,
+        10000
+      ],
+      "strategy": "boundary"
+    },
+    {
+      "coverage_tags": [
+        "half_cent",
+        "singleton"
+      ],
+      "discount_percent": 50,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "25ba56c4e861f4d1465a39590ef0481237a6e84286c96ddadb174e1735fa9344",
+      "is_anchor": false,
+      "prices_cents": [
+        1
+      ],
+      "strategy": "boundary"
+    },
+    {
+      "coverage_tags": [
+        "singleton"
+      ],
+      "discount_percent": 1,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "b10cffe92a8f8a74b95294193edb7c38240fec6422046a306bdb02a2d94b642f",
+      "is_anchor": false,
+      "prices_cents": [
+        1
+      ],
+      "strategy": "boundary"
+    },
+    {
+      "coverage_tags": [
+        "singleton"
+      ],
+      "discount_percent": 99,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "c8c7de7e7be980823ee5a1ecc8c95fdf4f3fd6d29b07d280d141244ce6d67152",
+      "is_anchor": false,
+      "prices_cents": [
+        1
+      ],
+      "strategy": "boundary"
+    },
+    {
+      "coverage_tags": [
+        "half_cent",
+        "singleton"
+      ],
+      "discount_percent": 10,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "4367558f9b22b809291be3e741dfcae2f9e543bf7f46b8f733b0245aa6bf1ddb",
+      "is_anchor": false,
+      "prices_cents": [
+        5
+      ],
+      "strategy": "boundary"
+    },
+    {
+      "coverage_tags": [
+        "half_cent",
+        "singleton"
+      ],
+      "discount_percent": 1,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "ee0715f9f770803e5251b2b1916734c9246fc95e94533246e85676902ae48c74",
+      "is_anchor": false,
+      "prices_cents": [
+        50
+      ],
+      "strategy": "boundary"
+    },
+    {
+      "coverage_tags": [
+        "max_price",
+        "singleton"
+      ],
+      "discount_percent": 99,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "da0af4fd8d93d23012fbe5fc295d38540b659dfe90455d8a5134b01c6040fc45",
+      "is_anchor": false,
+      "prices_cents": [
+        10000
+      ],
+      "strategy": "boundary"
+    },
+    {
+      "coverage_tags": [
+        "max_items",
+        "multi_item"
+      ],
+      "discount_percent": 50,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "33a18df4d44e1012ef7bad9342144a957a45da88692d8396155720f4719665b9",
+      "is_anchor": false,
+      "prices_cents": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "strategy": "boundary"
+    },
+    {
+      "coverage_tags": [
+        "multi_item"
+      ],
+      "discount_percent": 50,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "f317e9d504d871259ae4411b165734b10fba468f6de759fe225f7fcc4cc0feb3",
+      "is_anchor": false,
+      "prices_cents": [
+        1,
+        1
+      ],
+      "strategy": "boundary"
+    },
+    {
+      "coverage_tags": [
+        "half_cent",
+        "singleton"
+      ],
+      "discount_percent": 50,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "3da37c5882b0dfb984508b4e450a14eb7d97674ba86ace30362641c8010c0cc5",
+      "is_anchor": false,
+      "prices_cents": [
+        3
+      ],
+      "strategy": "boundary"
+    },
+    {
+      "coverage_tags": [
+        "half_cent",
+        "singleton"
+      ],
+      "discount_percent": 50,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "409ec673e3448bf6bade879751447931d8e10decd59deb8f839f23342f7332c9",
+      "is_anchor": false,
+      "prices_cents": [
+        7
+      ],
+      "strategy": "boundary"
+    },
+    {
+      "coverage_tags": [
+        "half_cent",
+        "max_price",
+        "multi_item"
+      ],
+      "discount_percent": 50,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "bde93f6397f68937866b885ab7295248718c7d8907ebef975e5a6dba7ddd255a",
+      "is_anchor": false,
+      "prices_cents": [
+        10000,
+        1
+      ],
+      "strategy": "boundary"
+    },
+    {
+      "coverage_tags": [
+        "half_cent",
+        "singleton"
+      ],
+      "discount_percent": 2,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "eb255bf0de3316d702367d4091346e811d3783a72e5f020fe1ed426e4cb53afa",
+      "is_anchor": false,
+      "prices_cents": [
+        25
+      ],
+      "strategy": "boundary"
+    },
+    {
+      "coverage_tags": [
+        "full_discount",
+        "singleton"
+      ],
+      "discount_percent": 100,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "0f7407e03a08acc51b14948a67e62546cace68b5f1eaf642a7d291fb065a15ef",
+      "is_anchor": false,
+      "prices_cents": [
+        1
+      ],
+      "strategy": "boundary"
+    },
+    {
+      "coverage_tags": [
+        "half_cent",
+        "singleton"
+      ],
+      "discount_percent": 50,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "8824f87ca84f66404b4f18eb5866a5482f632d6d78336e53f417d69fb3ad4ca8",
+      "is_anchor": false,
+      "prices_cents": [
+        9999
+      ],
+      "strategy": "boundary"
+    },
+    {
+      "coverage_tags": [
+        "half_cent",
+        "singleton"
+      ],
+      "discount_percent": 25,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "032b693996422e89769d357ad9758e49eee56e9f824833bdc88d9fb64f1c9fe3",
+      "is_anchor": false,
+      "prices_cents": [
+        2
+      ],
+      "strategy": "boundary"
+    },
+    {
+      "coverage_tags": [
+        "half_cent",
+        "singleton"
+      ],
+      "discount_percent": 10,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "5bc6672d99765825bc84b1af86a1e5e8971e0eb0f13ca4321764c08a7c238760",
+      "is_anchor": false,
+      "prices_cents": [
+        45
+      ],
+      "strategy": "boundary"
+    },
+    {
+      "coverage_tags": [
+        "multi_item"
+      ],
+      "discount_percent": 10,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "0f5b226173f448a085fec21ccbf505b0177787692ebc7e0159b9c33232e66c8e",
+      "is_anchor": false,
+      "prices_cents": [
+        5,
+        5
+      ],
+      "strategy": "constraint"
+    },
+    {
+      "coverage_tags": [
+        "multi_item"
+      ],
+      "discount_percent": 10,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "b37a2c1adda9de554a96c3f63082692446771818586f54587f261749511b94ea",
+      "is_anchor": false,
+      "prices_cents": [
+        15,
+        15
+      ],
+      "strategy": "constraint"
+    },
+    {
+      "coverage_tags": [
+        "multi_item"
+      ],
+      "discount_percent": 10,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "5234303ecfb136f546af1dbce9a6ebe4a8c06398bae58a20bd549f5a15673814",
+      "is_anchor": false,
+      "prices_cents": [
+        25,
+        25
+      ],
+      "strategy": "constraint"
+    },
+    {
+      "coverage_tags": [
+        "half_cent",
+        "multi_item"
+      ],
+      "discount_percent": 10,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "d72b24148e571c62ff91f89b3fffd001186d1c3761a1a7797deef97f3d4c2422",
+      "is_anchor": false,
+      "prices_cents": [
+        5,
+        5,
+        5
+      ],
+      "strategy": "constraint"
+    },
+    {
+      "coverage_tags": [
+        "multi_item"
+      ],
+      "discount_percent": 10,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "2bcff4e1bfd5f4b8a6a49b80dd271441359087ac36ac08701d3140c69c022d83",
+      "is_anchor": false,
+      "prices_cents": [
+        35,
+        35
+      ],
+      "strategy": "constraint"
+    },
+    {
+      "coverage_tags": [
+        "half_cent",
+        "singleton"
+      ],
+      "discount_percent": 30,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "83a1b37cdb0f6dbd987f0bbf4a849065f5094a58079e1c47a954b2ebb547c395",
+      "is_anchor": false,
+      "prices_cents": [
+        5
+      ],
+      "strategy": "constraint"
+    },
+    {
+      "coverage_tags": [
+        "half_cent",
+        "singleton"
+      ],
+      "discount_percent": 10,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "f46e3e85509840ae4829aa74e74bc9ccfff348bd678ffb233637f01f5d08c4d7",
+      "is_anchor": false,
+      "prices_cents": [
+        15
+      ],
+      "strategy": "constraint"
+    },
+    {
+      "coverage_tags": [
+        "half_cent",
+        "singleton"
+      ],
+      "discount_percent": 10,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "8c3f7cb8fa99210ac767b7afbe8888e6831be6d0495b1e28a0f6384ac03bd89d",
+      "is_anchor": false,
+      "prices_cents": [
+        25
+      ],
+      "strategy": "constraint"
+    },
+    {
+      "coverage_tags": [
+        "half_cent",
+        "singleton"
+      ],
+      "discount_percent": 10,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "496365834b76fc0ffbc8c1293f1ec05aa31f483767bae3639b0b73bc111f8357",
+      "is_anchor": false,
+      "prices_cents": [
+        35
+      ],
+      "strategy": "constraint"
+    },
+    {
+      "coverage_tags": [
+        "multi_item"
+      ],
+      "discount_percent": 10,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "e8b0c05bbc760b96c7105853fdb9fbd8a900d79281fe087220a73845ec1071c0",
+      "is_anchor": false,
+      "prices_cents": [
+        5,
+        5,
+        5,
+        5
+      ],
+      "strategy": "constraint"
+    },
+    {
+      "coverage_tags": [
+        "half_cent",
+        "multi_item"
+      ],
+      "discount_percent": 50,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "57ec6754d5cbdcb8b5d5c3f0932a99bea0ff62795aa0181b3a8fef110525422b",
+      "is_anchor": false,
+      "prices_cents": [
+        1,
+        1,
+        1
+      ],
+      "strategy": "constraint"
+    },
+    {
+      "coverage_tags": [
+        "multi_item"
+      ],
+      "discount_percent": 50,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "b4fe08306bf6507de1dd2dde55cc4ac62158985a98023555ff16098c119fa4bf",
+      "is_anchor": false,
+      "prices_cents": [
+        3,
+        3
+      ],
+      "strategy": "constraint"
+    },
+    {
+      "coverage_tags": [
+        "multi_item"
+      ],
+      "discount_percent": 50,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "a08c4061483264419c54adf8788d767b61887ff332230db453fd53b68516c72d",
+      "is_anchor": false,
+      "prices_cents": [
+        7,
+        7
+      ],
+      "strategy": "constraint"
+    },
+    {
+      "coverage_tags": [
+        "multi_item"
+      ],
+      "discount_percent": 10,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "effb4937d9d9de354abd5986de183a9f88ab7c465abdcaca11b893cd51229537",
+      "is_anchor": false,
+      "prices_cents": [
+        15,
+        15,
+        15,
+        15
+      ],
+      "strategy": "constraint"
+    },
+    {
+      "coverage_tags": [
+        "multi_item"
+      ],
+      "discount_percent": 10,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "90558b4760c23bc9dd7d7c00faf471e74f3a96640460cef041f2f5430d184494",
+      "is_anchor": false,
+      "prices_cents": [
+        65,
+        65
+      ],
+      "strategy": "constraint"
+    },
+    {
+      "coverage_tags": [
+        "half_cent",
+        "singleton"
+      ],
+      "discount_percent": 10,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "c3ef7090b79a8715b56be2468cf9c4541870ec07061c3928761f3a2525e27618",
+      "is_anchor": false,
+      "prices_cents": [
+        105
+      ],
+      "strategy": "constraint"
+    },
+    {
+      "coverage_tags": [
+        "half_cent",
+        "singleton"
+      ],
+      "discount_percent": 10,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "21a053f88c7149e55ec29ab41a59875a38c468b56e2972291f6ea832ae223467",
+      "is_anchor": false,
+      "prices_cents": [
+        95
+      ],
+      "strategy": "constraint"
+    },
+    {
+      "coverage_tags": [
+        "multi_item"
+      ],
+      "discount_percent": 10,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "7b27180d18e9a407c3fab2af35fac281455d3c9ea903c3ace32db2292994dc27",
+      "is_anchor": false,
+      "prices_cents": [
+        85,
+        85
+      ],
+      "strategy": "constraint"
+    },
+    {
+      "coverage_tags": [
+        "half_cent",
+        "singleton"
+      ],
+      "discount_percent": 10,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "c67c0661b5b522426e1481b48169026bb44ee7a32d704ba942900ad3d0dc431b",
+      "is_anchor": false,
+      "prices_cents": [
+        75
+      ],
+      "strategy": "constraint"
+    },
+    {
+      "coverage_tags": [
+        "empty"
+      ],
+      "discount_percent": 94,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "b9e899295ae8e65567fce53c9033e07e6a48322625363d0b931abc55554c32ca",
+      "is_anchor": false,
+      "prices_cents": [],
+      "strategy": "seeded_fuzz"
+    },
+    {
+      "coverage_tags": [
+        "max_items",
+        "multi_item"
+      ],
+      "discount_percent": 14,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "d2880718a1b96325af55fc4db9402ca2ff3de78b7e0fb021ff5b1956b470504d",
+      "is_anchor": false,
+      "prices_cents": [
+        4703,
+        23,
+        2203,
+        71,
+        70,
+        17,
+        21,
+        45
+      ],
+      "strategy": "seeded_fuzz"
+    },
+    {
+      "coverage_tags": [
+        "multi_item"
+      ],
+      "discount_percent": 85,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "8eaf0ce146df4d3b78103ee008d66542094e2ab5d022e6034e4e0dc295fd1e59",
+      "is_anchor": false,
+      "prices_cents": [
+        77,
+        680
+      ],
+      "strategy": "seeded_fuzz"
+    },
+    {
+      "coverage_tags": [
+        "multi_item"
+      ],
+      "discount_percent": 71,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "61f4d7aae1ee013672691c0edd38979aeea309941b2dfc8afeed3ab46cca13a2",
+      "is_anchor": false,
+      "prices_cents": [
+        445,
+        994
+      ],
+      "strategy": "seeded_fuzz"
+    },
+    {
+      "coverage_tags": [
+        "multi_item"
+      ],
+      "discount_percent": 3,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "8feba1d39130735fc091db21b362858c080ef9e3a727725288456d5845bd64db",
+      "is_anchor": false,
+      "prices_cents": [
+        8576,
+        7031
+      ],
+      "strategy": "seeded_fuzz"
+    },
+    {
+      "coverage_tags": [
+        "full_discount",
+        "multi_item"
+      ],
+      "discount_percent": 100,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "94cb1272f405d6003b8aa9697c5f40529e57634c44391c850eb8481216c0f65d",
+      "is_anchor": false,
+      "prices_cents": [
+        5421,
+        7942
+      ],
+      "strategy": "seeded_fuzz"
+    },
+    {
+      "coverage_tags": [
+        "singleton"
+      ],
+      "discount_percent": 27,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "2c8c129e9d8add0f958683329a0c2c7fe2d7175ceac8dbcbb188c7aef5221b9b",
+      "is_anchor": false,
+      "prices_cents": [
+        18
+      ],
+      "strategy": "seeded_fuzz"
+    },
+    {
+      "coverage_tags": [
+        "singleton"
+      ],
+      "discount_percent": 11,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "f1f0852ff29e4a0f3d8da024258008285c695cff2d2ef43b8ccd71e95c92e275",
+      "is_anchor": false,
+      "prices_cents": [
+        998
+      ],
+      "strategy": "seeded_fuzz"
+    },
+    {
+      "coverage_tags": [
+        "singleton"
+      ],
+      "discount_percent": 29,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "d61fe6e6f5fe06cbb48b3c0b3ab1a8bc3c38210e5b142422eab1b4cd602dbf30",
+      "is_anchor": false,
+      "prices_cents": [
+        8230
+      ],
+      "strategy": "seeded_fuzz"
+    },
+    {
+      "coverage_tags": [
+        "multi_item"
+      ],
+      "discount_percent": 67,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "b073e68ff77bd3f87ae84b6664d10734c1dcf01c811a42510a014291049482ef",
+      "is_anchor": false,
+      "prices_cents": [
+        89,
+        56,
+        76
+      ],
+      "strategy": "seeded_fuzz"
+    },
+    {
+      "coverage_tags": [
+        "max_items",
+        "multi_item"
+      ],
+      "discount_percent": 92,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "61a51ba1aa2694a60e2793c5b4a95e4cf4d87bf3733dd293adc2682ebea16289",
+      "is_anchor": false,
+      "prices_cents": [
+        3,
+        4508,
+        323,
+        4598,
+        56,
+        7130,
+        4590,
+        54
+      ],
+      "strategy": "seeded_fuzz"
+    },
+    {
+      "coverage_tags": [
+        "multi_item"
+      ],
+      "discount_percent": 92,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "17683ccaf3c9d2319040b007a174c9fa3dff894b0ca915151b4988b27bb998f3",
+      "is_anchor": false,
+      "prices_cents": [
+        67,
+        6379,
+        7079
+      ],
+      "strategy": "seeded_fuzz"
+    },
+    {
+      "coverage_tags": [
+        "multi_item"
+      ],
+      "discount_percent": 59,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "54dbed5473c9faed752918358e269c9136ebaa59463d20ba56407f4b5082cd96",
+      "is_anchor": false,
+      "prices_cents": [
+        22,
+        674
+      ],
+      "strategy": "seeded_fuzz"
+    },
+    {
+      "coverage_tags": [
+        "singleton"
+      ],
+      "discount_percent": 1,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "18d9054b270bf929810371330fdbbd44786709e5725ae07787b65d60d31e7b9f",
+      "is_anchor": false,
+      "prices_cents": [
+        7454
+      ],
+      "strategy": "seeded_fuzz"
+    },
+    {
+      "coverage_tags": [
+        "multi_item"
+      ],
+      "discount_percent": 86,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "8e1c6054fc88f62c043055e50e7a12c40f93d964a53d8adf3da66a4da8ff82b4",
+      "is_anchor": false,
+      "prices_cents": [
+        8864,
+        8031
+      ],
+      "strategy": "seeded_fuzz"
+    },
+    {
+      "coverage_tags": [
+        "multi_item"
+      ],
+      "discount_percent": 78,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "6416ec4e6f5b564ddb75703d314c9c967f6e8278252840c54dc23cd1377e049c",
+      "is_anchor": false,
+      "prices_cents": [
+        20,
+        65,
+        53
+      ],
+      "strategy": "seeded_fuzz"
+    },
+    {
+      "coverage_tags": [
+        "singleton"
+      ],
+      "discount_percent": 78,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "ed448ff4dda8dd98dd583cac387fc0979d758cdc252eae36dac564948495c85d",
+      "is_anchor": false,
+      "prices_cents": [
+        8286
+      ],
+      "strategy": "seeded_fuzz"
+    },
+    {
+      "coverage_tags": [
+        "multi_item"
+      ],
+      "discount_percent": 1,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "2fb5af2413b7f4eb62721ae45b02dbae74fd99eb550e9a50388042aedc31a594",
+      "is_anchor": false,
+      "prices_cents": [
+        1904,
+        2170,
+        3355
+      ],
+      "strategy": "seeded_fuzz"
+    },
+    {
+      "coverage_tags": [
+        "singleton"
+      ],
+      "discount_percent": 85,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "dbb47e8502a1ab95bceb4fa63cec0a29e1088ef9edbc8d54f230d5ca4f81a837",
+      "is_anchor": false,
+      "prices_cents": [
+        59
+      ],
+      "strategy": "seeded_fuzz"
+    },
+    {
+      "coverage_tags": [
+        "empty"
+      ],
+      "discount_percent": 89,
+      "generator_version": "candidate-generator-v1",
+      "input_sha256": "4be3e093711cf00900569b5944e0341409aa5872bfc4ab3f14a4b1bccdcd058c",
+      "is_anchor": false,
+      "prices_cents": [],
+      "strategy": "seeded_fuzz"
+    }
+  ],
+  "generator_version": "candidate-generator-v1",
+  "seed": 17
+}

@@ -1,0 +1,8 @@
+{
+  "attempts": 0,
+  "check_run_id": null,
+  "published_at": null,
+  "reason_code": "feature_disabled",
+  "run_id": "00000000-05e7-4001-8000-000000000001",
+  "status": "skipped_disabled"
+}

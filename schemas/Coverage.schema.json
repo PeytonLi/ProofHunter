@@ -1,0 +1,64 @@
+{
+  "$defs": {
+    "CoverageTag": {
+      "enum": [
+        "empty",
+        "singleton",
+        "multi_item",
+        "zero_discount",
+        "full_discount",
+        "half_cent",
+        "max_items",
+        "max_price"
+      ],
+      "title": "CoverageTag",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "coverage_guard_used": {
+      "title": "Coverage Guard Used",
+      "type": "boolean"
+    },
+    "distinct_usable_pairs": {
+      "maximum": 15,
+      "minimum": 0,
+      "title": "Distinct Usable Pairs",
+      "type": "integer"
+    },
+    "missing": {
+      "items": {
+        "$ref": "#/$defs/CoverageTag"
+      },
+      "maxItems": 8,
+      "title": "Missing",
+      "type": "array"
+    },
+    "observed": {
+      "items": {
+        "$ref": "#/$defs/CoverageTag"
+      },
+      "maxItems": 8,
+      "title": "Observed",
+      "type": "array"
+    },
+    "required": {
+      "items": {
+        "$ref": "#/$defs/CoverageTag"
+      },
+      "maxItems": 8,
+      "title": "Required",
+      "type": "array"
+    }
+  },
+  "required": [
+    "required",
+    "observed",
+    "missing",
+    "distinct_usable_pairs",
+    "coverage_guard_used"
+  ],
+  "title": "Coverage",
+  "type": "object"
+}

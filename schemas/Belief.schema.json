@@ -1,0 +1,54 @@
+{
+  "$defs": {
+    "HypothesisId": {
+      "description": "Canonical hypothesis IDs, assigned only by the local app.",
+      "enum": [
+        "H0",
+        "per_item_rounding",
+        "half_even_rounding",
+        "other"
+      ],
+      "title": "HypothesisId",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "likelihood_policy": {
+      "pattern": "^[A-Za-z0-9._@:+-]{1,64}$",
+      "title": "Likelihood Policy",
+      "type": "string"
+    },
+    "prior_policy": {
+      "pattern": "^[A-Za-z0-9._@:+-]{1,64}$",
+      "title": "Prior Policy",
+      "type": "string"
+    },
+    "probabilities": {
+      "additionalProperties": {
+        "ge": 0.0,
+        "le": 1.0,
+        "type": "number"
+      },
+      "propertyNames": {
+        "$ref": "#/$defs/HypothesisId"
+      },
+      "title": "Probabilities",
+      "type": "object"
+    },
+    "updates": {
+      "maximum": 15,
+      "minimum": 0,
+      "title": "Updates",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "probabilities",
+    "prior_policy",
+    "likelihood_policy",
+    "updates"
+  ],
+  "title": "Belief",
+  "type": "object"
+}

@@ -1,0 +1,16 @@
+{
+  "answers": {
+    "next_action": {
+      "choice": "constraint",
+      "confidence": 0.62,
+      "probabilities": {
+        "boundary": 0.25,
+        "constraint": 0.62,
+        "seeded_fuzz": 0.13
+      },
+      "type": "choice"
+    }
+  },
+  "id": "sysone-fixture-0001",
+  "model": "subq-snap-1.1"
+}

@@ -1,0 +1,98 @@
+# Prepared for review only. Applying this Blueprint creates billable services.
+services:
+  - type: pserv
+    name: proofhunter-core
+    runtime: python
+    plan: starter
+    region: oregon
+    repo: https://github.com/PeytonLi/ProofHunter
+    branch: devin/1794083400-proofhunter-live/integration-1
+    autoDeploy: false
+    numInstances: 1
+    buildCommand: uv sync --locked
+    startCommand: uv run --locked python -m proofhunter stack --profile live --intake-disabled
+    disk:
+      name: proofhunter-state
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.16"
+      - key: UV_VERSION
+        value: "0.13.7"
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: PROOFHUNTER_PROFILE
+        value: live
+      - key: PROOFHUNTER_DB_PATH
+        value: /var/data/runs.sqlite3
+      - key: PROOFHUNTER_ENROLLMENTS
+        value: /var/data/enrollments.json
+      - key: PROOFHUNTER_ENABLE_INTAKE
+        value: "false"
+      - key: PROOFHUNTER_ENABLE_LIVE_RUNNER
+        value: "false"
+      - key: PROOFHUNTER_ENABLE_GITHUB_CHECKS
+        value: "false"
+      - key: PROOFHUNTER_ENABLE_GITHUB_WEBHOOK
+        value: "false"
+      - key: PROOFHUNTER_BIND_HOST
+        value: 0.0.0.0
+      - key: PROOFHUNTER_BIND_PORT
+        value: "10000"
+      - key: PORT
+        value: "10000"
+      - key: GITHUB_API_VERSION
+        value: "2026-03-10"
+      - key: META_MODEL
+        value: muse-spark-1.3
+      - key: SUBQ_MODEL
+        value: subq-snap-1.1
+      - key: MODEL_API_KEY
+        sync: false
+      - key: SUBQ_API_KEY
+        sync: false
+      - key: GITHUB_APP_ID
+        sync: false
+      # Supply correctly formatted multiline PEM, not the saved collapsed form.
+      - key: GITHUB_PRIVATE_KEY
+        sync: false
+      - key: PROOFHUNTER_API_TOKEN
+        sync: false
+      - key: PROOFHUNTER_OPERATOR_TOKEN
+        sync: false
+      # External registry is atomically written to the disk with mode 0600.
+      - key: PROOFHUNTER_ENROLLMENTS_JSON
+        sync: false
+
+  # Explicitly publication-held: this process exits 2 before Agent construction.
+  # Do not change the hold or register the existing mailbox during hosting setup.
+  - type: worker
+    name: proofhunter-acp
+    runtime: python
+    plan: starter
+    region: oregon
+    repo: https://github.com/PeytonLi/ProofHunter
+    branch: devin/1794083400-proofhunter-live/integration-1
+    autoDeploy: false
+    buildCommand: uv sync --locked
+    # fromService hostport has no scheme; add it only in the launched process.
+    startCommand: PROOFHUNTER_API_BASE="http://${PROOFHUNTER_API_BASE}" uv run --locked python -m proofhunter.acp
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.16"
+      - key: UV_VERSION
+        value: "0.13.7"
+      - key: PROOFHUNTER_PROFILE
+        value: live
+      - key: PROOFHUNTER_ACP_PUBLISH
+        value: "false"
+      - key: PROOFHUNTER_API_BASE
+        fromService:
+          type: pserv
+          name: proofhunter-core
+          property: hostport
+      - key: AGENT_SEED_PHRASE
+        sync: false
+      - key: PROOFHUNTER_API_TOKEN
+        sync: false

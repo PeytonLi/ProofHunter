@@ -1,0 +1,47 @@
+{
+  "$defs": {
+    "RunKind": {
+      "enum": [
+        "verification",
+        "replay"
+      ],
+      "title": "RunKind",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "requester_scope": {
+      "pattern": "^[a-z0-9:._-]{1,128}$",
+      "title": "Requester Scope",
+      "type": "string"
+    },
+    "reserved_at": {
+      "format": "date-time",
+      "title": "Reserved At",
+      "type": "string"
+    },
+    "run_id": {
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "run_kind": {
+      "$ref": "#/$defs/RunKind"
+    },
+    "window_started_at": {
+      "format": "date-time",
+      "title": "Window Started At",
+      "type": "string"
+    }
+  },
+  "required": [
+    "run_id",
+    "requester_scope",
+    "reserved_at",
+    "window_started_at",
+    "run_kind"
+  ],
+  "title": "QuotaReservation",
+  "type": "object"
+}

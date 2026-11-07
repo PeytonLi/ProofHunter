@@ -1,0 +1,18 @@
+[Unit]
+Description=ProofHunter private offline control API example
+After=network.target
+
+[Service]
+User=proofhunter
+WorkingDirectory=/opt/proofhunter
+EnvironmentFile=/etc/proofhunter/offline.env
+ExecStart=/opt/proofhunter/.venv/bin/python -m proofhunter serve --profile offline
+StateDirectory=proofhunter
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,88 @@
+{
+  "$defs": {
+    "WebhookAction": {
+      "enum": [
+        "opened",
+        "reopened",
+        "synchronize"
+      ],
+      "title": "WebhookAction",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Validated ``pull_request`` webhook delivery (after HMAC verification).",
+  "properties": {
+    "action": {
+      "$ref": "#/$defs/WebhookAction"
+    },
+    "base_sha": {
+      "pattern": "^[0-9a-f]{40}$",
+      "title": "Base Sha",
+      "type": "string"
+    },
+    "body_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Body Sha256",
+      "type": "string"
+    },
+    "delivery_id": {
+      "pattern": "^[A-Za-z0-9-]{1,64}$",
+      "title": "Delivery Id",
+      "type": "string"
+    },
+    "event": {
+      "const": "pull_request",
+      "title": "Event",
+      "type": "string"
+    },
+    "head_sha": {
+      "pattern": "^[0-9a-f]{40}$",
+      "title": "Head Sha",
+      "type": "string"
+    },
+    "installation_id": {
+      "maximum": 9007199254740991,
+      "minimum": 1,
+      "title": "Installation Id",
+      "type": "integer"
+    },
+    "number": {
+      "maximum": 2147483647,
+      "minimum": 1,
+      "title": "Number",
+      "type": "integer"
+    },
+    "owner": {
+      "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9._-]{1,100}$",
+      "title": "Owner",
+      "type": "string"
+    },
+    "repo": {
+      "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9._-]{1,100}$",
+      "title": "Repo",
+      "type": "string"
+    },
+    "repo_id": {
+      "maximum": 9007199254740991,
+      "minimum": 1,
+      "title": "Repo Id",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "delivery_id",
+    "event",
+    "action",
+    "installation_id",
+    "repo_id",
+    "owner",
+    "repo",
+    "number",
+    "head_sha",
+    "base_sha",
+    "body_sha256"
+  ],
+  "title": "GithubWebhookEvent",
+  "type": "object"
+}

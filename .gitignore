@@ -1,0 +1,28 @@
+# Local environment and secrets
+.venv/
+.env
+.env.*
+!.env.example
+*.pem
+
+# Local state, logs and demo outputs
+.proofhunter/
+*.sqlite3
+*.sqlite3-*
+*.db
+*.log
+*-receipt.json
+bench-results.jsonl
+receipt-*.json
+
+# Tool caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/

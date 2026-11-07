@@ -1,0 +1,50 @@
+{
+  "base": {
+    "blob_sha": "f903e7aa002d541af5c354dbeac854c8d1afd935",
+    "commit_sha": "ed3eac4ed8d400e24b716b163c5f281a2ffcf460",
+    "content": "\"\"\"Demo checkout module, base revision (satisfies checkout-rounding@1).\"\"\"\n\n\ndef total_cents(prices_cents: list[int], discount_percent: int) -> int:\n    n = sum(prices_cents) * (100 - discount_percent)\n    return (n + 50) // 100\n",
+    "content_sha256": "67ad174f81050136a42c6ffe92b823d771c8f9ad530cc5dcc731abea160f42ff",
+    "path": "checkout.py",
+    "side": "base",
+    "size_bytes": 229
+  },
+  "context": {
+    "contract_id": "checkout-rounding@1",
+    "contract_text": "{\n  \"contract_id\": \"checkout-rounding@1\",\n  \"description\": \"Return the discounted basket total in integer cents, rounding the discounted subtotal once, half up.\",\n  \"domain\": {\n    \"discount_percent\": {\"maximum\": 100, \"minimum\": 0, \"type\": \"integer\"},\n    \"prices_cents\": {\"item_maximum\": 10000, \"item_minimum\": 0, \"max_items\": 8, \"type\": \"integer[]\"}\n  },\n  \"entrypoint\": \"checkout.total_cents\",\n  \"invalid_input\": \"Booleans, floats, extra keys and out-of-range values are rejected at the boundary. Invalid-input behavior is outside the contract.\",\n  \"oracle_version\": \"checkout-rounding-oracle@1\",\n  \"rule\": \"n = sum(prices_cents) * (100 - discount_percent); return (n + 50) // 100\",\n  \"signature\": \"total_cents(prices_cents: list[int], discount_percent: int) -> int\",\n  \"source_path\": \"checkout.py\",\n  \"trust_tier\": \"T1\"\n}\n",
+    "diff": "--- a/checkout.py\n+++ b/checkout.py\n@@ -1,6 +1,8 @@\n-\"\"\"Demo checkout module, base revision (satisfies checkout-rounding@1).\"\"\"\n+\"\"\"Demo checkout module, buggy head: discounts and rounds each line separately.\"\"\"\n \n \n def total_cents(prices_cents: list[int], discount_percent: int) -> int:\n-    n = sum(prices_cents) * (100 - discount_percent)\n-    return (n + 50) // 100\n+    total = 0\n+    for price in prices_cents:\n+        total += (price * (100 - discount_percent) + 50) // 100\n+    return total\n",
+    "entrypoint": "checkout.total_cents",
+    "files": [
+      {
+        "path": "checkout.py",
+        "start_line": 1,
+        "text": "\"\"\"Demo checkout module, buggy head: discounts and rounds each line separately.\"\"\"\n\n\ndef total_cents(prices_cents: list[int], discount_percent: int) -> int:\n    total = 0\n    for price in prices_cents:\n        total += (price * (100 - discount_percent) + 50) // 100\n    return total\n"
+      }
+    ],
+    "max_hypotheses": 6,
+    "run_id": "00000000-0000-4000-8000-000000000000",
+    "supported_modes": [
+      "per_item_rounding",
+      "half_even_rounding",
+      "other"
+    ]
+  },
+  "head": {
+    "blob_sha": "c9b7524846923b999d02a69aafce7ca7182958b0",
+    "commit_sha": "83359b9ff5a9ced05c22ee2feeaaa67e667fe34e",
+    "content": "\"\"\"Demo checkout module, buggy head: discounts and rounds each line separately.\"\"\"\n\n\ndef total_cents(prices_cents: list[int], discount_percent: int) -> int:\n    total = 0\n    for price in prices_cents:\n        total += (price * (100 - discount_percent) + 50) // 100\n    return total\n",
+    "content_sha256": "69918784e41323fa70c59d353f1acdfdf50cf6ddde098fee2c44b83d9c3e96b8",
+    "path": "checkout.py",
+    "side": "head",
+    "size_bytes": 283
+  },
+  "revision": {
+    "base_sha": "ed3eac4ed8d400e24b716b163c5f281a2ffcf460",
+    "head_sha": "83359b9ff5a9ced05c22ee2feeaaa67e667fe34e",
+    "installation_id": 900000002,
+    "number": 1,
+    "owner": "proofhunter-demo",
+    "repo": "checkout-demo",
+    "repo_id": 900000001,
+    "resolved_at": "2026-11-07T19:00:00.000000Z"
+  }
+}

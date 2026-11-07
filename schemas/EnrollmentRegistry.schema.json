@@ -1,0 +1,129 @@
+{
+  "$defs": {
+    "Enrollment": {
+      "additionalProperties": false,
+      "description": "Trusted operator enrollment; lives in trusted config, never in the PR.",
+      "properties": {
+        "contract_id": {
+          "const": "checkout-rounding@1",
+          "title": "Contract Id",
+          "type": "string"
+        },
+        "contract_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Contract Sha256",
+          "type": "string"
+        },
+        "enabled": {
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "entrypoint": {
+          "const": "checkout.total_cents",
+          "title": "Entrypoint",
+          "type": "string"
+        },
+        "harness_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Harness Sha256",
+          "type": "string"
+        },
+        "harness_version": {
+          "pattern": "^[A-Za-z0-9._@:+-]{1,64}$",
+          "title": "Harness Version",
+          "type": "string"
+        },
+        "image_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Image Digest",
+          "type": "string"
+        },
+        "installation_id": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "title": "Installation Id",
+          "type": "integer"
+        },
+        "oracle_version": {
+          "pattern": "^[A-Za-z0-9._@:+-]{1,64}$",
+          "title": "Oracle Version",
+          "type": "string"
+        },
+        "repo_full_name": {
+          "maxLength": 201,
+          "pattern": "^[A-Za-z0-9._-]{1,100}/[A-Za-z0-9._-]{1,100}$",
+          "title": "Repo Full Name",
+          "type": "string"
+        },
+        "repo_id": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "title": "Repo Id",
+          "type": "integer"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "snapshot_id": {
+          "pattern": "^[A-Za-z0-9._:@/+=-]{1,128}$",
+          "title": "Snapshot Id",
+          "type": "string"
+        },
+        "source_path": {
+          "const": "checkout.py",
+          "title": "Source Path",
+          "type": "string"
+        },
+        "visibility": {
+          "const": "public",
+          "title": "Visibility",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "repo_id",
+        "repo_full_name",
+        "installation_id",
+        "visibility",
+        "source_path",
+        "entrypoint",
+        "contract_id",
+        "contract_sha256",
+        "oracle_version",
+        "harness_version",
+        "harness_sha256",
+        "snapshot_id",
+        "image_digest",
+        "enabled"
+      ],
+      "title": "Enrollment",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "File format of ``PROOFHUNTER_ENROLLMENTS`` (see config/enrollments.example.json).",
+  "properties": {
+    "enrollments": {
+      "items": {
+        "$ref": "#/$defs/Enrollment"
+      },
+      "maxItems": 32,
+      "title": "Enrollments",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "enrollments"
+  ],
+  "title": "EnrollmentRegistry",
+  "type": "object"
+}

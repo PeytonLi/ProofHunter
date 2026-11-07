@@ -1,0 +1,247 @@
+{
+  "$defs": {
+    "ContextFile": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "maxLength": 200,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.?(?:/|$))[A-Za-z0-9._/-]{1,200}$",
+          "title": "Path",
+          "type": "string"
+        },
+        "start_line": {
+          "maximum": 100000,
+          "minimum": 1,
+          "title": "Start Line",
+          "type": "integer"
+        },
+        "text": {
+          "maxLength": 32768,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "start_line",
+        "text"
+      ],
+      "title": "ContextFile",
+      "type": "object"
+    },
+    "HypothesisMode": {
+      "description": "Failure modes a provider may propose (H0 is always implicit).",
+      "enum": [
+        "per_item_rounding",
+        "half_even_rounding",
+        "other"
+      ],
+      "title": "HypothesisMode",
+      "type": "string"
+    },
+    "PinnedRevision": {
+      "additionalProperties": false,
+      "properties": {
+        "base_sha": {
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Base Sha",
+          "type": "string"
+        },
+        "head_sha": {
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Head Sha",
+          "type": "string"
+        },
+        "installation_id": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "title": "Installation Id",
+          "type": "integer"
+        },
+        "number": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Number",
+          "type": "integer"
+        },
+        "owner": {
+          "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9._-]{1,100}$",
+          "title": "Owner",
+          "type": "string"
+        },
+        "repo": {
+          "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9._-]{1,100}$",
+          "title": "Repo",
+          "type": "string"
+        },
+        "repo_id": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "title": "Repo Id",
+          "type": "integer"
+        },
+        "resolved_at": {
+          "format": "date-time",
+          "title": "Resolved At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "owner",
+        "repo",
+        "number",
+        "repo_id",
+        "installation_id",
+        "base_sha",
+        "head_sha",
+        "resolved_at"
+      ],
+      "title": "PinnedRevision",
+      "type": "object"
+    },
+    "PlanningContext": {
+      "additionalProperties": false,
+      "description": "Bounded, sanitized model context. Repo text is data, never instructions.",
+      "properties": {
+        "contract_id": {
+          "const": "checkout-rounding@1",
+          "title": "Contract Id",
+          "type": "string"
+        },
+        "contract_text": {
+          "maxLength": 4096,
+          "title": "Contract Text",
+          "type": "string"
+        },
+        "diff": {
+          "maxLength": 32768,
+          "title": "Diff",
+          "type": "string"
+        },
+        "entrypoint": {
+          "const": "checkout.total_cents",
+          "title": "Entrypoint",
+          "type": "string"
+        },
+        "files": {
+          "items": {
+            "$ref": "#/$defs/ContextFile"
+          },
+          "maxItems": 4,
+          "title": "Files",
+          "type": "array"
+        },
+        "max_hypotheses": {
+          "maximum": 6,
+          "minimum": 1,
+          "title": "Max Hypotheses",
+          "type": "integer"
+        },
+        "run_id": {
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "supported_modes": {
+          "items": {
+            "$ref": "#/$defs/HypothesisMode"
+          },
+          "maxItems": 3,
+          "minItems": 1,
+          "title": "Supported Modes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "run_id",
+        "contract_id",
+        "entrypoint",
+        "contract_text",
+        "files",
+        "diff",
+        "supported_modes",
+        "max_hypotheses"
+      ],
+      "title": "PlanningContext",
+      "type": "object"
+    },
+    "SourceFile": {
+      "additionalProperties": false,
+      "properties": {
+        "blob_sha": {
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Blob Sha",
+          "type": "string"
+        },
+        "commit_sha": {
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Commit Sha",
+          "type": "string"
+        },
+        "content": {
+          "maxLength": 65536,
+          "title": "Content",
+          "type": "string"
+        },
+        "content_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Content Sha256",
+          "type": "string"
+        },
+        "path": {
+          "const": "checkout.py",
+          "title": "Path",
+          "type": "string"
+        },
+        "side": {
+          "enum": [
+            "base",
+            "head"
+          ],
+          "title": "Side",
+          "type": "string"
+        },
+        "size_bytes": {
+          "maximum": 65536,
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "side",
+        "commit_sha",
+        "path",
+        "blob_sha",
+        "content",
+        "content_sha256",
+        "size_bytes"
+      ],
+      "title": "SourceFile",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "base": {
+      "$ref": "#/$defs/SourceFile"
+    },
+    "context": {
+      "$ref": "#/$defs/PlanningContext"
+    },
+    "head": {
+      "$ref": "#/$defs/SourceFile"
+    },
+    "revision": {
+      "$ref": "#/$defs/PinnedRevision"
+    }
+  },
+  "required": [
+    "revision",
+    "base",
+    "head",
+    "context"
+  ],
+  "title": "SourceBundle",
+  "type": "object"
+}

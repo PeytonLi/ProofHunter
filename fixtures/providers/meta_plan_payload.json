@@ -1,0 +1,25 @@
+{
+  "hypotheses": [
+    {
+      "constraints": {"discount_percent": 10, "max_items": null, "min_items": 2, "require_fractional_cent": true},
+      "mode": "per_item_rounding",
+      "rationale": "The loop may discount and round each line before summing.",
+      "source_refs": [{"line": 4, "path": "checkout.py"}],
+      "suggested_strategy": "constraint"
+    },
+    {
+      "constraints": {"discount_percent": null, "max_items": null, "min_items": null, "require_fractional_cent": true},
+      "mode": "half_even_rounding",
+      "rationale": "Half-cent ties may round to even instead of half up.",
+      "source_refs": [],
+      "suggested_strategy": "boundary"
+    },
+    {
+      "constraints": {"discount_percent": null, "max_items": null, "min_items": null, "require_fractional_cent": null},
+      "mode": "other",
+      "rationale": "Any other deviation from the enrolled rounding rule.",
+      "source_refs": [],
+      "suggested_strategy": "seeded_fuzz"
+    }
+  ]
+}

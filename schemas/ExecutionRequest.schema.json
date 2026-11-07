@@ -1,0 +1,182 @@
+{
+  "$defs": {
+    "CandidateInput": {
+      "additionalProperties": false,
+      "description": "Legal input of ``checkout-rounding@1``.",
+      "properties": {
+        "discount_percent": {
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Discount Percent",
+          "type": "integer"
+        },
+        "prices_cents": {
+          "items": {
+            "maximum": 10000,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 8,
+          "title": "Prices Cents",
+          "type": "array"
+        }
+      },
+      "required": [
+        "prices_cents",
+        "discount_percent"
+      ],
+      "title": "CandidateInput",
+      "type": "object"
+    },
+    "ResourcePolicy": {
+      "additionalProperties": false,
+      "properties": {
+        "control_deadline_seconds": {
+          "default": 30,
+          "maximum": 60,
+          "minimum": 1,
+          "title": "Control Deadline Seconds",
+          "type": "integer"
+        },
+        "cpu_count": {
+          "default": 1,
+          "maximum": 2,
+          "minimum": 1,
+          "title": "Cpu Count",
+          "type": "integer"
+        },
+        "execution_timeout_seconds": {
+          "default": 5,
+          "maximum": 5,
+          "minimum": 1,
+          "title": "Execution Timeout Seconds",
+          "type": "integer"
+        },
+        "max_output_bytes": {
+          "default": 16384,
+          "maximum": 16384,
+          "minimum": 1,
+          "title": "Max Output Bytes",
+          "type": "integer"
+        },
+        "max_processes": {
+          "default": 16,
+          "maximum": 64,
+          "minimum": 1,
+          "title": "Max Processes",
+          "type": "integer"
+        },
+        "memory_mib": {
+          "default": 256,
+          "maximum": 1024,
+          "minimum": 64,
+          "title": "Memory Mib",
+          "type": "integer"
+        }
+      },
+      "title": "ResourcePolicy",
+      "type": "object"
+    },
+    "Side": {
+      "enum": [
+        "base",
+        "head",
+        "confirm"
+      ],
+      "title": "Side",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One sandbox invocation. Carries no expected result and no oracle data.",
+  "properties": {
+    "attempt_id": {
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+      "title": "Attempt Id",
+      "type": "string"
+    },
+    "commit_sha": {
+      "pattern": "^[0-9a-f]{40}$",
+      "title": "Commit Sha",
+      "type": "string"
+    },
+    "entrypoint": {
+      "const": "checkout.total_cents",
+      "title": "Entrypoint",
+      "type": "string"
+    },
+    "harness_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Harness Sha256",
+      "type": "string"
+    },
+    "harness_version": {
+      "pattern": "^[A-Za-z0-9._@:+-]{1,64}$",
+      "title": "Harness Version",
+      "type": "string"
+    },
+    "image_digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Image Digest",
+      "type": "string"
+    },
+    "input": {
+      "$ref": "#/$defs/CandidateInput"
+    },
+    "input_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Input Sha256",
+      "type": "string"
+    },
+    "resources": {
+      "$ref": "#/$defs/ResourcePolicy"
+    },
+    "run_id": {
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "side": {
+      "$ref": "#/$defs/Side"
+    },
+    "snapshot_id": {
+      "pattern": "^[A-Za-z0-9._:@/+=-]{1,128}$",
+      "title": "Snapshot Id",
+      "type": "string"
+    },
+    "source_content": {
+      "maxLength": 65536,
+      "title": "Source Content",
+      "type": "string"
+    },
+    "source_path": {
+      "const": "checkout.py",
+      "title": "Source Path",
+      "type": "string"
+    },
+    "source_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Sha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "run_id",
+    "attempt_id",
+    "side",
+    "commit_sha",
+    "source_path",
+    "source_content",
+    "source_sha256",
+    "input",
+    "input_sha256",
+    "entrypoint",
+    "resources",
+    "snapshot_id",
+    "image_digest",
+    "harness_version",
+    "harness_sha256"
+  ],
+  "title": "ExecutionRequest",
+  "type": "object"
+}

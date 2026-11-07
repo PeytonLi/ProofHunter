@@ -1,0 +1,67 @@
+{
+  "$defs": {
+    "CoverageTag": {
+      "enum": [
+        "empty",
+        "singleton",
+        "multi_item",
+        "zero_discount",
+        "full_discount",
+        "half_cent",
+        "max_items",
+        "max_price"
+      ],
+      "title": "CoverageTag",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "eig_round_decimals": {
+      "default": 12,
+      "maximum": 15,
+      "minimum": 1,
+      "title": "Eig Round Decimals",
+      "type": "integer"
+    },
+    "likelihood_policy": {
+      "default": "rounding-likelihood-v1",
+      "pattern": "^[A-Za-z0-9._@:+-]{1,64}$",
+      "title": "Likelihood Policy",
+      "type": "string"
+    },
+    "missing_coverage": {
+      "items": {
+        "$ref": "#/$defs/CoverageTag"
+      },
+      "maxItems": 8,
+      "title": "Missing Coverage",
+      "type": "array"
+    },
+    "negative_eig_tolerance": {
+      "default": 1e-12,
+      "ge": 0.0,
+      "le": 1e-06,
+      "title": "Negative Eig Tolerance",
+      "type": "number"
+    },
+    "remaining_pairs": {
+      "maximum": 6,
+      "minimum": 0,
+      "title": "Remaining Pairs",
+      "type": "integer"
+    },
+    "selection_policy": {
+      "default": "eig-select-v1",
+      "pattern": "^[A-Za-z0-9._@:+-]{1,64}$",
+      "title": "Selection Policy",
+      "type": "string"
+    }
+  },
+  "required": [
+    "remaining_pairs",
+    "missing_coverage"
+  ],
+  "title": "SelectionPolicy",
+  "type": "object"
+}

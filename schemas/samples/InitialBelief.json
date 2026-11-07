@@ -1,0 +1,73 @@
+{
+  "belief": {
+    "likelihood_policy": "rounding-likelihood-v1",
+    "prior_policy": "v1",
+    "probabilities": {
+      "H0": 0.6,
+      "half_even_rounding": 0.15,
+      "other": 0.1,
+      "per_item_rounding": 0.15
+    },
+    "updates": 0
+  },
+  "hypotheses": {
+    "initial_prior": {
+      "H0": 0.6,
+      "half_even_rounding": 0.15,
+      "other": 0.1,
+      "per_item_rounding": 0.15
+    },
+    "plan_source": "offline_fixture",
+    "prior_policy": "v1",
+    "rejected_proposals": 0,
+    "retained": [
+      {
+        "constraints": null,
+        "id": "H0",
+        "rationale": null,
+        "raw_prior_weight": 0.6,
+        "source": "mandatory",
+        "suggested_strategy": null
+      },
+      {
+        "constraints": {
+          "discount_percent": 10,
+          "max_items": null,
+          "min_items": 2,
+          "require_fractional_cent": true
+        },
+        "id": "per_item_rounding",
+        "rationale": "The loop may discount and round each line before summing.",
+        "raw_prior_weight": 0.15,
+        "source": "meta",
+        "suggested_strategy": "constraint"
+      },
+      {
+        "constraints": {
+          "discount_percent": null,
+          "max_items": null,
+          "min_items": null,
+          "require_fractional_cent": true
+        },
+        "id": "half_even_rounding",
+        "rationale": "Half-cent ties may round to even instead of half up.",
+        "raw_prior_weight": 0.15,
+        "source": "meta",
+        "suggested_strategy": "boundary"
+      },
+      {
+        "constraints": {
+          "discount_percent": null,
+          "max_items": null,
+          "min_items": null,
+          "require_fractional_cent": null
+        },
+        "id": "other",
+        "rationale": "Any other deviation from the enrolled rounding rule.",
+        "raw_prior_weight": 0.1,
+        "source": "meta",
+        "suggested_strategy": "seeded_fuzz"
+      }
+    ]
+  }
+}

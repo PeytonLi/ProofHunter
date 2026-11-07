@@ -1,0 +1,19 @@
+{
+  "model": "subq-snap-1.1",
+  "questions": {
+    "next_action": {
+      "criteria": {
+        "boundary": "Enumerate discount endpoints and half-cent boundaries",
+        "constraint": "Search for inputs on which candidate behaviors disagree",
+        "seeded_fuzz": "Sample remaining legal, uncovered inputs"
+      },
+      "instructions": "Choose among the eligible preparation actions for the next probe.",
+      "type": "choice"
+    }
+  },
+  "state": {
+    "contract": "checkout-rounding@1",
+    "coverage": [],
+    "remaining_pairs": 6
+  }
+}

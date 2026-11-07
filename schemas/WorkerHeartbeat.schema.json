@@ -1,0 +1,48 @@
+{
+  "$defs": {
+    "Profile": {
+      "enum": [
+        "offline",
+        "live"
+      ],
+      "title": "Profile",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Internal liveness record; persisted timestamps come from the store clock.",
+  "properties": {
+    "config_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Config Fingerprint",
+      "type": "string"
+    },
+    "expires_at": {
+      "format": "date-time",
+      "title": "Expires At",
+      "type": "string"
+    },
+    "observed_at": {
+      "format": "date-time",
+      "title": "Observed At",
+      "type": "string"
+    },
+    "profile": {
+      "$ref": "#/$defs/Profile"
+    },
+    "worker_id": {
+      "pattern": "^[A-Za-z0-9._:@/+=-]{1,128}$",
+      "title": "Worker Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "worker_id",
+    "profile",
+    "config_fingerprint",
+    "observed_at",
+    "expires_at"
+  ],
+  "title": "WorkerHeartbeat",
+  "type": "object"
+}

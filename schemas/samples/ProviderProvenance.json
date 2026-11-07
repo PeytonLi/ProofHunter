@@ -1,0 +1,9 @@
+{
+  "attempts": 0,
+  "latency_ms": 0,
+  "mode": "offline_fixture",
+  "model_id": null,
+  "provider": "meta",
+  "reason_code": null,
+  "request_id": null
+}

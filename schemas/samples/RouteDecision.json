@@ -1,0 +1,19 @@
+{
+  "choice": "constraint",
+  "confidence": 0.62,
+  "eligible": [
+    "boundary",
+    "constraint",
+    "seeded_fuzz"
+  ],
+  "latency_ms": 412,
+  "mode": "live",
+  "model_id": "subq-snap-1.1",
+  "probabilities": {
+    "boundary": 0.25,
+    "constraint": 0.62,
+    "seeded_fuzz": 0.13
+  },
+  "provider_request_id": "req_fixture_0001",
+  "reason_code": "provider_choice"
+}
