@@ -18,7 +18,7 @@ Each HTTP attempt has a three-second total deadline and HTTPX timeout, no redire
 following, and a 16 KiB decoded response limit. Responses validate the answer type,
 exact offered choice, optional model, probabilities and confidence. Booleans are
 not numbers, nonfinite numbers are rejected, and accepted floats round to twelve
-decimal places. Probabilities may use a subset of offered keys but must normalize
+decimal places. Probabilities must cover exactly the offered keys and normalize
 within the shared 0.01 tolerance. IDs pass the shared `SafeToken` validator before
 being recorded. Non-live decisions never carry provider request IDs. Logs contain
 only routing choices, alternatives, mode, reason, final status, sanitized ID and
@@ -65,6 +65,8 @@ elapsed latency, never request/response bodies, headers, credentials or errors.
 | Valid 200 choice | live / provider_choice | no |
 | 403, 404, 410 | fallback / preview_unavailable | no |
 | 401 or missing key | fallback / provider_unavailable | no |
+| 402 insufficient credits | fallback / provider_unavailable | no |
+| 422 invalid request / non-decision model | fallback / invalid_response | no |
 | 429 | fallback / rate_limited | once per run if budget permits |
 | 5xx or HTTPX transport failure | fallback / provider_unavailable | once per run if budget permits |
 | HTTPX or total deadline timeout | fallback / provider_timeout | once per run if budget permits |
@@ -111,6 +113,72 @@ No frozen contract or dependency changes were needed. No simulator modifications
 were made: its offline receipts must not claim live provider modes, and its current
 mode-based counting cannot represent retries. The worker should use the accessor
 above rather than copy that counting approach.
+
+## Live audit corrections and scoped smoke
+
+Read the official Decisions, Models, Models API and Authentication Markdown pages
+linked by `https://docs.subq.ai/llms.txt`, including the Decisions errors section.
+The top-level `/errors` page does not exist; Decisions documents 402 as insufficient
+credits and 422 as an invalid request or non-decision model.
+
+The response `x-request-id` header is now the sole ID source, validated with
+`SafeToken`; body IDs are ignored. Every attempt records only method, path, status,
+latency and sanitized ID in `route.attempts` and logs, including non-200 attempts
+and timeouts (null status if no response). Bodies and other headers are not recorded.
+`probe_models()` returns structured sanitized metadata plus `model_visible`;
+`check_model_visibility()` remains its bool wrapper. GETs do not spend decisions.
+
+402 uses `provider_unavailable` and is not retried. 422 remains `invalid_response`
+and is not retried. Cross-owner request: add dedicated `insufficient_credits` and
+`invalid_request` RouteReasonCode values; neither current enum describes those
+cases exactly. Frozen contracts were not changed. Retry-After is deliberately
+ignored (no sleep), retaining one transient retry and three requests per run,
+further limited by the configured budget and caller's remaining allowance.
+
+`pool_evidence(bank, choice, used_input_sha256=())` delegates to the shared
+`CandidateBank.pool_for` and `pool_sha256`; it returns choice and chosen/alternative
+pool hashes/sizes without inputs. It is a small operator helper, not a replacement
+worker selector. The smoke uses a small synthetic public bank; its pool evidence
+does not claim to describe a production worker's actual bank. Tests also prove all
+three live-shaped choices produce distinct pools in the pinned seed17 bank.
+
+Operator command (not run live during development):
+
+```sh
+uv run --locked python -m proofhunter.snap --live --decisions 3 --output snap-evidence.json
+```
+
+Set `SUBQ_API_KEY` in the environment first. No full live settings or unrelated
+credentials are needed. Without `--live` the command refuses before any I/O.
+`--decisions` accepts 1–3 and caps actual POST attempts, including retries. Exactly
+one GET precedes decisions. States vary on steps 1–2 and offer two or three
+strategies. Evidence includes UTC, sanitized per-attempt metadata, routing output,
+pool summaries, and model/URL/timeout/limit plus their SHA256 prefix. It excludes
+the key, headers and provider bodies. Account entitlement/real model behavior and
+real worker pool effects remain live-unverified. FixtureRoute is unchanged.
+
+Initial offline setup lacked cached grpcio; `uv sync --locked` installed the exact
+locked environment without changing dependencies or lockfile.
+
+Final validation (all commands prefixed `UV_OFFLINE=1 PROOFHUNTER_PROFILE=offline`):
+
+```text
+uv run --locked pytest -q
+915 passed, 1 warning in 13.67s
+uv run --locked ruff check .
+All checks passed!
+uv run --locked mypy src bench tools tests/integration
+Success: no issues found in 72 source files
+uv run --locked python tools/gate.py setup
+[gate] setup PASSED
+uv run --locked python tools/gate.py integrated
+[gate] integrated PASSED
+```
+
+The pytest warning is the locked Starlette/FastAPI integration's
+`StarletteDeprecationWarning: Using httpx with starlette.testclient is deprecated;
+install httpx2 instead.` The installed environment matches the lock; dependencies
+remain unchanged. No visual UI check applies to this adapter/CLI work.
 
 ## Remaining live gate
 
