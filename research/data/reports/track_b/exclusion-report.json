@@ -47,7 +47,6 @@
  "rows": 50908,
  "schema": "track-b-exclusion-report-v1",
  "schema_gaps": [
-  "SweSmithTask.dataset_id is Literal['SWE-bench/SWE-smith'] but the pinned dataset is SWE-bench/SWE-smith-py; rows carry the schema literal and this report records the true id. Setup must widen the literal in a new schema version.",
   "license_verified=True means a GitHub SPDX id was recorded by the assessment (not a manual LICENSE review); NOASSERTION repos are unverified/unknown."
  ],
  "shards": {
