@@ -19,7 +19,8 @@ def test_cli_resolves_integration_commands() -> None:
 def test_run_pilot_smoke_writes_report(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     assert cli.main(["run-pilot", "--doubles", "--smoke", "--out", str(tmp_path)]) == 0
     report = json.loads((tmp_path / "pilot-report.json").read_text())
-    assert report["cases"] == 3 and report["seeds"] == report["seeds"][:1]
+    assert report["cases"] == 3
+    assert report["seeds"] == report["seeds"][:1]
     assert report["skipped_arms"] == {"simple_heuristic": "no double for selector "
                                       "'simple_heuristic'"}
     assert report["projection"]["worst_case_executions_total"] == (
@@ -51,7 +52,8 @@ def test_evaluate_frozen_config(tmp_path: Path) -> None:
     manifest = json.loads((out / "run-manifest.json").read_text())
     assert manifest["arms_run"] == ["builtin_eig", "fixed_order"]
     assert set(manifest["arms_skipped"]) == {"builtin_ranker"}
-    assert manifest["rows"] == 2 * 2 * 5 and manifest["training"] == "disabled"
+    assert manifest["rows"] == 2 * 2 * 5
+    assert manifest["training"] == "disabled"
 
 
 def test_evaluate_test_split_runs_in_full(tmp_path: Path) -> None:

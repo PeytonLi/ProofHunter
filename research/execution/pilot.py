@@ -95,7 +95,8 @@ def summarize(rows: Sequence[RawResultRow], labels: Mapping[str, CaseLabel],
         per_arm[row.arm_id].append(row)
     arms: dict[str, Any] = {}
     for arm_id, arm_rows in sorted(per_arm.items()):
-        usable = [r for r in arm_rows if r.verdict != "failed" and r.reason_code != "source_invalid"]
+        usable = [r for r in arm_rows
+                  if r.verdict != "failed" and r.reason_code != "source_invalid"]
         invocations = [r.invocations.base + r.invocations.head + r.invocations.confirm
                        for r in arm_rows]
         walls = [r.timings.wall_ms for r in arm_rows]

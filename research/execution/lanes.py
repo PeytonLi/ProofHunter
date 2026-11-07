@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import importlib
 import json
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from research.schemas.interfaces import CaseStore, HypothesisGenerator, Ledger, Selector
 from research.schemas.models import ArmSpec, LedgerEntry
@@ -19,7 +19,7 @@ class LaneMissing(Exception):
     """A lane module or a frozen artifact needed by an arm is not available."""
 
 
-def _attr(module: str, name: str) -> Callable[..., Any]:
+def _attr(module: str, name: str) -> Any:
     try:
         loaded = importlib.import_module(module)
     except ModuleNotFoundError as error:
@@ -74,30 +74,36 @@ class ArmFactory:
     artifacts: FrozenArtifacts = field(default_factory=FrozenArtifacts)
 
     def selector(self, spec: ArmSpec, seed: int) -> Selector:
-        if spec.selector in FACTORY_SELECTORS:
-            return _attr("research.baselines.selectors", "make_selector")(spec.arm_id, seed=seed)
-        if spec.selector == "eig":
-            return _attr("research.baselines.selectors", "make_selector")("builtin_eig", seed=seed)
+        selector: Selector
+        if spec.selector in FACTORY_SELECTORS or spec.selector == "eig":
+            arm_id = spec.arm_id if spec.selector in FACTORY_SELECTORS else "builtin_eig"
+            selector = _attr("research.baselines.selectors", "make_selector")(arm_id, seed=seed)
+            return selector
         if spec.selector == "lambdarank":
             checkpoint = _check_hash(self.artifacts.ranker_checkpoint,
                                      self.artifacts.ranker_checkpoint_sha256, "ranker checkpoint")
-            return _attr("research.ranker.selector", "load_ranker_selector")(
+            selector = _attr("research.ranker.selector", "load_ranker_selector")(
                 checkpoint, arm_id=spec.arm_id)
+            return selector
         model_id = self.artifacts.frontier_model_id
         if spec.selector in ("frontier_reviewer", "frontier_agent") and model_id is None:
             raise LaneMissing("frontier_model_id must be frozen in the config")
         if spec.selector == "frontier_reviewer":
-            return _attr("research.baselines.frontier", "frontier_reviewer")(model_id)
+            selector = _attr("research.baselines.frontier", "frontier_reviewer")(model_id)
+            return selector
         if spec.selector == "frontier_agent":
-            return _attr("research.baselines.frontier", "frontier_agent")(
+            selector = _attr("research.baselines.frontier", "frontier_agent")(
                 model_id, free_input=spec.candidate_freedom == "free_input_documented")
+            return selector
         raise LaneMissing(f"no selector factory for {spec.selector!r}")
 
     def generator(self, spec: ArmSpec) -> HypothesisGenerator | None:
+        generator: HypothesisGenerator
         if spec.generator in (None, "builtin_plan"):
             return None
         if spec.generator == "meta_muse_spark":
-            return _attr("research.baselines.meta", "meta_generator")()
+            generator = _attr("research.baselines.meta", "meta_generator")()
+            return generator
         if spec.generator in ("qwen_untuned", "qwen_qlora"):
             revision = self.artifacts.generator_revision
             if revision is None:
@@ -106,13 +112,14 @@ class ArmFactory:
             if spec.generator == "qwen_qlora":
                 adapter = _check_hash(self.artifacts.generator_adapter,
                                       self.artifacts.generator_adapter_sha256, "generator adapter")
-            return _attr("research.generator.model", "load_generator")(
+            generator = _attr("research.generator.model", "load_generator")(
                 spec.generator, adapter=adapter, revision=revision)
+            return generator
         raise LaneMissing(f"no generator factory for {spec.generator!r}")
 
 
 def open_store(root: Path) -> CaseStore:
-    return _attr("research.data.store", "open_store")(root)
+    return cast(CaseStore, _attr("research.data.store", "open_store")(root))
 
 
 class JsonlLedger:
@@ -135,6 +142,6 @@ class JsonlLedger:
 
 def open_ledger(path: Path) -> Ledger:
     try:
-        return _attr("research.metrics.ledger", "open_ledger")(path)
+        return cast(Ledger, _attr("research.metrics.ledger", "open_ledger")(path))
     except LaneMissing:
         return JsonlLedger(path)

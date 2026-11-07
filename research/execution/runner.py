@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from time import perf_counter_ns
-from typing import Final
+from typing import Final, cast
 
 from pydantic import ValidationError
 
@@ -89,7 +89,8 @@ class BudgetViolation(RuntimeError):
 
 def implementation_sha() -> str:
     out = subprocess.run(
-        ["git", "rev-parse", "HEAD"], cwd=REPO, capture_output=True, text=True, check=True
+        ["git", "rev-parse", "HEAD"],  # noqa: S607
+        cwd=REPO, capture_output=True, text=True, check=True,
     )
     return out.stdout.strip()
 
@@ -108,7 +109,7 @@ def template_review(sources: CaseSources) -> str | None:
     if hashlib.sha256(sources.head_source).hexdigest() != case.head_source_sha256:
         return "head_source_hash_mismatch"
     try:
-        from research.data import templates
+        from research.data import templates  # type: ignore[import-untyped]
     except ModuleNotFoundError:
         return "template_registry_unavailable"
     info = {t.template_id: t for t in templates.list_templates()}.get(case.template_id)
@@ -116,15 +117,16 @@ def template_review(sources: CaseSources) -> str | None:
         case.template_version, case.template_sha256
     ):
         return "template_not_reviewed"
-    if templates.render(case.template_id, case.params) != (sources.base_source, sources.head_source):
+    rendered = templates.render(case.template_id, case.params)
+    if rendered != (sources.base_source, sources.head_source):
         return "sources_differ_from_template_render"
     return None
 
 
 def default_prompt_builder(sources: CaseSources) -> GeneratorInput:
-    from research.generator.prompt import build_input
+    from research.generator.prompt import build_input  # type: ignore[import-untyped]
 
-    return build_input(sources)
+    return cast(GeneratorInput, build_input(sources))
 
 
 def _commit(source_sha256: str) -> str:
@@ -197,7 +199,9 @@ class _Episode:
             exit_code=0 if ok else (1 if result.outcome is ObservationOutcome.NONZERO else None),
             stdout_sha256=sha256_hex(stdout), stderr_sha256=sha256_hex(b""), truncated=False)
 
-    def observe_with_retry(self, side: Side, candidate: Candidate) -> tuple[SandboxObservation, int]:
+    def observe_with_retry(
+        self, side: Side, candidate: Candidate
+    ) -> tuple[SandboxObservation, int]:
         used = 0
         observation = self.observe(side, candidate)
         while (observation.outcome in RETRYABLE and self.retries < self.max_retries
@@ -273,9 +277,8 @@ class ResearchEpisodeRunner:
             try:
                 plan_payload = HypothesisPlanPayload.model_validate(
                     generator.propose(self.prompt_builder(sources)).model_dump())
-                plan_mode = ProviderMode.LIVE if mode is MeasurementMode.LIVE else (
-                    ProviderMode.RECORDED if mode is MeasurementMode.RECORDED
-                    else ProviderMode.OFFLINE_FIXTURE)
+                plan_mode = (ProviderMode.LIVE if mode is MeasurementMode.LIVE
+                             else ProviderMode.OFFLINE_FIXTURE)
             except (ValidationError, ValueError) as error:
                 plan_payload = builtin_hypothesis_payload()
                 self._fallback(run_id, generator, "generator_invalid_output", error)
@@ -442,7 +445,8 @@ class ResearchEpisodeRunner:
             probes=list(summaries),
             invocations=Invocations(base=episode.counts["base"], head=episode.counts["head"],
                                     confirm=episode.counts["confirm"], failed=episode.failed),
-            verdict="failed" if verdict == "failed" else Verdict(verdict), reason_code=reason, pairs_to_first_confirmed_witness=first,
+            verdict="failed" if verdict == "failed" else Verdict(verdict), reason_code=reason,
+            pairs_to_first_confirmed_witness=first,
             censored=first is None,
             timings=Timings(
                 wall_ms=(perf_counter_ns() - start) / 1e6, queue_ms=None,

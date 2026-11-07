@@ -11,8 +11,20 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from research.execution import pilot
-from research.execution.lanes import ArmFactory, FrozenArtifacts, LaneMissing, open_ledger, open_store
-from research.execution.runner import REPO, implementation_sha, make_runner
+from research.execution.lanes import (
+    ArmFactory,
+    FrozenArtifacts,
+    LaneMissing,
+    open_ledger,
+    open_store,
+)
+from research.execution.runner import (
+    REPO,
+    ResearchEpisodeRunner,
+    implementation_sha,
+    make_runner,
+)
+from research.schemas.interfaces import CaseStore
 from research.schemas.models import MeasurementMode, ProtocolV1, RawResultRow, Split
 
 PROTOCOL = REPO / "research" / "spec" / "protocol-v1.json"
@@ -38,17 +50,23 @@ def _common(parser: argparse.ArgumentParser) -> None:
                         help="integration self-test: reviewed bench corpus + selector doubles")
 
 
-def _setup(args: argparse.Namespace, split: Split) -> tuple[object, object, object, object]:
+def _setup(
+    args: argparse.Namespace, split: Split
+) -> tuple[ProtocolV1, Path, CaseStore, ResearchEpisodeRunner, pilot.Factory]:
     protocol = load_protocol(args.protocol)
     out = args.out or ARTIFACTS / f"{args.command}-{_stamp()}"
     out.mkdir(parents=True, exist_ok=True)
     ledger = open_ledger(out / "ledger.jsonl")
+    store: CaseStore
+    runner: ResearchEpisodeRunner
+    factory: pilot.Factory
     if args.doubles:
         from research.execution import doubles
 
         store = doubles.BenchStore(split)
-        runner = doubles.test_runner(protocol, ledger=None)
-        runner.ledger, runner.implementation = ledger, implementation_sha()
+        runner = doubles.offline_runner(protocol)
+        runner.ledger = ledger
+        runner.implementation = implementation_sha()
         factory = doubles.DoubleFactory()
     else:
         if args.store is None:
@@ -56,7 +74,7 @@ def _setup(args: argparse.Namespace, split: Split) -> tuple[object, object, obje
         store = open_store(args.store)
         runner = make_runner(protocol, ledger)
         factory = ArmFactory(FrozenArtifacts.load(getattr(args, "config", None)))
-    return protocol, out, store, (runner, factory)
+    return protocol, out, store, runner, factory
 
 
 def run_pilot(argv: Sequence[str]) -> int:
@@ -72,11 +90,10 @@ def run_pilot(argv: Sequence[str]) -> int:
     if not 1 <= args.cases <= 50 or not 1 <= args.seeds <= 5:
         parser.error("--cases must be 1..50 and --seeds 1..5")
     try:
-        protocol, out, store, (runner, factory) = _setup(args, Split(args.split))
-        assert isinstance(protocol, ProtocolV1) and isinstance(out, Path)
+        protocol, out, store, runner, factory = _setup(args, Split(args.split))
         seeds = protocol.replicate_seeds[: 1 if args.smoke else args.seeds]
         arms = args.arms.split(",") if args.arms else list(PILOT_ARMS)
-        report = pilot.run(store, protocol, runner, factory, arms=arms,  # type: ignore[arg-type]
+        report = pilot.run(store, protocol, runner, factory, arms=arms,
                            split=Split(args.split), max_cases=3 if args.smoke else args.cases,
                            seeds=seeds, mode=MeasurementMode(args.mode), out=out)
     except (LaneMissing, ValueError) as error:
@@ -101,14 +118,13 @@ def evaluate(argv: Sequence[str]) -> int:
         parser.error("the sealed test split runs in full")
     try:
         artifacts = FrozenArtifacts.load(args.config)
-        protocol, out, store, (runner, factory) = _setup(args, Split(args.split))
-        assert isinstance(protocol, ProtocolV1) and isinstance(out, Path)
+        protocol, out, store, runner, factory = _setup(args, Split(args.split))
         arm_ids = (args.arms.split(",") if args.arms else list(artifacts.arms or [])
                    or [a.arm_id for a in protocol.arms])
         specs = {a.arm_id: a for a in protocol.arms}
         if set(arm_ids) - set(specs):
             raise ValueError(f"arms not in protocol: {sorted(set(arm_ids) - set(specs))}")
-        cases = sorted((c for c in store.manifest().cases  # type: ignore[attr-defined]
+        cases = sorted((c for c in store.manifest().cases
                         if c.split.value == args.split), key=lambda c: c.case_id)
         cases = cases[: args.max_cases] if args.max_cases else cases
         rows: list[RawResultRow] = []
@@ -116,16 +132,16 @@ def evaluate(argv: Sequence[str]) -> int:
         for arm_id in arm_ids:
             spec = specs[arm_id]
             try:
-                generator = factory.generator(spec)  # type: ignore[attr-defined]
-                factory.selector(spec, protocol.replicate_seeds[0])  # type: ignore[attr-defined]
+                generator = factory.generator(spec)
+                factory.selector(spec, protocol.replicate_seeds[0])
             except LaneMissing as error:
                 skipped[arm_id] = str(error)
                 continue
             for case in cases:
-                sources = store.sources(case.case_id)  # type: ignore[attr-defined]
+                sources = store.sources(case.case_id)
                 for repetition, seed in enumerate(protocol.replicate_seeds):
-                    selector = factory.selector(spec, seed)  # type: ignore[attr-defined]
-                    rows.append(runner.run(  # type: ignore[attr-defined]
+                    selector = factory.selector(spec, seed)
+                    rows.append(runner.run(
                         sources, selector, generator, arm_id=arm_id, seed=seed,
                         repetition=repetition, mode=MeasurementMode(args.mode)))
     except (LaneMissing, ValueError) as error:
@@ -134,10 +150,10 @@ def evaluate(argv: Sequence[str]) -> int:
     rows_path = out / "rows.jsonl"
     rows_path.write_text("".join(r.model_dump_json() + "\n" for r in rows), encoding="utf-8")
     (out / "events.jsonl").write_text("".join(
-        json.dumps(e, sort_keys=True) + "\n" for e in runner.events), encoding="utf-8")  # type: ignore[attr-defined]
+        json.dumps(e, sort_keys=True) + "\n" for e in runner.events), encoding="utf-8")
     manifest = {
         "schema": "research-evaluation-run-v1", "protocol_version": protocol.schema_version,
-        "implementation_sha": runner.implementation,  # type: ignore[attr-defined]
+        "implementation_sha": runner.implementation,
         "config_sha256": hashlib.sha256(args.config.read_bytes()).hexdigest(),
         "split": args.split, "measurement_mode": args.mode, "training": "disabled",
         "seeds": protocol.replicate_seeds, "cases": len(cases), "arms_run": sorted(

@@ -33,7 +33,7 @@ def protocol() -> ProtocolV1:
 def run(protocol: ProtocolV1, case: str, selector: object, *, faults: dict | None = None,
         generator: object = None, arm_id: str | None = None,
         mode: MeasurementMode = OFFLINE, runner: object = None) -> RawResultRow:
-    runner = runner or doubles.test_runner(protocol, faults=faults)
+    runner = runner or doubles.offline_runner(protocol, faults=faults)
     row = runner.run(doubles.bench_sources(case), selector, generator,  # type: ignore[attr-defined]
                      arm_id=arm_id or selector.arm_id, seed=1, repetition=0,  # type: ignore[attr-defined]
                      mode=mode)
@@ -55,14 +55,15 @@ def test_pool_is_shared_and_frozen(protocol: ProtocolV1) -> None:
     assert {r.pool_sha256 for r in rows} == {bank.bank_sha256}
 
 
-@pytest.mark.parametrize("case,verdict", [
+@pytest.mark.parametrize(("case", "verdict"), [
     ("per_line", "confirmed_regression"), ("half_even", "confirmed_regression"),
     ("existing", "confirmed_existing_defect"), ("clean_divmod", "no_defect_found"),
 ])
 def test_verdicts_follow_production_rules(protocol: ProtocolV1, case: str, verdict: str) -> None:
     row = run(protocol, case, doubles.EigDouble())
     assert row.verdict.value == verdict  # type: ignore[union-attr]
-    assert row.cost_status is CostStatus.MEASURED and row.cost_usd == 0.0
+    assert row.cost_status is CostStatus.MEASURED
+    assert row.cost_usd == 0.0
     assert row.snap_routing == "disabled"
 
 
@@ -83,26 +84,30 @@ def test_transient_timeout_is_retried_once(protocol: ProtocolV1) -> None:
               faults={("head", 1): ObservationOutcome.TIMEOUT})
     assert row.probes[0].retries == 1
     assert row.verdict.value == "confirmed_regression"  # type: ignore[union-attr]
-    assert row.invocations.failed == 1 and total(row) == 4
+    assert row.invocations.failed == 1
+    assert total(row) == 4
 
 
 def test_nonretryable_invalid_output_is_unusable(protocol: ProtocolV1) -> None:
     row = run(protocol, "per_line", doubles.EigDouble(),
               faults={("head", 1): ObservationOutcome.INVALID})
-    assert row.probes[0].outcome.value == "unusable" and row.probes[0].retries == 0
+    assert row.probes[0].outcome.value == "unusable"
+    assert row.probes[0].retries == 0
 
 
 def test_flaky_confirmation_is_not_a_witness(protocol: ProtocolV1) -> None:
     row = run(protocol, "per_line", doubles.EigDouble(), faults={("confirm", 1): 999999})
     assert row.probes[0].confirmation.value == "not_reproduced"
-    assert row.censored and row.invocations.confirm == 1
+    assert row.censored
+    assert row.invocations.confirm == 1
     assert row.verdict.value == "inconclusive"  # type: ignore[union-attr]
 
 
 def test_confirmation_timeout_is_unusable(protocol: ProtocolV1) -> None:
     row = run(protocol, "per_line", doubles.EigDouble(),
               faults={("confirm", 1): ObservationOutcome.TIMEOUT})
-    assert row.probes[0].confirmation.value == "unusable" and row.censored
+    assert row.probes[0].confirmation.value == "unusable"
+    assert row.censored
 
 
 def test_real_deadline_times_out_reviewed_code() -> None:
@@ -114,7 +119,8 @@ def test_real_deadline_times_out_reviewed_code() -> None:
     executor = ReviewedTemplateExecutor({hashlib.sha256(source).hexdigest()}.__contains__,
                                         timeout_seconds=0.2)
     result = executor("head", source, CandidateInput(prices_cents=[1], discount_percent=0))
-    assert result.outcome is ObservationOutcome.TIMEOUT and result.value is None
+    assert result.outcome is ObservationOutcome.TIMEOUT
+    assert result.value is None
     assert result.duration_ms < 2000
 
 
@@ -125,7 +131,7 @@ def test_unreviewed_source_never_executes(protocol: ProtocolV1) -> None:
     result = executor("base", b"raise SystemExit(1)\n",
                       CandidateInput(prices_cents=[], discount_percent=0))
     assert result.outcome is ObservationOutcome.DENIED
-    runner = doubles.test_runner(protocol)
+    runner = doubles.offline_runner(protocol)
     runner.review = lambda sources: "template_not_reviewed"
     row = run(protocol, "per_line", doubles.FixedOrderDouble(), runner=runner)
     assert (row.verdict.value, row.reason_code, total(row)) == (  # type: ignore[union-attr]
@@ -137,7 +143,8 @@ def test_selector_outage_and_malformed_choice(protocol: ProtocolV1) -> None:
                  doubles.ScriptedSelector("fixed_order", fail_reset=True))
     assert (outage.reason_code, total(outage)) == ("provider_unavailable", 0)
     midway = run(protocol, "clean_divmod", doubles.ScriptedSelector("fixed_order", fail_at=3))
-    assert len(midway.probes) == 2 and midway.verdict.value == "inconclusive"  # type: ignore[union-attr]
+    assert len(midway.probes) == 2
+    assert midway.verdict.value == "inconclusive"
     invalid = run(protocol, "clean_divmod",
                   doubles.ScriptedSelector("fixed_order", invalid_at=1))
     assert (len(invalid.probes), total(invalid)) == (0, 0)
@@ -150,7 +157,7 @@ def test_generator_outage_and_malformed_output_fall_back(protocol: ProtocolV1) -
         (doubles.StaticGenerator(error=TimeoutError("slow")), "generator_unavailable"),
         (doubles.StaticGenerator(raw={"hypotheses": "nope"}), "generator_invalid_output"),
     ):
-        runner = doubles.test_runner(protocol)
+        runner = doubles.offline_runner(protocol)
         row = run(protocol, "per_line", doubles.EigDouble(), generator=generator,
                   arm_id="qwen_untuned_eig", runner=runner)
         assert row.verdict.value == "confirmed_regression"  # type: ignore[union-attr]
@@ -173,7 +180,7 @@ def test_model_arm_costs_come_from_the_ledger(protocol: ProtocolV1) -> None:
                   arm_id="qwen_untuned_eig", mode=MeasurementMode.LIVE)
     assert (unknown.cost_usd, unknown.cost_status) == (None, CostStatus.UNKNOWN)
     ledger = doubles.MemoryLedger()
-    runner = doubles.test_runner(protocol, ledger)
+    runner = doubles.offline_runner(protocol, ledger)
     entry = LedgerEntry.model_validate_json(
         (REPO / "research/schemas/samples/LedgerEntry.json").read_text()).model_copy(update={
             "lane": "baselines", "cost_usd": 0.0125, "cost_status": CostStatus.MEASURED,

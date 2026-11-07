@@ -9,13 +9,17 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from typing import Literal
 
 from bench.corpus import ROOT, load
 from bench.freeze import load_policy
 from proofhunter import bayes
 from proofhunter.contracts import (
+    BinaryOutcome,
     HypothesisPlanPayload,
     ObservationOutcome,
+    ProviderMode,
+    SelectionPolicy,
     Strategy,
     Verdict,
     builtin_hypothesis_payload,
@@ -32,14 +36,14 @@ from research.schemas.models import (
     CaseManifest,
     CaseRecord,
     CheckoutInput,
-    LabelKind,
-    Witness,
     ContextFile,
     GeneratorInput,
+    LabelKind,
     LedgerEntry,
     ProtocolV1,
     Split,
     Track,
+    Witness,
 )
 
 STRATEGY_ORDER = (Strategy.BOUNDARY, Strategy.CONSTRAINT, Strategy.SEEDED_FUZZ)
@@ -51,7 +55,7 @@ def bench_sources(case_id: str, *, split: Split = Split.VALIDATION,
     case = next(c for c in load().cases if c.case_id == case_id)
     base = (ROOT / case.base_path).read_bytes()
     head = (ROOT / case.head_path).read_bytes()
-    params = {"bench_case": case_id}
+    params: dict[str, int | bool | str | list[int]] = {"bench_case": case_id}
     record = CaseRecord(
         schema_version="research-case-v1", track=Track.A, case_id=f"bench-{case_id}",
         split=split, family_id=f"bench_{case_id}", defect_origin=f"bench-{case_id}",
@@ -74,9 +78,11 @@ def bench_review(sources: CaseSources) -> str | None:
 
 
 def bench_prompt(sources: CaseSources) -> GeneratorInput:
+    sides: tuple[tuple[Literal["base", "head"], bytes], ...] = (
+        ("base", sources.base_source), ("head", sources.head_source))
     files = [ContextFile(side=side, path="checkout.py", sha256=hashlib.sha256(data).hexdigest(),
                          content=data.decode())
-             for side, data in (("base", sources.base_source), ("head", sources.head_source))]
+             for side, data in sides]
     return GeneratorInput(
         prompt_format_version="integration-double-v1", contract_id="checkout-rounding@1",
         behavior_spec_sha256="0" * 64,
@@ -95,7 +101,7 @@ class MemoryLedger:
         return tuple(self.rows)
 
 
-def test_runner(protocol: ProtocolV1, ledger: MemoryLedger | None = None, *,
+def offline_runner(protocol: ProtocolV1, ledger: MemoryLedger | None = None, *,
                 faults: Mapping[FaultKey, ObservationOutcome | int] | None = None,
                 timeout_seconds: float | None = None) -> ResearchEpisodeRunner:
     reviewed = set(load_policy().reviewed_source_sha256)
@@ -126,7 +132,7 @@ class EigDouble:
     arm_id = "builtin_eig"
 
     def reset(self, context: EpisodeContext) -> None:
-        self.plan = as_plan(context.plan, mode=bayes.c.ProviderMode.FALLBACK)
+        self.plan = as_plan(context.plan, mode=ProviderMode.FALLBACK)
         self.bank = {c.input_sha256: c for c in context.bank.candidates}
 
     def choose(self, state: EpisodeState) -> str:
@@ -134,12 +140,12 @@ class EigDouble:
         for item in state.history:
             if item.outcome.value in ("match", "mismatch"):
                 selection = bayes.select(belief, [self.bank[item.candidate_input_sha256]],
-                                         bayes.c.SelectionPolicy(remaining_pairs=1,
+                                         SelectionPolicy(remaining_pairs=1,
                                                                  missing_coverage=[]))
-                outcome = (bayes.c.BinaryOutcome.MATCH if item.outcome.value == "match"
-                           else bayes.c.BinaryOutcome.MISMATCH)
+                outcome = (BinaryOutcome.MATCH if item.outcome.value == "match"
+                           else BinaryOutcome.MISMATCH)
                 belief = bayes.update(belief, selection, outcome)
-        selection = bayes.select(belief, list(state.available), bayes.c.SelectionPolicy(
+        selection = bayes.select(belief, list(state.available), SelectionPolicy(
             remaining_pairs=state.remaining_pairs, missing_coverage=list(state.missing_coverage)))
         return selection.candidate.input_sha256
 
@@ -228,7 +234,8 @@ class BenchStore:
                 defect_family=case.defect_family.replace("-", "_"),
                 expected_verdict=(Verdict.CONFIRMED_EXISTING_DEFECT if existing
                                   else Verdict.CONFIRMED_REGRESSION),
-                witness=Witness(input=CheckoutInput(**data), input_sha256=input_sha256(data),
+                witness=Witness(input=CheckoutInput.model_validate(data),
+                                input_sha256=input_sha256(data),
                                 expected_cents=w.expected,
                                 base_cents=w.head if existing else w.expected,
                                 head_cents=w.head, reproduced_by="reviewed_template_execution"),
