@@ -5,22 +5,24 @@ import json
 import logging
 import math
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from typing import Any
 
 import httpx
 from pydantic import TypeAdapter, ValidationError
 
-from proofhunter.config import Settings
+from proofhunter.config import Settings, SnapSettings
 from proofhunter.contracts import (
     ROUTE_PROBABILITY_TOLERANCE,
     STRATEGY_FALLBACK_ORDER,
+    CandidateBank,
     DecisionState,
     RouteDecision,
     RouteMode,
     RouteReasonCode,
     SafeToken,
     Strategy,
+    pool_sha256,
 )
 
 _LOG = logging.getLogger(__name__)
@@ -49,14 +51,27 @@ def _probability(value: object) -> float:
     return round(float(value), 12)
 
 
+def pool_evidence(bank: CandidateBank, choice: Strategy,
+                  used_input_sha256: Iterable[str] = ()) -> dict[str, Any]:
+    """Describe the exact shared candidate pools without exposing candidate inputs."""
+    used = tuple(used_input_sha256)
+    pools = {s.value: {"size": len(pool := bank.pool_for(s, used)),
+                       "sha256": pool_sha256(pool)} for s in Strategy}
+    return {"choice": choice.value, "chosen": pools[choice.value], "alternatives": pools}
+
+
 class SnapRoute:
     """One worker-owned instance; retain counters for the lifetime of each run."""
 
-    def __init__(self, settings: Settings, *, client: httpx.AsyncClient | None = None,
+    def __init__(self, settings: Settings | SnapSettings, *,
+                 client: httpx.AsyncClient | None = None,
                  transport: httpx.AsyncBaseTransport | None = None,
+                 request_limit: int = 3,
                  clock: Callable[[], float] = time.monotonic) -> None:
-        self._settings = settings.snap
-        self._limit = min(3, settings.budget.max_snap_requests)
+        self._settings = settings if isinstance(settings, SnapSettings) else settings.snap
+        self._limit = max(0, min(3, request_limit, 3 if isinstance(settings, SnapSettings)
+                                else settings.budget.max_snap_requests))
+        self.attempts: list[dict[str, Any]] = []
         self._client = client
         self._transport = transport
         self._clock = clock
@@ -69,43 +84,62 @@ class SnapRoute:
         return self._spent.get(run_id, 0)
 
     async def _http(self, method: str, url: str,
-                    body: dict[str, object] | None = None) -> tuple[int, object]:
+                    body: dict[str, object] | None = None) -> tuple[int, object, str | None]:
         key = self._settings.api_key
         headers = {"Authorization": f"Bearer {key.get_secret_value()}"} if key else {}
 
-        async def send(client: httpx.AsyncClient) -> tuple[int, object]:
+        async def send(client: httpx.AsyncClient) -> tuple[int, object, str | None]:
             async with asyncio.timeout(_TIMEOUT):
                 async with client.stream(method, url, headers=headers, json=body,
                                          timeout=_TIMEOUT, follow_redirects=False) as response:
+                    metadata.update(status=response.status_code,
+                                    request_id=_token(response.headers.get("x-request-id")))
+                    request_id = metadata["request_id"]
                     if response.status_code != 200:
-                        return response.status_code, None
+                        return response.status_code, None, request_id
                     data = bytearray()
                     async for chunk in response.aiter_bytes():
                         if len(data) + len(chunk) > _LIMIT:
-                            return 200, None
+                            return 200, None, request_id
                         data.extend(chunk)
                     try:
-                        return 200, json.loads(data)
+                        return 200, json.loads(data), request_id
                     except (ValueError, UnicodeError, RecursionError):
-                        return 200, None
+                        return 200, None, request_id
 
-        if self._client is not None:
-            return await send(self._client)
-        async with httpx.AsyncClient(transport=self._transport, trust_env=False) as client:
-            return await send(client)
+        started = self._clock()
+        metadata: dict[str, Any] = {"method": method, "path": httpx.URL(url).path,
+                                    "status": None, "request_id": None}
+        try:
+            if self._client is not None:
+                return await send(self._client)
+            async with httpx.AsyncClient(transport=self._transport, trust_env=False) as client:
+                return await send(client)
+        finally:
+            metadata["latency_ms"] = max(0, int((self._clock() - started) * 1000))
+            self.attempts.append(metadata)
+            _LOG.info("snap attempt=%s", metadata)
 
     async def check_model_visibility(self) -> bool:
         """Operator-only probe, not charged to decision budgets; never called by choose."""
+        return bool((await self.probe_models())["model_visible"])
+
+    async def probe_models(self) -> dict[str, Any]:
+        """Sanitized operator probe; never exposes the provider payload."""
+        before = len(self.attempts)
+        visible = False
         if self._settings.api_key is None:
-            return False
+            return {"status": None, "request_id": None, "latency_ms": 0,
+                    "model_visible": False}
         try:
-            status, payload = await self._http("GET", self._settings.models_url)
-            return (status == 200 and isinstance(payload, dict)
+            status, payload, _ = await self._http("GET", self._settings.models_url)
+            visible = (status == 200 and isinstance(payload, dict)
                     and isinstance(payload.get("data"), list)
                     and any(isinstance(row, dict) and row.get("id") == self._settings.model
                             for row in payload["data"]))
         except (httpx.HTTPError, TimeoutError):
-            return False
+            pass
+        return {**self.attempts[before], "model_visible": visible}
 
     def _body(self, state: DecisionState, eligible: tuple[Strategy, ...]) -> dict[str, object]:
         structured = state.model_dump(mode="json")
@@ -133,6 +167,7 @@ class SnapRoute:
         fallback = next(s for s in STRATEGY_FALLBACK_ORDER if s in eligible)
         started: float | None = None
         status: int | None = None
+        request_id: str | None = None
 
         def result(reason: RouteReasonCode, mode: RouteMode = RouteMode.FALLBACK,
                    **values: Any) -> RouteDecision:
@@ -140,7 +175,7 @@ class SnapRoute:
                 choice=values.get("choice", fallback), eligible=list(eligible), mode=mode,
                 model_id=self._settings.model if mode is RouteMode.LIVE else None,
                 probabilities=values.get("probabilities"), confidence=values.get("confidence"),
-                provider_request_id=values.get("request_id") if mode is RouteMode.LIVE else None,
+                provider_request_id=request_id if mode is RouteMode.LIVE else None,
                 latency_ms=None if started is None else max(0, int((self._clock()-started)*1000)),
                 reason_code=reason)
             _LOG.info("snap choice=%s alternatives=%s mode=%s reason=%s status=%s "
@@ -162,14 +197,15 @@ class SnapRoute:
             allowance -= 1
             self._spent[state.run_id] = self.requests_spent(state.run_id) + 1
             status = None
+            request_id = None
             try:
-                status, payload = await self._http("POST", self._settings.url,
+                status, payload, request_id = await self._http("POST", self._settings.url,
                                                    self._body(state, eligible))
                 if status == 200:
                     return self._parse(payload, eligible, result)
                 if status in (403, 404, 410):
                     return result(RouteReasonCode.PREVIEW_UNAVAILABLE)
-                if status == 401:
+                if status in (401, 402):
                     return result(RouteReasonCode.PROVIDER_UNAVAILABLE)
                 if status == 429:
                     reason = RouteReasonCode.RATE_LIMITED
@@ -203,7 +239,7 @@ class SnapRoute:
         if "probabilities" in answer:
             raw = answer["probabilities"]
             try:
-                if not isinstance(raw, dict) or not set(raw) <= set(eligible):
+                if not isinstance(raw, dict) or set(raw) != set(eligible):
                     raise ValueError("invalid probability keys")
                 probabilities = {Strategy(k): _probability(v) for k, v in raw.items()}
                 if abs(math.fsum(probabilities.values()) - 1) > ROUTE_PROBABILITY_TOLERANCE:
@@ -216,7 +252,7 @@ class SnapRoute:
             return result(RouteReasonCode.INVALID_RESPONSE)
         return result(RouteReasonCode.PROVIDER_CHOICE, RouteMode.LIVE,
                       choice=Strategy(choice), probabilities=probabilities,
-                      confidence=confidence, request_id=_token(payload.get("id")))
+                      confidence=confidence)
 
 
 def create_route_port(settings: Settings, *, client: httpx.AsyncClient | None = None,

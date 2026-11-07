@@ -71,7 +71,8 @@ async def test_request_and_fixture_response(eligible: tuple[Strategy, ...],
         if len(eligible) == 2:
             payload["answers"]["next_action"]["probabilities"] = {
                 "constraint": 0.75, "boundary": 0.25}
-        return httpx.Response(200, json=payload)
+        return httpx.Response(200, json=payload,
+                              headers={"x-request-id": "sysone-fixture-0001"})
 
     route = port(handle)
     typed: RoutePort = route
@@ -180,14 +181,17 @@ async def test_optional_fields_and_sanitization(request_id: object) -> None:
     assert decision.confidence is None
 
 
-async def test_rounding_subset_and_latency() -> None:
-    times = iter([1.0, 1.125])
+async def test_rounding_and_latency() -> None:
+    times = iter([1.0, 1.0, 1.125, 1.125])
     route = create_route_port(settings(), clock=lambda: next(times), transport=httpx.MockTransport(
-        lambda _: httpx.Response(200, json=response(probabilities={"constraint": 0.999},
+        lambda _: httpx.Response(200, json=response(probabilities={"constraint": 0.999,
+                                                                 "boundary": 0.001,
+                                                                 "seeded_fuzz": 0.0},
                                                    confidence=0.123456789012345))))
     decision = await route.choose(state(), ELIGIBLE)
     assert decision.confidence == 0.123456789012
-    assert decision.probabilities == {Strategy.CONSTRAINT: 0.999}
+    assert decision.probabilities == {Strategy.CONSTRAINT: 0.999, Strategy.BOUNDARY: 0.001,
+                                      Strategy.SEEDED_FUZZ: 0.0}
     assert decision.latency_ms == 125
 
 
@@ -197,6 +201,7 @@ async def test_rounding_subset_and_latency() -> None:
     (429, "rate_limited", 2), (500, "provider_unavailable", 2),
     (503, "provider_unavailable", 2), (400, "invalid_response", 1),
     (302, "invalid_response", 1),
+    (402, "provider_unavailable", 1), (422, "invalid_response", 1),
 ])
 async def test_status_mapping(status: int, reason: str, attempts: int) -> None:
     route = port(lambda _: httpx.Response(status, headers={"Location": "https://example.org"}))
@@ -280,9 +285,10 @@ async def test_real_pinned_bank_route_changes_candidate_pool() -> None:
         (ROOT / "fixtures/demo/candidate_bank.seed17.json").read_bytes())
     eligible = bank.eligible_strategies(set())
     pools = []
-    for choice in ("constraint", "boundary"):
+    for choice in ("constraint", "boundary", "seeded_fuzz"):
         def handle(_: httpx.Request, choice: str = choice) -> httpx.Response:
-            return httpx.Response(200, json=response(choice))
+            return httpx.Response(200, json=response(choice, confidence=1.0,
+                probabilities={s.value: float(s.value == choice) for s in eligible}))
 
         route = port(handle)
         decision = await route.choose(state(), eligible)
@@ -291,6 +297,7 @@ async def test_real_pinned_bank_route_changes_candidate_pool() -> None:
         pools.append(bank.pool_for(decision.choice, set()))
     assert pools[0] != pools[1]
     assert pool_sha256(pools[0]) != pool_sha256(pools[1])
+    assert len({pool_sha256(pool) for pool in pools}) == 3
 
 
 async def test_injected_client_not_closed() -> None:
