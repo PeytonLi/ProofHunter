@@ -186,3 +186,14 @@ def test_spend_policy_uncapped_with_guards() -> None:
     model = SCHEMA_MODELS["SpendPolicy"]
     reject(model, sample("SpendPolicy") | {"total_cap_usd": 50}, "total_cap_usd")
     reject(model, sample("SpendPolicy") | {"single_job_checkin_usd": 100.0}, "single_job")
+
+
+@pytest.mark.parametrize("dataset_id", ["SWE-bench/SWE-smith", "SWE-bench/SWE-smith-py"])
+def test_track_b_dataset_ids(dataset_id: str) -> None:
+    check(SCHEMA_MODELS["SweSmithTask"], sample("SweSmithTask") | {"dataset_id": dataset_id})
+
+
+def test_track_b_rejects_unknown_dataset() -> None:
+    reject(
+        SCHEMA_MODELS["SweSmithTask"], sample("SweSmithTask") | {"dataset_id": "x/y"}, "dataset_id"
+    )

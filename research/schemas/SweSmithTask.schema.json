@@ -53,7 +53,10 @@
       "type": "string"
     },
     "dataset_id": {
-      "const": "SWE-bench/SWE-smith",
+      "enum": [
+        "SWE-bench/SWE-smith",
+        "SWE-bench/SWE-smith-py"
+      ],
       "title": "Dataset Id",
       "type": "string"
     },
