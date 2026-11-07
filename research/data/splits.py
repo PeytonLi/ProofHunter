@@ -90,10 +90,10 @@ def leakage_audit(manifest: M.CaseManifest, labels: Mapping[M.Split, M.LabelFile
             | {c.head_source_sha256 for c in manifest.cases} & bench_hashes),
         "clusters_recorded": len(set(clusters.values())),
         "test_labels_sealed": labels[M.Split.TEST].sealed,
-        "test_label_file": "labels/test.sealed.json (read only via store.labels('test', unseal=...))",
+        "test_label_file": "labels/test.sealed.json (store.labels('test', unseal=...) only)",
         "known_shared_structure": (
-            "Rounding helper styles (addfloor/divmod/float/fraction/decimal) recur across splits in "
-            "different shape combinations; shapes, template ids, families, defect origins and "
+            "Rounding helper styles (addfloor/divmod/float/fraction/decimal) recur across splits "
+            "in different shape combinations; shapes, template ids, families, defect origins and "
             "behavior clusters do not. CaseRecord.params/family_id are public by schema design; "
             "arms must not read them (EpisodeContext excludes them)."),
     }

@@ -101,7 +101,8 @@ def test_observations_and_generator_examples(small_root: Path) -> None:
     per_case: dict[str, int] = {}
     for row in rows:
         per_case[row.case_id] = per_case.get(row.case_id, 0) + 1
-        assert row.selection_probability is not None and 0 < row.selection_probability <= 1
+        assert row.selection_probability is not None
+        assert 0 < row.selection_probability <= 1
     assert max(per_case.values()) <= 20
     assert any(r.relevance is M.Relevance.POSITIVE for r in rows)
     with pytest.raises(ValueError):
@@ -111,8 +112,10 @@ def test_observations_and_generator_examples(small_root: Path) -> None:
     for ex in examples:
         case = next(c for c in store.manifest().cases if c.case_id == ex.case_id)
         text = ex.input.model_dump_json()
-        assert case.family_id not in text and case.template_id not in text
-        assert "cond_value" not in text and "params" not in text
+        assert case.family_id not in text
+        assert case.template_id not in text
+        assert "cond_value" not in text
+        assert "params" not in text
     with pytest.raises(ValueError):
         sft.build_examples(store, M.Split.TEST)
 

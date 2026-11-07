@@ -42,14 +42,16 @@ def first_changed_head_line(base: str, head: str) -> int:
 
 
 def example(case: M.CaseRecord, src: I.CaseSources, label: M.CaseLabel) -> M.GeneratorExample:
-    assert label.witness is not None and label.defect_family is not None
+    assert label.witness is not None
+    assert label.defect_family is not None
     base, head = src.base_source.decode(), src.head_source.decode()
     w = label.witness
     prices, d = w.input.prices_cents, w.input.discount_percent
     residue = sum(prices) * (100 - d) % 100
     target = M.TargetHypothesis(
         mode=MODE_BY_FAMILY.get(label.defect_family, c.HypothesisMode.OTHER),
-        rationale=f"Head deviates from the contract: {T.FAMILY_BY_ID[label.defect_family].description}.",
+        rationale=("Head deviates from the contract: "
+                   f"{T.FAMILY_BY_ID[label.defect_family].description}."),
         source_refs=[c.SourceRef(path="checkout.py", line=first_changed_head_line(base, head))],
         suggested_strategy=c.Strategy.CONSTRAINT,
         constraints=c.PlanConstraints(min_items=len(prices), max_items=None, discount_percent=d,

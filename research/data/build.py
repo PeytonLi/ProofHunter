@@ -128,7 +128,7 @@ def validate(raw: Raw) -> Raw:
         return raw
     try:
         base, head = _vector(raw.base), _vector(raw.head)
-    except Exception:  # noqa: BLE001
+    except Exception:
         raw.reason = "source_load_failed"
         return raw
     if None in base or None in head:
@@ -163,7 +163,7 @@ def validate(raw: Raw) -> Raw:
 
 def _git_head() -> str:
     try:
-        return subprocess.run(["git", "rev-parse", "HEAD"], check=True, capture_output=True,
+        return subprocess.run(["git", "rev-parse", "HEAD"], check=True, capture_output=True,  # noqa: S607
                               text=True).stdout.strip()
     except (OSError, subprocess.CalledProcessError):
         return "0" * 40
