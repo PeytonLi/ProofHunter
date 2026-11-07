@@ -11,6 +11,7 @@ import hashlib
 import json
 import shutil
 import tempfile
+import time
 from collections.abc import Iterable, Mapping
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -37,7 +38,7 @@ from research.generator.prompt import (
 )
 from research.generator.scoring import GeneratorScore, score_generations
 from research.schemas.models import GeneratorExample, Split
-from research.training.runpod import PodSession, pod_session
+from research.training.runpod import PodSession, attributed_entry, pod_session
 
 POD_DIR: Final = Path(__file__).parent / "pod"
 LOCK: Final = Path(__file__).parent / "pod-requirements.lock"
@@ -103,12 +104,15 @@ class QloraTrainer:
     """``GeneratorTrainer``: returns the selected adapter's sha256."""
 
     def __init__(self, *, run_id: str, config: TrainConfig | None = None, gpu: str = "rtx4090",
-                 max_hours: float = 3.0, ledger: JsonlLedger | None = None) -> None:
+                 max_hours: float = 3.0, ledger: JsonlLedger | None = None,
+                 pod: PodSession | None = None, idle_minutes: int = 45) -> None:
         self.run_id = run_id
         self.config = config or TrainConfig()
         self.gpu = gpu
         self.max_hours = max_hours
         self.ledger = ledger or JsonlLedger()
+        self.pod = pod
+        self.idle_minutes = idle_minutes
 
     def stage(self, train: list[GeneratorExample], validation: list[GeneratorExample],
               stage_dir: Path) -> dict[str, str]:
@@ -126,24 +130,39 @@ class QloraTrainer:
         }
 
     def _remote(self, pod: PodSession, stage_dir: Path, out_dir: Path) -> None:
-        pod.run(f"mkdir -p {REMOTE}")
+        run_dir = f"{REMOTE}/runs/{self.run_id}"
+        pod.run(f"mkdir -p {run_dir}")
         for item in sorted(stage_dir.iterdir()):
-            pod.put(item, f"{REMOTE}/{item.name}")
+            pod.put(item, f"{run_dir}/{item.name}")
         deadman = int(self.max_hours * 3600)
-        pod.run(f"cd {REMOTE} && bash bootstrap.sh {deadman}", timeout=3600)
-        gen = (f"cd {REMOTE} && python hf_generate.py --model-dir /workspace/model "
+        pod.run(f"bash {run_dir}/bootstrap.sh {deadman} {self.idle_minutes}", timeout=3600)
+        gen = (f"cd {run_dir} && python hf_generate.py --model-dir /workspace/model "
                f"--prompts val_prompts.jsonl --policy policy.json")
         pod.run(f"{gen} --out untuned.jsonl", timeout=7200)
-        pod.get(f"{REMOTE}/untuned.jsonl", out_dir / "untuned" / GENERATIONS_FILE)
-        pod.run(f"cd {REMOTE} && python train_qlora.py --model-dir /workspace/model "
+        pod.get(f"{run_dir}/untuned.jsonl", out_dir / "untuned" / GENERATIONS_FILE)
+        pod.run(f"cd {run_dir} && python train_qlora.py --model-dir /workspace/model "
                 f"--data sft.jsonl --config config.json --out ckpt", timeout=int(deadman))
-        pod.get(f"{REMOTE}/ckpt/train_log.json", out_dir / "train_log.json")
+        pod.get(f"{run_dir}/ckpt/train_log.json", out_dir / "train_log.json")
         log = json.loads((out_dir / "train_log.json").read_text())
         for epoch in log["epochs"]:
             name = epoch["checkpoint"]
             pod.run(f"{gen} --adapter ckpt/{name} --out ckpt/{name}/{GENERATIONS_FILE}",
                     timeout=7200)
-            pod.get(f"{REMOTE}/ckpt/{name}", out_dir / "checkpoints" / name)
+            pod.get(f"{run_dir}/ckpt/{name}", out_dir / "checkpoints" / name)
+
+    def _logged(self, pod: PodSession, stage: Path, out_dir: Path) -> None:
+        try:
+            self._remote(pod, stage, out_dir)
+        finally:
+            (out_dir / "pod_log.txt").write_text("\n".join(pod.log))
+
+    def _attached(self, pod: PodSession, stage: Path, out_dir: Path) -> None:
+        """Job on a warm pod: billed by the pod's own ledger entry, attributed here."""
+        start = time.time()
+        try:
+            self._logged(pod, stage, out_dir)
+        finally:
+            self.ledger.append(attributed_entry(self.run_id, pod.pod_id, time.time() - start))
 
     def select(self, validation: list[GeneratorExample], out_dir: Path) -> Selection:
         log = json.loads((out_dir / "train_log.json").read_text())
@@ -199,11 +218,11 @@ class QloraTrainer:
             hashes = self.stage(train_l, val_l, stage)
             listing = "".join(f"{p.name}:{sha256_file(p)}\n" for p in sorted(stage.iterdir()))
             hashes["stage_files_sha256"] = hashlib.sha256(listing.encode()).hexdigest()
-            with pod_session(run_id=self.run_id, gpu=self.gpu, max_hours=self.max_hours,
-                             ledger=self.ledger) as pod:
-                try:
-                    self._remote(pod, stage, out_dir)
-                finally:
-                    (out_dir / "pod_log.txt").write_text("\n".join(pod.log))
+            if self.pod is not None:
+                self._attached(self.pod, stage, out_dir)
+            else:
+                with pod_session(run_id=self.run_id, gpu=self.gpu, max_hours=self.max_hours,
+                                 ledger=self.ledger) as pod:
+                    self._logged(pod, stage, out_dir)
         sel = self.select(val_l, out_dir)
         return self.freeze(sel, val_l, out_dir, hashes)

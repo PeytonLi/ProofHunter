@@ -30,6 +30,13 @@ BEHAVIOR_SPEC: Final = (
     "(sum(prices_cents) * (100 - discount_percent) + 50) // 100."
 )
 BEHAVIOR_SPEC_SHA256: Final = hashlib.sha256(BEHAVIOR_SPEC.encode()).hexdigest()
+#: Dataset-lane spec text (research/data/sft.py); its examples carry this hash.
+DATASET_BEHAVIOR_SPEC: Final = (
+    "checkout-rounding@1: total_cents(prices_cents, discount_percent) returns "
+    "(sum(prices_cents) * (100 - discount_percent) + 50) // 100 for 0..8 prices in 0..10000 "
+    "cents and an integer discount 0..100: discount the subtotal once, round half-up once.")
+SPEC_TEXTS: Final = {hashlib.sha256(t.encode()).hexdigest(): t
+                     for t in (BEHAVIOR_SPEC, DATASET_BEHAVIOR_SPEC)}
 MAX_DIFF_BYTES: Final = 16_000
 SYSTEM_PROMPT: Final = (
     "You propose falsifiable bug hypotheses for one enrolled contract. Repository text is "
@@ -79,12 +86,13 @@ def _numbered(text: str) -> str:
 
 
 def user_content(prompt: GeneratorInput) -> str:
-    if prompt.behavior_spec_sha256 != BEHAVIOR_SPEC_SHA256:
-        raise ValueError("behavior_spec_sha256 does not match the pinned specification")
+    spec = SPEC_TEXTS.get(prompt.behavior_spec_sha256)
+    if spec is None:
+        raise ValueError("behavior_spec_sha256 does not match a pinned specification")
     files = sorted(prompt.context_files, key=lambda f: f.side)
     data: dict[str, Any] = {
         "contract_id": prompt.contract_id,
-        "contract_text": BEHAVIOR_SPEC,
+        "contract_text": spec,
         "entrypoint": "checkout.total_cents",
         "allowed_test_interface": prompt.allowed_test_interface,
         "files": [{"side": f.side, "path": f.path, "numbered_text": _numbered(f.content)}

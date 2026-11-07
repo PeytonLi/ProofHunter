@@ -20,8 +20,15 @@ from pathlib import Path
 from typing import Any, Final
 
 from research.generator import pins
-from research.generator.ledger import JsonlLedger, gpu_entry
-from research.schemas.models import SINGLE_JOB_CHECKIN_USD, CostStatus
+from research.generator.ledger import JsonlLedger, gpu_entry, utcnow
+from research.schemas.models import (
+    SINGLE_JOB_CHECKIN_USD,
+    CostStatus,
+    LedgerCategory,
+    LedgerEntry,
+    LedgerPhase,
+    MeasurementMode,
+)
 
 API: Final = "https://rest.runpod.io/v1"
 PRICING_REFERENCE: Final = "https://www.runpod.io/pricing (pod costPerHr from REST API)"
@@ -64,7 +71,8 @@ class RunpodClient:
         except urllib.error.HTTPError as exc:
             if exc.code == 404:
                 return None
-            raise RunpodError(f"{method} {path} -> HTTP {exc.code}") from None
+            detail = exc.read()[:500].decode("utf-8", errors="replace")
+            raise RunpodError(f"{method} {path} -> HTTP {exc.code}: {detail}") from None
         return json.loads(raw) if raw.strip() else {}
 
     def create_pod(self, body: dict[str, Any]) -> dict[str, Any]:
@@ -171,7 +179,7 @@ def pod_session(*, run_id: str, gpu: str, max_hours: float, ledger: JsonlLedger,
         "name": f"ph-{run_id}"[:60], "imageName": pins.POD_IMAGE, "cloudType": "SECURE",
         "computeType": "GPU", "gpuTypeIds": [GPU_CHOICES[gpu][0]], "gpuCount": 1,
         "containerDiskInGb": 80, "volumeInGb": 0, "ports": ["22/tcp"],
-        "supportPublicIp": True, "allowedCudaVersions": list(pins.POD_CUDA_VERSIONS),
+        "supportPublicIp": True,
         "env": {"PUBLIC_KEY": key.with_suffix(".pub").read_text().strip()},
     }
     started = time.time()
@@ -206,3 +214,17 @@ def pod_session(*, run_id: str, gpu: str, max_hours: float, ledger: JsonlLedger,
 
 def remote_quote(text: str) -> str:
     return shlex.quote(text)
+
+
+def attributed_entry(run_id: str, pod_id: str, seconds: float) -> LedgerEntry:
+    """Unpaid usage record for a job on a warm pod (cost lives in the pod entry)."""
+    return LedgerEntry(
+        schema_version="research-ledger-v1", entry_id=f"{run_id}-job", recorded_at=utcnow(),
+        lane="generator", provider="runpod", category=LedgerCategory.TRAINING_GPU,
+        phase=LedgerPhase.TRAINING, resource_id=pod_id, run_id=run_id, case_id=None,
+        quantity=round(seconds / 3600, 6), unit="gpu_hour_attributed", unit_price_usd=None,
+        cost_usd=None, cost_status=CostStatus.UNKNOWN,
+        pricing_reference="billed in the pod lifetime entry", pricing_date=None,
+        wall_ms=round(seconds * 1000, 1), queue_ms=None, measurement_mode=MeasurementMode.LIVE,
+        paid=False, estimated_job_usd=None, coordinator_checkin_ref=None,
+        teardown_verified=None)
