@@ -14,7 +14,7 @@ from pydantic import SecretStr
 
 from proofhunter import contracts as c
 from proofhunter import oracle
-from proofhunter.config import load_settings
+from proofhunter.config import load_enrollments, load_settings, mode_config_fingerprint
 from proofhunter.pipeline import VerificationPipeline, WallClock, compose
 from proofhunter.ports import AdapterError, ApiDependencies, ConfigError
 from proofhunter.store import create_store
@@ -109,6 +109,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             settings = load_settings(env)
             store = create_store(settings)
             pipeline = compose(settings, store)
+            fingerprint = mode_config_fingerprint(
+                settings, load_enrollments(settings.enrollments_path)
+            )
+            worker = VerificationWorker(
+                pipeline,
+                heartbeat_store=store,
+                config_fingerprint=fingerprint,
+                profile=c.Profile.OFFLINE,
+            )
             if args.command == "demo":
                 from fixtures.adapters import FixtureRepositoryValidator
 
@@ -125,7 +134,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     target=target,
                     enrollment=enrollment,
                 )
-                asyncio.run(VerificationWorker(pipeline).run_once())
+                asyncio.run(worker.run_once())
                 receipt = store.get_receipt(status.run_id)
                 if receipt is None:
                     raise ValueError("worker did not produce a terminal receipt")
@@ -137,7 +146,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 asyncio.run(replay_receipt(pipeline, args.receipt.read_bytes(), number))
                 print("offline_fixture replay reproduced")
             elif args.command == "worker":
-                asyncio.run(VerificationWorker(pipeline).poll())
+                asyncio.run(worker.poll())
             else:
                 import uvicorn
 
@@ -154,7 +163,13 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
                 app = create_app(
                     ApiDependencies(
-                        settings, store, FixtureRepositoryValidator(), None, WallClock()
+                        settings,
+                        store,
+                        FixtureRepositoryValidator(),
+                        None,
+                        WallClock(),
+                        heartbeat_store=store,
+                        config_fingerprint=fingerprint,
                     )
                 )
                 uvicorn.run(app, host=settings.bind_host, port=settings.bind_port)

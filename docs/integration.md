@@ -1,173 +1,210 @@
-# Integration: offline wiring and release blockers
+# Integration release: offline G2
 
-Integration started at `70826d59957b5e65d10afdf6f2c6c32996647b21`, verified
-with `git log -1 --format=%H` after checking the repository was not shallow.
-No live provider, deployment, webhook, Check Run or public ACP was used.
+Starting SHA: `77c8062b17527c22d22d19d786a8f5f7933be32a`.
+No live keys, real providers, deployments, public ACP, webhooks or Check Run
+publication were exercised. Live release remains operator-gated.
 
 ## Wiring and profiles
 
-`pipeline.VerificationPipeline` injects SourcePort, MetaPort, RoutePort,
-RunnerPort, CheckPort, RunStore and Clock. `compose` is the explicit profile
-boundary: offline uses FixtureSource/Meta/Route/Checks with the production
-`create_runner_port(settings)` (ReviewedFixtureRunner); live constructs the
-GitHub, Meta, Snap and runner factories from validated Settings. Invalid live
-settings fail closed. The CLI refuses live in this offline build; the live
-composition was not executed.
+VerificationPipeline injects SourcePort, MetaPort, RoutePort, RunnerPort,
+CheckPort, RunStore and Clock. compose is the explicit profile boundary:
+offline binds FixtureSource/Meta/Route/Checks and the production
+ReviewedFixtureRunner; live binds validated GitHub/Meta/Snap/runner factories.
+The CLI refuses live in this build. Offline settings read no live credentials.
 
-All inference and evidence operations in the pipeline are production
-`proofhunter.bayes` and `proofhunter.oracle`, not fixtures.reference. Each
-candidate is evaluated before execution and every assessment uses
-ProvenanceBinding.for_run. An unavailable oracle prevents even runner preflight.
-Attestation precedes observations; denied isolation yields a partial receipt.
-The selector excludes used hashes, confirmations get fresh attempt IDs, and
-only the original usable pair contributes one Bayesian update. A reproduced
-confirmation ends probing. Budgets are checked before runner spending, including
-the reserved confirmation. Meta reserves up to two attempts without an outer
-retry; Snap's requests_spent(run_id), when present, accounts for HTTP retries.
-Async I/O is bounded by the run deadline. Smaller candidate limits truncate
-the deterministic bank and recompute its hash.
+Inference/evidence use production proofhunter.bayes and proofhunter.oracle.
+Oracle evaluation and provenance binding precede execution; isolation attestation
+precedes observations. Charged attempts precede runner calls, complete probes
+precede sealing. Workers claim 240-second leases for the 180-second budget.
+Async I/O respects the original deadline. LeaseLostError prevents publication;
+unexpected failures produce sanitized internal_error receipts with reloaded
+durable budgets. Offline creates no check intent; live requires live mode and
+the explicit checks flag. Publication is not performed by this worker.
 
-Workers claim a 240-second lease (longer than the 180-second work deadline),
-checkpoint fetching/planning/testing/finalizing, record charged attempts before
-each call and completed observations after it, commit each complete probe, and
-call finish once to atomically store the seal and terminal state. Store finish
-owns the final completed/failed transition. LeaseLostError stops publication;
-adapter failures produce partial inconclusive receipts where possible, while
-unrecoverable internal failures produce sealed failed receipts with only
-internal_error, never exception text. Partial receipts include unpaired attempts.
-Offline never creates a check intent. Live check intents require both live mode
-and github.enable_checks, and are not published by this worker.
+Replay preserves parent bindings and bypasses Meta/Snap. CLI replay verifies the
+receipt hash, source hashes, isolation and fresh base/head/confirmation
+observations. Tamper, missing artifacts, mode mismatch or non-reproduction fail.
 
-Replay jobs use RunRecord.replay's input and exact source/commit bindings, carry
-the parent receipt hash, and bypass Meta and Snap. The CLI independently verifies
-raw receipt bytes before validate_replay, retrieves reviewed source bytes through
-FixtureSource by bound commits and hashes, attests, evaluates the oracle and runs
-fresh base/head/confirmation. It checks every replay observation's binding and
-the observed values against the parent. Tamper, unavailable artifacts, mode
-mismatch or non-reproduction are nonzero exits.
+### Heartbeat wiring and readiness
 
-### Offline seed-17 bank decision
+API and worker share the same SQLite store and
+`mode_config_fingerprint(settings, load_enrollments(settings.enrollments_path))`.
+CLI computes the fingerprint once. Workers write at startup/start of work,
+every poll iteration and via a background refresh during active work:
+**TTL 30 seconds / interval 10 seconds**. Poll sleeps stay below the interval.
+Worker IDs are valid opaque SafeTokens. Heartbeat write failures log once and
+are suppressed; subsequent writes continue. Store time controls freshness.
 
-Use the PRD section 4 pinned offline candidate bank
-`fixtures/demo/candidate_bank.seed17.json` only in offline composition at seed 17.
-Still call production generate, but replace that profile's experiment bank with
-the reviewed pinned bank. Other seeds and live use production generation. No
-fixture was edited. This is the PRD's disclosed development bank, not a holdout
-result or a changed selector. Inspection showed production generation also
-selects the sentinel first and gives fixed full coverage, but its nonanchor
-candidates/pool hashes differ. The pinned bank makes golden experiment histories
-and their hashes directly comparable while preserving the exact production
-selector, updater, oracle and classifier.
+`/readyz` requires ready schema, valid mode config and a fresh matching worker
+heartbeat. Absent worker/dependencies, expiry or fingerprint mismatch returns
+**503**, including offline mode; only all three predicates permit **200**.
+API and worker must run concurrently against the same DB/effective config.
 
-The buggy sentinel is `[15,15,15] @ 10%`: expected/base/head/repeated head =
-`41/41/42/42`, confirmed_regression. Fixed is no_defect_found with full required
-coverage; half_even is confirmed_regression; existing is confirmed_existing_defect.
+### Durable pin and provider high-water reservations
 
-Golden comparison covers both committed golden files (only buggy and fixed
-exist). Normalization ignores IDs, timestamps including deadline_at, elapsed
-durations, seals and replay commands containing IDs. Histories, candidate pool
-hashes, vectors, selections, values, budgets and verdicts match. The sole
-remaining difference is the runner transport: ReviewedFixtureRunner reports
-stdout_sha256/stderr_sha256 as null, whereas FixtureRunner used to generate
-goldens hashes its synthetic output and empty stderr. Tests assert equality
-after **only** that explicit difference; they do not discard probe histories.
-Repeated normalized production receipts are equal.
+Persist the resolved RunCheckpoint.pinned_revision with reserve_progress
+**before source fetch or any Meta/Snap I/O**. Replay substitutes its original
+base/head before persistence. Existing durable pins are reused exactly.
 
-## Recovery: explicit fail-closed, not transparent resume
+Allocations are absolute durable high-water marks, including internal retries
+and ambiguous outcomes, and are **never refunded**. Successful persistence
+authorizes entering an adapter. Lost acknowledgement or reservation failure
+authorizes no I/O; non-lease errors reach the worker's sanitized failure path
+using reloaded budgets. Lease loss stops publication.
 
-The frozen ports do not durably expose a pre-probe pinned revision or pre-call
-provider reservations. RunEvent.detail is sanitized text, not a typed durable
-state channel; AttemptRecord is for sandbox invocations, not provider requests.
-Do not encode hidden pin/budget payloads into those fields.
-
-Every recovered claim (epoch > 1), including runs already beyond fetching, is
-terminated **without re-pinning** or any Source/Meta/Snap/runner call. It produces
-inconclusive / revision_unavailable; Meta/Snap budgets are conservatively fully
-spent. Committed probes can supply the original evidence bindings, but do not
-authorize continuing execution. If sealing fails the worker fails the job with
-sanitized internal_error. Tests simulate checkpoint to planning, crash, expired
-lease, re-claim and assert zero external calls and terminal inconclusive.
-This is an acceptable explicit fail-closed safety policy, **not** a transparent
-recovery implementation. The missing contract blocks resumable verification,
-not the safety of the offline integration.
-
-## Cross-owner defects (not waived as future live work)
-
-| Owner | Defect and evidence | Required owning-lane fix |
+| Binding | Meta allowance per propose | Snap maximum per choose |
 | --- | --- | --- |
-| store (`src/proofhunter/api.py`, ready) + setup (ports/contracts) | `/readyz` validates DB/config then returns HTTP 200 `{"status":"ready","worker_heartbeat":"unavailable"}` with no worker ever started. This contradicts PRD section 6 readiness = schema AND heartbeat AND required mode config. `test_readyz_current_contract_defect` asserts the current behavior explicitly; it is evidence of a defect, not an acceptance assertion. A composition wrapper would not fix create_app's authoritative contract. | Setup: define `WorkerHeartbeat(worker_id: SafeToken, profile: Profile, config_fingerprint: Sha256Hex, observed_at: UtcTimestamp, expires_at: UtcTimestamp)` and `HeartbeatStore.write_heartbeat(heartbeat) -> None`, `read_heartbeat(profile, config_fingerprint) -> WorkerHeartbeat | None`, exposed via ApiDependencies and worker dependencies; writes use trusted store time, bounded TTL, monotonic updates. Worker writes at startup, during polling and while working (interval shorter than TTL). Store: persist/read heartbeat transactionally; readyz must return 503 when absent/expired/mode or config mismatched, and 200 only if all three readiness predicates pass. Update schemas/fixtures/ports centrally. |
-| setup (contracts/ports) + store (durability) | RunRecord cannot recover pin/provider allocations before a committed probe. Re-pin risks accepting a moving head; retries risk exceeding caps. | Add `RunCheckpoint(pinned_revision: PinnedRevision | None, provider_allocations: {meta: NonNegInt, snap: NonNegInt})`, `RunStore.reserve_progress(lease: RunLease, checkpoint: RunCheckpoint) -> RunCheckpoint`, exposed on RunRecord. CAS-fence owner/epoch/expiry; pin immutable once set; allocations monotonic, capped by BudgetLimits and persisted before external calls, with atomic accounting. Reclaims return the original pin and reserved counts. Until then use the explicit fail-closed policy above. |
-| bench (`bench/arms.py`, `bench/run.py`) | Hard imports/calls to fixtures.reference initialize/select/evaluate/classify_pair/confirmation_status/update/classify/compute_coverage/generate with no production injection point. The sample-benchmark G2 step therefore measures the setup reference copy, **not shipped code**. | Replace reference calls with proofhunter.bayes/proofhunter.oracle production functions, retaining only hash-allowlisted first-party fixture transport labeled offline_fixture. Do not monkeypatch from integration. Re-freeze evaluation policy/results and run independently reviewed holdout. |
+| Offline fixtures | 0 outbound requests | 1 per call, capped at 2 total scripted requests |
+| Live adapters | 2 including retries | 2 per call including retries |
 
-The readiness defect is a genuine control-plane correctness blocker, even in
-offline mode. The benchmark defect blocks claiming shipped-policy benchmark
-evidence. G2's existing sample benchmark command can pass without resolving
-that claim. No cross-owner path was edited; these require owning-lane changes.
+Meta calls only if `max_meta_requests - reserved >= allowance`; reserve the
+whole positive allowance first. Otherwise use the labeled builtin
+budget_exhausted fallback without calling. Receipt usage is reserved high-water;
+Meta ProviderUsage.calls is actual provenance.attempts / MetaError.attempts.
 
-## Nine-lane handoff and scope audit
+For non-replay Snap, spent is requests_spent(run_id) when present, otherwise
+counted stub/live decisions. Compute
+`want = min(max_snap_requests - spent, per_call)`; offline additionally caps
+the total request limit at 2. If `reserved - spent < want`, first reserve
+`spent + want`. Pass exactly `reserved - spent` as
+DecisionState.snap_requests_remaining. Zero headroom permits policy-only routing.
+Receipt Snap usage is the high-water reservation, not a refund of unused retries.
 
-Ran `git diff --name-only 5c3aecd0ec98eb7ad1a91c43d85bf940d52d67cf..70826d5`:
-91 changed paths, grouped below. Every path belongs to its lane, including each
-`docs/agent-handoffs/<owner>.md`; no setup/frozen path changed in the joined delta.
-Read all nine handoffs, docs/setup.md, PRD lifecycle/limits, selection, evidence,
-release gates and commands, tools/gate.py and fixtures/simulate.py.
+### Recovery policy
 
-| Owner | Joined path groups (including handoff) | Count | Boundary audit / pending |
-| --- | --- | ---: | --- |
-| github | src/proofhunter/github/, tests/github/, handoff | 8 | Source/check/validator/webhook factories; real App permissions, stale event accessor/head policy and check reconcile smoke pending. |
-| meta | src/proofhunter/meta/, tests/meta/, handoff | 4 | attempts charged including errors, labeled built-in fallback; real schema/entitlement/data-handling gate pending. |
-| snap | src/proofhunter/snap/, tests/snap/, handoff | 3 | requests_spent used for retries; real visibility/choice/pool/latency gate pending. |
-| bayes | src/proofhunter/bayes/, tests/bayes/, handoff | 3 | Production initialize/generate/select/update wired; pinned offline bank decision disclosed above. |
-| runner | src/proofhunter/runner/, tests/runner/, ops/sandbox/, handoff | 9 | Production offline runner; live account isolation/resources/deletion and tagged sweeper pending. |
-| oracle | src/proofhunter/oracle/, tests/oracle/, handoff | 10 | Production binding, assessment, coverage/classification, sealing and replay wired. |
-| acp | src/proofhunter/acp/, tests/acp/, handoff | 14 | Private API boundary; fresh ASI:One/mailbox/discoverability gate pending. |
-| store | src/proofhunter/store/, src/proofhunter/api.py, tests/store/, handoff | 4 | SQLite intake/lease/attempt/probe/finish used; readiness and durable recovery defects above. |
-| bench | bench/, tests/bench/, handoff | 36 | Sample output is reference-policy only; production-policy fix and fresh verifier's full independent holdout pending. |
+- Durable pin, zero allocations, no probes and no attempts: resume from fetch
+  with the exact durable pin, never re-pin even if the PR head moved.
+- Any allocation/probe/attempt with a durable pin: fail closed
+  **inconclusive / revision_unavailable**, with zero Source/Meta/Snap/runner I/O.
+  Preserve the public original pin, checkpoint allocations and source hashes
+  from committed probes. Partial execution does not authorize safe continuation.
+- Legacy checkpoint=None: fail closed without external calls; unknown Meta/Snap
+  usage is conservatively charged to the run's limits.
 
-No pre-commit configuration exists in the checkout. The locked TestClient stack
-emits the pre-existing `StarletteDeprecationWarning: Using httpx with
-starlette.testclient is deprecated; install httpx2 instead.` The store handoff
-already diagnoses this pinned stack; the correct repository .venv is loaded.
-No lockfile/dependency change or warning suppression was made.
+Transparent resume after provider spend is not implemented. Recovery never
+resets the deadline, refunds reservations or derives hidden pins from event text.
 
-## Commands and operational boundaries
+### Offline golden evidence
 
-All checks and commands use `UV_OFFLINE=1 PROOFHUNTER_PROFILE=offline` and
-`uv run --locked`. README contains the exact section 9 commands. `serve` requires
-explicit distinct test-only transport tokens; it never reads live tokens through
-offline settings. API and worker share PROOFHUNTER_DB_PATH and bind privately by
-default. Standalone demos otherwise use a temporary database. Examples under
-ops/deploy are uninstalled systemd/env examples with every live flag false and
-no secrets. ACP is an operator console example, not an enabled public service.
+Seed 17 offline composition uses the reviewed pinned candidate bank after
+production generation; other seeds/live use production generation. This is the
+disclosed development bank, not an independent holdout. Buggy sentinel
+`[15,15,15] @ 10%` gives expected/base/head/repeated head `41/41/42/42`:
+confirmed_regression. Fixed is no_defect_found with full required coverage.
+Golden histories/selections/budgets/verdicts match after normalization of IDs,
+times, seals and the disclosed runner transport difference (reviewed runner
+stdout/stderr hashes are null). Meta usage stays 0; Snap buggy=1, fixed=2.
 
-`python tools/gate.py integrated --evidence ~/ph-evidence` retains full subprocess
-logs, both receipts, tampered refusal input and benchmark outputs. The top-level
-log is saved separately as `~/ph-evidence/gate-integrated.log`. These receipts
-are offline_fixture only. Nothing was deployed or visually verified; this is a
-CLI/API integration, not an end-user UI validation. Remaining operator gates:
-live providers/GitHub/Daytona isolation, stale-head publication and outbox drain,
-public ACP, reviewed retention (7-day operational/30-day public receipts), tagged
-cleanup, heartbeat and independent holdout. Do not claim those gates passed.
+## Resolved cross-owner defects
+
+| Prior defect | Status and evidence |
+| --- | --- |
+| readyz heartbeat unavailable but 200 | **RESOLVED**: store/API heartbeat refreeze and shared composition; integration tests cover absent/fresh/expired/mismatched readiness and active-work refresh. |
+| durable pin/allocations unavailable | **RESOLVED**: typed checkpoint/reserve_progress plus pipeline reservations; tests cover pin-only recovery, conserved partial recovery, legacy rows, ordering and reservation failures. |
+| bench importing fixtures.reference | **RESOLVED**: production Bayes/oracle bench lane; search below has no matches and integrated sample bench passes with 120 rows. |
+
+Verified static search (exit 1 means no matches):
+
+```text
+$ rg -n 'fixtures\.reference' bench --glob '*.py'
+rg exit: 1 (1 = no matches)
+```
+
+**Open: independent holdout pending for G3 verifier.** Sample results are not
+independent release validation.
+
+## Lane handoff and scope audit
+
+Verified with git show --stat: refreeze commits touched only their owned paths.
+
+```text
+e15159c190b820f1b56b7b89a6645697d1a88bfa (store)
+ docs/agent-handoffs/store.md
+ src/proofhunter/api.py
+ src/proofhunter/store/__init__.py
+ tests/store/test_progress.py
+ tests/store/test_store.py
+ 5 files changed, 558 insertions(+), 43 deletions(-)
+
+22400999aebdb08fd43b0fa6c4d6af408f4ac162 (bench)
+ bench/arms.py
+ bench/corpus/__init__.py
+ bench/corpus/item_count/checkout.py
+ bench/corpus/manifest.json
+ bench/corpus/prepare.py
+ bench/freeze.py
+ bench/harness.py
+ bench/policy.json
+ bench/results/sample.adversarial.jsonl
+ bench/results/sample.csv
+ bench/results/sample.jsonl
+ bench/results/sample.summary.md
+ bench/run.py
+ bench/scoring.py
+ docs/agent-handoffs/bench.md
+ tests/bench/test_benchmark.py
+ 16 files changed, 765 insertions(+), 239 deletions(-)
+```
+
+Integration edits are confined to pipeline/worker/CLI, integration tests, README,
+this document and deployment guidance. No frozen contracts/config, store/API,
+fixtures, bench or lockfile changes belong to this lane.
+
+## Exact offline release commands (PRD §9)
+
+```bash
+export UV_OFFLINE=1 PROOFHUNTER_PROFILE=offline
+uv sync --locked
+uv run --locked pytest -q
+uv run --locked python -m proofhunter demo --offline --case buggy --seed 17 --receipt ./buggy-receipt.json
+uv run --locked python -m proofhunter demo --offline --case fixed --seed 17 --receipt ./fixed-receipt.json
+uv run --locked python -m proofhunter replay --offline --receipt ./buggy-receipt.json --probe counterexample
+uv run --locked python -m bench.run --offline --split sample --seed 17 --output ./bench-results.jsonl
+# Supply distinct PROOFHUNTER_TEST_API_TOKEN / PROOFHUNTER_TEST_OPERATOR_TOKEN
+# as local test-only values, never live keys. Share DB and effective config.
+export PROOFHUNTER_DB_PATH="$HOME/proofhunter-offline.sqlite3"
+uv run --locked python -m proofhunter serve --profile offline
+# In a separate terminal, with the same environment/config:
+uv run --locked python -m proofhunter worker --profile offline
+uv run --locked python tools/gate.py integrated --evidence DIR
+```
+
+Serve binds privately; readiness stays 503 until the matching worker runs.
+Demo exit 0 means terminal evidence, not necessarily a clean verdict.
+Deployment units are examples only, not installed services.
 
 ### Recorded offline verification
 
+Final implementation runs, all using the offline environment and locked uv:
+
 ```text
-UV_OFFLINE=1 PROOFHUNTER_PROFILE=offline uv run --locked pytest -q
-769 passed, 1 warning in 11.72s
-
-UV_OFFLINE=1 PROOFHUNTER_PROFILE=offline uv run --locked ruff check .
-All checks passed!
-
-UV_OFFLINE=1 PROOFHUNTER_PROFILE=offline uv run --locked mypy src bench tools tests/integration
-Success: no issues found in 70 source files
-
-UV_OFFLINE=1 PROOFHUNTER_PROFILE=offline python tools/gate.py integrated --evidence ~/ph-evidence
+pytest -q: 868 passed, 1 warning in 15.71s
+ruff check .: All checks passed!
+mypy src bench tools: Success: no issues found in 70 source files
+mypy tests/integration: Success: no issues found in 1 source file
+integrated full suite: 868 passed, 1 warning in 17.24s
+[gate] demo evidence: ok
+[gate] counterexample replay: ok
+[gate] tampered receipt is refused: ok
 [gate] sample bench rows: 120
 [gate] integrated PASSED
 ```
 
-The integrated gate additionally reports mypy clean over src/bench/tools (69
-files) and integration tests (1 file), fixture/schema snapshots (107 files),
-contract tests (205 passed), both sealed demos, successful counterexample replay
-and expected tamper refusal. Passing this executable gate does not resolve the
-readiness or reference-only benchmark defects documented above.
+Gate additionally validates 113 fixture/schema files and 251 contract tests.
+The existing Starlette/httpx deprecation warning is from the locked dependency
+stack; no dependency change or warning suppression was made. No pre-commit config
+was present. Release rerun evidence is retained at /home/ubuntu/ph-evidence and
+the top-level transcript at /home/ubuntu/ph-gate.log. No UI visual check was made.
+
+## Remaining operator/live prerequisites
+
+- Live GitHub App pin/authorization smoke and stale-head checks.
+- Meta/Snap live smoke, retry accounting, route visibility and latency.
+- Daytona isolation fingerprint, resource enforcement, teardown and tagged cleanup.
+- Agentverse/ASI:One registration, mailbox, discovery and fresh-account invocation.
+- Demonstrate the 180-second latency target on three staged runs.
+- Check/webhook P1 gates stay off by default; separately validate publication,
+  delivery, stale-head refusal and outbox draining before enabling.
+- Reviewed retention sweeper (7-day operational / 30-day public receipts).
+- Independent holdout pending for G3 verifier.
+- Transparent resume after provider spend not implemented.

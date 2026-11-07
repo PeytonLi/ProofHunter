@@ -1,20 +1,75 @@
 """Single-claim worker and bounded idle polling."""
 
 import asyncio
+import logging
 from contextlib import suppress
+from datetime import timedelta
+from uuid import uuid4
+
+from pydantic import TypeAdapter
 
 from proofhunter import contracts as c
 from proofhunter import oracle
 from proofhunter.pipeline import VerificationPipeline
-from proofhunter.ports import LeaseLostError
+from proofhunter.ports import HeartbeatStore, LeaseLostError
 
 
 class VerificationWorker:
-    def __init__(self, pipeline: VerificationPipeline, worker_id: str = "worker") -> None:
+    def __init__(
+        self,
+        pipeline: VerificationPipeline,
+        worker_id: str | None = None,
+        *,
+        heartbeat_store: HeartbeatStore | None = None,
+        config_fingerprint: str | None = None,
+        profile: c.Profile | None = None,
+    ) -> None:
         self.pipeline = pipeline
-        self.worker_id = worker_id
+        self.worker_id = TypeAdapter(c.SafeToken).validate_python(
+            worker_id or "worker-" + uuid4().hex
+        )
+        self.heartbeat_store = heartbeat_store
+        self.config_fingerprint = config_fingerprint
+        self.profile = profile or (
+            c.Profile.OFFLINE if pipeline.settings.offline else c.Profile.LIVE
+        )
+        self._heartbeat_failed = False
+
+    def heartbeat(self) -> None:
+        if self.heartbeat_store is None or self.config_fingerprint is None:
+            return
+        try:
+            now = self.pipeline.clock.now()
+            self.heartbeat_store.write_heartbeat(
+                c.WorkerHeartbeat(
+                    worker_id=self.worker_id,
+                    profile=self.profile,
+                    config_fingerprint=self.config_fingerprint,
+                    observed_at=now,
+                    expires_at=now + timedelta(seconds=c.HEARTBEAT_TTL_SECONDS),
+                )
+            )
+        except Exception:
+            if not self._heartbeat_failed:
+                logging.getLogger(__name__).warning("Worker heartbeat write failed")
+                self._heartbeat_failed = True
+
+    async def _refresh_heartbeat(self) -> None:
+        while True:
+            await asyncio.sleep(c.HEARTBEAT_INTERVAL_SECONDS)
+            self.heartbeat()
 
     async def run_once(self) -> bool:
+        self.heartbeat()
+        task = asyncio.create_task(self._refresh_heartbeat())
+        try:
+            return await self._run_once()
+        finally:
+            task.cancel()
+            with suppress(asyncio.CancelledError):
+                await task
+
+    async def _run_once(self) -> bool:
         store = self.pipeline.store
         lease = store.claim(self.worker_id, 240)
         if lease is None:
@@ -70,4 +125,4 @@ class VerificationWorker:
     async def poll(self, interval: float = 1.0) -> None:
         while True:
             if not await self.run_once():
-                await asyncio.sleep(interval)
+                await asyncio.sleep(min(interval, c.HEARTBEAT_INTERVAL_SECONDS / 2))

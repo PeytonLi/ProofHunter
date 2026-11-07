@@ -46,6 +46,9 @@ class VerificationPipeline:
     store: RunStore
     clock: Clock
     fixture_bank: Path | None = None
+    meta_request_allowance: int = 2
+    route_requests_per_call: int = 2
+    route_request_limit: int | None = None
 
     async def run(self, record: RunRecord, lease: c.RunLease) -> c.ReceiptV1:
         mode = c.ExecutionMode.OFFLINE_FIXTURE if self.settings.offline else c.ExecutionMode.LIVE
@@ -54,10 +57,13 @@ class VerificationPipeline:
         probes = list(record.probes)
         state = record.status.status
         seq = max((event.seq for event in record.events), default=0)
-        revision = None
+        checkpoint = record.checkpoint
+        revision = checkpoint.pinned_revision if checkpoint else None
         sources = None
         initial = None
         replay = None
+        snap_counted = 0
+        recovery_blocked = False
         guard = any(probe.selection_reason is c.SelectionReason.COVERAGE_GUARD for probe in probes)
         stop = c.ReasonCode.BUDGET_EXHAUSTED
         provider_mode = (
@@ -106,20 +112,33 @@ class VerificationPipeline:
                 and self.clock.now() < budget.deadline_at
             )
 
+        def reserve(meta: int, snap: int) -> None:
+            nonlocal checkpoint
+            checkpoint = self.store.reserve_progress(
+                lease,
+                c.RunCheckpoint(
+                    pinned_revision=revision,
+                    provider_allocations=c.ProviderAllocations(meta=meta, snap=snap),
+                ),
+            )
+            usage["meta_requests"] = checkpoint.provider_allocations.meta
+            usage["snap_requests"] = checkpoint.provider_allocations.snap
+
         try:
             if state is c.RunState.QUEUED:
                 stage(c.RunState.FETCHING)
-            # Recovery cannot safely reconstruct pre-call allocations through frozen ports.
-            if lease.epoch > 1:
+            if checkpoint is None:
                 usage["meta_requests"] = budget.limits.max_meta_requests
                 usage["snap_requests"] = budget.limits.max_snap_requests
+            else:
+                usage["meta_requests"] = checkpoint.provider_allocations.meta
+                usage["snap_requests"] = checkpoint.provider_allocations.snap
+            if checkpoint is None or (
+                revision is not None
+                and (usage["meta_requests"] or usage["snap_requests"] or probes or record.attempts)
+            ):
+                recovery_blocked = True
                 if probes:
-                    revision = c.PinnedRevision(
-                        **record.target.model_dump(),
-                        base_sha=probes[0].base.commit_sha,
-                        head_sha=probes[0].head.commit_sha,
-                        resolved_at=record.status.created_at,
-                    )
                     sources = c.SourceHashes(
                         base=probes[0].base.source_sha256, head=probes[0].head.source_sha256
                     )
@@ -129,11 +148,16 @@ class VerificationPipeline:
                     "durable recovery pin unavailable; operator review required",
                     retryable=False,
                 )
-            revision = await external(self.source.pin(record.target))
-            if record.replay is not None:
-                revision = revision.model_copy(
-                    update={"base_sha": record.replay.base_sha, "head_sha": record.replay.head_sha}
-                )
+            if revision is None:
+                revision = await external(self.source.pin(record.target))
+                if record.replay is not None:
+                    revision = revision.model_copy(
+                        update={
+                            "base_sha": record.replay.base_sha,
+                            "head_sha": record.replay.head_sha,
+                        }
+                    )
+                reserve(usage["meta_requests"], usage["snap_requests"])
             bundle = await external(self.source.fetch(revision, self.enrollment))
             sources = c.SourceHashes(
                 base=bundle.base.content_sha256, head=bundle.head.content_sha256
@@ -162,26 +186,25 @@ class VerificationPipeline:
                     reason_code=c.ReasonCode.BUDGET_EXHAUSTED,
                 ),
             )
-            if record.replay is None and budget.limits.max_meta_requests >= 2 and available(0):
+            if (
+                record.replay is None
+                and budget.limits.max_meta_requests - usage["meta_requests"]
+                >= self.meta_request_allowance
+                and available(0)
+            ):
+                if self.meta_request_allowance:
+                    reserve(
+                        usage["meta_requests"] + self.meta_request_allowance, usage["snap_requests"]
+                    )
                 try:
-                    usage["meta_requests"] = (
-                        0 if self.settings.offline else budget.limits.max_meta_requests
-                    )
                     plan = await external(self.meta.propose(bundle.context))
-                    usage["meta_requests"] = (
-                        plan.provenance.attempts if not self.settings.offline else 0
-                    )
                 except AdapterError as error:
-                    usage["meta_requests"] = min(
-                        getattr(error, "attempts", usage["meta_requests"]),
-                        budget.limits.max_meta_requests,
-                    )
                     plan = plan.model_copy(
                         update={
                             "provenance": plan.provenance.model_copy(
                                 update={
                                     "reason_code": error.code,
-                                    "attempts": usage["meta_requests"],
+                                    "attempts": getattr(error, "attempts", 0),
                                 }
                             )
                         }
@@ -189,7 +212,7 @@ class VerificationPipeline:
             providers[c.ProviderName.META] = c.ProviderUsage(
                 mode=plan.provenance.mode,
                 model_id=plan.provenance.model_id,
-                calls=usage["meta_requests"],
+                calls=plan.provenance.attempts,
                 fallbacks=int(plan.provenance.mode is c.ProviderMode.FALLBACK),
                 reason_code=plan.provenance.reason_code,
             )
@@ -300,6 +323,17 @@ class VerificationPipeline:
                     stop = c.ReasonCode.INPUTS_EXHAUSTED
                     break
                 coverage = oracle.compute_coverage(probes, guard)
+                counter = getattr(self.route, "requests_spent", None)
+                spent = counter(record.run_id) if counter else snap_counted
+                if record.replay is None:
+                    want = min(
+                        min(budget.limits.max_snap_requests, self.route_request_limit) - spent
+                        if self.route_request_limit is not None
+                        else budget.limits.max_snap_requests - spent,
+                        self.route_requests_per_call,
+                    )
+                    if usage["snap_requests"] - spent < want:
+                        reserve(usage["meta_requests"], spent + want)
                 decision = (
                     await external(
                         self.route.choose(
@@ -308,8 +342,7 @@ class VerificationPipeline:
                                 contract_id=self.enrollment.contract_id,
                                 step=len(probes) + 1,
                                 remaining_pairs=budget.limits.max_pairs - len(probes),
-                                snap_requests_remaining=budget.limits.max_snap_requests
-                                - usage["snap_requests"],
+                                snap_requests_remaining=usage["snap_requests"] - spent,
                                 observed_coverage=coverage.observed,
                                 missing_coverage=coverage.missing,
                                 unseen_candidates={
@@ -335,12 +368,11 @@ class VerificationPipeline:
                         confidence=None,
                     )
                 )
-                counter = getattr(self.route, "requests_spent", None)
                 if record.replay is None:
-                    usage["snap_requests"] = (
+                    snap_counted = (
                         counter(record.run_id)
                         if counter
-                        else usage["snap_requests"]
+                        else snap_counted
                         + int(decision.mode in (c.RouteMode.LIVE, c.RouteMode.STUB))
                     )
                 previous = providers[c.ProviderName.SNAP]
@@ -349,7 +381,7 @@ class VerificationPipeline:
                     if decision.mode is not c.RouteMode.POLICY
                     else previous.mode,
                     model_id=decision.model_id,
-                    calls=usage["snap_requests"] if counter else 0,
+                    calls=snap_counted if counter else 0,
                     fallbacks=previous.fallbacks + int(decision.mode is c.RouteMode.FALLBACK),
                     reason_code=None,
                 )
@@ -431,13 +463,13 @@ class VerificationPipeline:
             stop = error.code
         coverage = oracle.compute_coverage(probes, guard)
         verdict = oracle.classify(probes, coverage, stop)
-        if lease.epoch > 1:
+        if recovery_blocked:
             verdict = c.VerdictResult(
                 verdict=c.Verdict.INCONCLUSIVE,
                 reason_code=c.ReasonCode.REVISION_UNAVAILABLE,
                 counterexample_probe_no=None,
                 wording=c.VERDICT_WORDING[c.Verdict.INCONCLUSIVE],
-                next_requirement="Start a fresh run; durable recovery binding is unavailable.",
+                next_requirement="Start a fresh run; partial execution cannot be safely resumed.",
             )
         if (
             verdict.counterexample_probe_no is not None
@@ -552,6 +584,9 @@ def compose(
             store,
             clock or WallClock(),
             Path(__file__).resolve().parents[2] / "fixtures/demo/candidate_bank.seed17.json",
+            meta_request_allowance=0,
+            route_requests_per_call=1,
+            route_request_limit=2,
         )
     from proofhunter.github import create_check_port, create_source_port
     from proofhunter.meta import create_meta_port

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from dataclasses import replace
 from datetime import datetime, timedelta
@@ -14,7 +15,7 @@ from proofhunter import contracts as c
 from proofhunter import oracle
 from proofhunter.api import create_app
 from proofhunter.cli import main, replay_receipt
-from proofhunter.config import load_settings
+from proofhunter.config import load_settings, mode_config_fingerprint
 from proofhunter.pipeline import VerificationPipeline, WallClock, compose
 from proofhunter.ports import AdapterError, ApiDependencies, LeaseLostError
 from proofhunter.store import create_store
@@ -191,6 +192,13 @@ async def test_unexpected_failure_is_sanitized(
 async def test_expired_lease_recovery(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     pipeline, store, run_id = setup_run(tmp_path)
     old = store.claim("old", 1)
+    pin = await pipeline.source.pin(store.load_run(run_id).target)
+    store.reserve_progress(
+        old,
+        c.RunCheckpoint(
+            pinned_revision=pin, provider_allocations=c.ProviderAllocations(meta=2, snap=3)
+        ),
+    )
     for seq, (before, after) in enumerate(
         [
             (c.RunState.QUEUED, c.RunState.FETCHING),
@@ -240,6 +248,7 @@ async def test_expired_lease_recovery(tmp_path: Path, monkeypatch: pytest.Monkey
     assert receipt.budget.used.sandbox_invocations == 0
     assert receipt.budget.used.meta_requests == 2
     assert receipt.budget.used.snap_requests == 3
+    assert receipt.pinned_revision == c.public_revision(pin)
 
 
 async def test_store_replay_bypasses_providers(
@@ -395,7 +404,7 @@ async def test_api_worker(tmp_path: Path) -> None:
         assert response.json()["verdict"] == "no_defect_found"
 
 
-def test_readyz_current_contract_defect(tmp_path: Path) -> None:
+async def test_readyz_heartbeat(tmp_path: Path) -> None:
     from pydantic import SecretStr
 
     pipeline, store, _ = setup_run(tmp_path)
@@ -405,10 +414,146 @@ def test_readyz_current_contract_defect(tmp_path: Path) -> None:
             "operator_token": SecretStr("test-operator"),
         }
     )
+    fingerprint = mode_config_fingerprint(settings, [pipeline.enrollment])
     app = create_app(
-        ApiDependencies(settings, store, FixtureRepositoryValidator(), None, WallClock())
+        ApiDependencies(
+            settings,
+            store,
+            FixtureRepositoryValidator(),
+            None,
+            WallClock(),
+            heartbeat_store=store,
+            config_fingerprint=fingerprint,
+        )
     )
     with TestClient(app) as client:
-        response = client.get("/readyz")
-        assert response.status_code == 200
-        assert response.json() == {"status": "ready", "worker_heartbeat": "unavailable"}
+        assert client.get("/readyz").status_code == 503
+        worker = VerificationWorker(pipeline, heartbeat_store=store, config_fingerprint=fingerprint)
+        await worker.run_once()
+        assert client.get("/readyz").status_code == 200
+        worker.config_fingerprint = "f" * 64
+        worker.heartbeat()
+        assert client.get("/readyz").status_code == 503
+        worker.config_fingerprint = fingerprint
+        worker.heartbeat()
+        now = WallClock().now() + timedelta(seconds=31)
+
+        class LaterClock:
+            def now(self) -> datetime:
+                return now
+
+        store.clock = LaterClock()
+        assert client.get("/readyz").status_code == 503
+
+
+async def test_pin_only_recovery(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    pipeline, store, run_id = setup_run(tmp_path)
+    lease = store.claim("old", 1)
+    pin = await pipeline.source.pin(store.load_run(run_id).target)
+    store.reserve_progress(lease, c.RunCheckpoint(pinned_revision=pin))
+    now = WallClock().now() + timedelta(seconds=2)
+
+    class LaterClock:
+        def now(self) -> datetime:
+            return now
+
+    store.clock = LaterClock()
+
+    async def moved(*args: object) -> None:
+        raise AssertionError("must not resolve moving head")
+
+    monkeypatch.setattr(pipeline.source, "pin", moved)
+    await VerificationWorker(pipeline).run_once()
+    receipt = store.get_receipt(run_id)
+    assert receipt.verdict is c.Verdict.CONFIRMED_REGRESSION
+    assert receipt.pinned_revision == c.public_revision(pin)
+
+
+async def test_legacy_recovery(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    pipeline, store, run_id = setup_run(tmp_path)
+    load = store.load_run
+    monkeypatch.setattr(store, "load_run", lambda key: replace(load(key), checkpoint=None))
+
+    async def forbidden(*args: object) -> None:
+        raise AssertionError("legacy must not perform I/O")
+
+    for port, methods in (
+        (pipeline.source, ("pin", "fetch")),
+        (pipeline.meta, ("propose",)),
+        (pipeline.route, ("choose",)),
+        (pipeline.runner, ("attest", "observe")),
+    ):
+        for method in methods:
+            monkeypatch.setattr(port, method, forbidden)
+    await VerificationWorker(pipeline).run_once()
+    receipt = store.get_receipt(run_id)
+    assert receipt.reason_code is c.ReasonCode.REVISION_UNAVAILABLE
+    assert receipt.budget.used.meta_requests == 2
+    assert receipt.budget.used.snap_requests == 3
+
+
+async def test_reservation_order_and_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pipeline, store, run_id = setup_run(tmp_path)
+    pipeline.meta_request_allowance = 2
+    pipeline.route_requests_per_call = 2
+    propose, choose = pipeline.meta.propose, pipeline.route.choose
+
+    async def meta(context: Any) -> c.HypothesisPlan:
+        checkpoint = store.load_run(run_id).checkpoint
+        assert checkpoint.pinned_revision is not None
+        assert checkpoint.provider_allocations.meta == 2
+        return await propose(context)
+
+    async def route(state: c.DecisionState, eligible: Any) -> c.RouteDecision:
+        checkpoint = store.load_run(run_id).checkpoint
+        assert checkpoint.pinned_revision is not None
+        assert checkpoint.provider_allocations.snap >= state.snap_requests_remaining
+        assert state.snap_requests_remaining >= 2
+        return await choose(state, eligible)
+
+    monkeypatch.setattr(pipeline.meta, "propose", meta)
+    monkeypatch.setattr(pipeline.route, "choose", route)
+    await VerificationWorker(pipeline).run_once()
+    assert store.get_receipt(run_id).verdict is c.Verdict.CONFIRMED_REGRESSION
+
+
+async def test_reservation_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    pipeline, store, run_id = setup_run(tmp_path)
+    calls = []
+
+    def broken(*args: object) -> None:
+        raise RuntimeError("lost acknowledgment")
+
+    async def forbidden(*args: object) -> None:
+        calls.append(True)
+
+    monkeypatch.setattr(store, "reserve_progress", broken)
+    monkeypatch.setattr(pipeline.source, "fetch", forbidden)
+    monkeypatch.setattr(pipeline.meta, "propose", forbidden)
+    monkeypatch.setattr(pipeline.route, "choose", forbidden)
+    await VerificationWorker(pipeline).run_once()
+    assert store.get_receipt(run_id).reason_code is c.ReasonCode.INTERNAL_ERROR
+    assert calls == []
+
+
+async def test_active_heartbeat(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    pipeline, store, _ = setup_run(tmp_path)
+    monkeypatch.setattr(c, "HEARTBEAT_INTERVAL_SECONDS", 0.01)
+    fingerprint = mode_config_fingerprint(pipeline.settings, [pipeline.enrollment])
+    original = pipeline.runner.attest
+    observed = []
+
+    async def slow() -> c.IsolationAttestation:
+        before = store.read_heartbeat(c.Profile.OFFLINE, fingerprint)
+        await asyncio.sleep(0.05)
+        after = store.read_heartbeat(c.Profile.OFFLINE, fingerprint)
+        observed.append(after.observed_at > before.observed_at)
+        return await original()
+
+    monkeypatch.setattr(pipeline.runner, "attest", slow)
+    await VerificationWorker(
+        pipeline, heartbeat_store=store, config_fingerprint=fingerprint
+    ).run_once()
+    assert observed == [True]

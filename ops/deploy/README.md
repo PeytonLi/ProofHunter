@@ -5,6 +5,12 @@ install the reviewed checkout at `/opt/proofhunter`, and provision a writable
 `/var/lib/proofhunter` before use. Set the same database and enrollment paths for
 API and worker. Explicitly provision distinct test-only API/operator tokens for
 the offline API; the template contains no credentials. Do not use live keys.
+Run both units with the same effective configuration/enrollment registry so
+their mode_config_fingerprint matches. `/readyz` returns 503 until a worker
+writes a fresh matching heartbeat to the shared SQLite store. Workers refresh
+at startup, during polling and during active work (TTL 30s, interval 10s).
+Unit ordering alone does not establish readiness; monitor `/readyz` after both
+processes start and after config changes.
 
 The ACP unit is deliberately not installable as a boot service: offline ACP is
 an interactive private console and refuses to start a public agent. For console
@@ -13,6 +19,7 @@ setting. Public Agentverse registration, mailbox and production credentials need
 the separate operator gates in `docs/provider-smoke.md` and the ACP handoff.
 
 No unit was installed, enabled or started. Bind privately; do not expose the API
-to the Internet. No webhook/check publication, cleanup sweeper, retention job or
-worker heartbeat is claimed. Apply reviewed retention and tagged sandbox cleanup
+to the Internet. No webhook/check publication, cleanup sweeper or retention job
+is claimed. Heartbeat wiring is implemented; these example units were not run.
+Apply reviewed retention and tagged sandbox cleanup
 policies only after those operational interfaces have been reviewed.

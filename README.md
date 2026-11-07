@@ -7,23 +7,26 @@ Status: offline integration implemented. Live release remains operator-gated.
 ## Quickstart (offline)
 
 ```bash
-uv sync --locked
 export UV_OFFLINE=1 PROOFHUNTER_PROFILE=offline
+uv sync --locked
 uv run --locked pytest -q
 uv run --locked python -m proofhunter demo --offline --case buggy --seed 17 --receipt ./buggy-receipt.json
 uv run --locked python -m proofhunter demo --offline --case fixed --seed 17 --receipt ./fixed-receipt.json
 uv run --locked python -m proofhunter replay --offline --receipt ./buggy-receipt.json --probe counterexample
 uv run --locked python -m bench.run --offline --split sample --seed 17 --output ./bench-results.jsonl
-uv run --locked python -m proofhunter serve --profile offline
-uv run --locked python -m proofhunter worker --profile offline
-python tools/gate.py integrated --evidence ~/ph-evidence
+uv run --locked python tools/gate.py integrated --evidence ~/ph-evidence
 ```
 
 Everything defaults to `PROOFHUNTER_PROFILE=offline`. No provider credentials are read in that profile and every live feature flag is off.
 
 `serve` requires explicitly supplied, distinct `PROOFHUNTER_TEST_API_TOKEN` and
 `PROOFHUNTER_TEST_OPERATOR_TOKEN` (local test credentials only). It binds
-127.0.0.1 by default. API and worker must share `PROOFHUNTER_DB_PATH`.
+127.0.0.1 by default. Run `uv run --locked python -m proofhunter serve --profile offline`
+and `uv run --locked python -m proofhunter worker --profile offline` in separate
+terminals with the same `PROOFHUNTER_DB_PATH` and effective configuration.
+`/readyz` stays 503 without a fresh matching worker heartbeat (TTL 30s, refresh
+10s, including active work). Durable pins and allocations precede I/O; pin-only
+recovery resumes, while partial spend fails closed without refunds.
 Standalone demos use a temporary database unless that path is supplied.
 `half_even` and `existing` are also supported demo cases. Demo exit 0 means a
 terminal evidence receipt, not necessarily a clean verdict. Live CLI requests
