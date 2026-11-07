@@ -18,7 +18,7 @@ from research.baselines.smoke import generator_input, run_episode
 from research.schemas.interfaces import EpisodeContext, EpisodeState, PairFeedback, Selector
 from research.schemas.models import CostStatus, MeasurementMode, Outcome
 
-MODEL = "gpt-6-sol"
+MODEL = "gpt-6.1-sol"
 PROVIDERS = Path(__file__).resolve().parents[3] / "fixtures" / "providers"
 
 
@@ -75,7 +75,8 @@ def test_models_json_pins() -> None:
     from research.baselines.config import frontier_model_ids, load_models
 
     cfg = load_models()
-    assert frontier_model_ids() == ("gpt-6-sol", "gpt-6-astra")
+    assert frontier_model_ids() == ("gpt-6.1-sol", "gpt-6-astra")
+    assert "gpt-6-sol" not in cfg["frontier"]["pricing_usd_per_1m_tokens"]
     assert cfg["frontier"]["reasoning_effort"] == "low"
     assert cfg["frontier"]["pricing_date"] == "2026-11-07"
     assert cfg["meta"]["max_completion_tokens"] == 4096
@@ -104,7 +105,7 @@ def test_reviewer_ranks_once_without_feedback(ctx: EpisodeContext) -> None:
     assert body["text"]["format"]["strict"] is True
     assert "outcome" not in json.dumps(body["input"])
     (entry,) = ledger.entries()
-    assert entry.cost_status is CostStatus.ESTIMATED
+    assert entry.cost_status is CostStatus.MEASURED
     assert entry.paid
     assert entry.cost_usd == pytest.approx((1000 * 2 + 100 * 10) / 1e6)
 

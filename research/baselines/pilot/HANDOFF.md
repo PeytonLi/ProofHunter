@@ -6,7 +6,7 @@
 ## Owned files
 - `research/baselines/{__init__,selectors,meta,frontier,ledger,config,smoke}.py`, `research/baselines/models.json`
 - `tests/research/baselines/{__init__,conftest,test_selectors,test_providers}.py`
-- `research/baselines/pilot/{HANDOFF.md,ledger.jsonl,smoke-live_v2.json}` (committed copies; `research/artifacts/` is gitignored by setup, full run outputs stay local)
+- `research/baselines/pilot/{HANDOFF.md,ledger.jsonl,smoke-live_v2.json,smoke-live_gpt61sol.json}` (committed copies; `research/artifacts/` is gitignored by setup, full run outputs stay local)
 
 ## Interfaces
 - `selectors.make_selector(arm_id, *, seed)`: `fixed_order`, `uniform_random`, `simple_heuristic`, `builtin_eig`
@@ -20,9 +20,13 @@
   the same `PairFeedback` as other arms, and the eligible (coverage-guarded) ids each turn. The harness keeps the paired-probe budget.
   Optional kwargs: `api_key, ledger, transport, phase, mode, run_id, estimated_job_usd`.
   Every provider failure → deterministic fixed order, plus a `selector.degraded` reason code. Rows should mark/censor on this.
-- `models.json`: primary `gpt-6-sol`, optional `gpt-6-astra` (both listed by GET /v1/models on 2026-11-07), effort low,
-  max_output_tokens 4096, store=false, retries 3 attempts on 429/5xx/transport/timeout (backoff 1 s, 2 s; Retry-After cap 8 s),
-  90 s request timeout, 1 MiB response cap, per-episode caps (18 agent calls, 250k input / 40k output tokens).
+- `models.json`: primary `gpt-6.1-sol` ($2 in / $0.10 cached / $10 out per 1M, verified 2026-11-07 at
+  https://developers.openai.com/api/docs/pricing), optional `gpt-6-astra` ($10 / $1 / $50, verified). gpt-6-sol dropped
+  (listed by /v1/models but unpriced). Effort low, max_output_tokens 4096, store=false, retries 3 attempts on
+  429/5xx/transport/timeout (backoff 1 s, 2 s; Retry-After cap 8 s), 90 s request timeout, 1 MiB response cap,
+  per-episode caps (18 agent calls, 250k input / 40k output tokens).
+- Degraded episodes (coordinator decision): count as the arm's own results with the fallback outcome and all provider
+  cost incurred; the measurement lane reports the degraded rate per arm by `degraded` reason.
 
 ## Tests (all pass)
 ```
@@ -37,30 +41,34 @@ Failure modes tested with httpx.MockTransport: 503/429 retries, 400 no-retry, ti
 bad envelope, malformed/non-schema output, unknown ids, empty ranking, incomplete status, refusal, missing key (no call),
 invalid tool-call cap, text instead of a tool call. Meta: 503, malformed, timeout, missing key → built-in fallback.
 
-## Live smoke (pilot, `python -m research.baselines.smoke --live`)
-These are the 4 reviewed demo cases (buggy, half_even and fixed at seed 1633385816, plus buggy at seed 3469185555), not dataset validation cases,
-because the dataset lane had not landed. Final run: `smoke-live_v2.json`.
+## Live smoke (pilot, reviewed demo cases only)
+Final run: `python -m research.baselines.smoke --live --max-cases 3 --tag=_gpt61sol` → `smoke-live_gpt61sol.json`
+(cases: buggy, half_even, fixed at seed 1633385816). These are the reviewed fixture cases, not dataset validation cases.
 
-| arm | per-case cost (USD, estimated) | provider latency |
+| arm | per-case cost (USD, measured) | provider latency |
 |---|---|---|
-| frontier_reviewer gpt-6-sol | 0.0024–0.0029 (cached prompt); 0.010 uncached | 1.2–3.0 s |
-| frontier_agent gpt-6-sol | 0.0013 (1 pair) / 0.044 (6 pairs) | 0.9–8 s |
-| meta_muse_spark_eig | unknown (no published price, no usage returned) | 7–37 s |
+| frontier_reviewer gpt-6.1-sol | 0.0083–0.0100 | 1.7–4.3 s |
+| frontier_agent gpt-6.1-sol | 0.0084–0.0085 (1 pair) / 0.058 (6 pairs) | 1.7–9.3 s |
+| meta_muse_spark_eig | unknown (no published price, no usage returned) | 10–19 s |
 
-Ledger: 51 entries, all `phase=pilot`, `measurement_mode=live`: OpenAI 40 entries totalling **$0.321 estimated**. Meta has 11 entries
-of HTTP attempts with **cost unknown**. Every pre-launch job estimate was ≤ $2. That includes a $0.005 upper-bound entry for one
-exploratory shape-check call and 2 aggregate entries for 8 debug calls made before ledgering was wired.
+gpt-6.1-sol reported 0 cached tokens on these calls. Earlier pilot runs used gpt-6-sol (`smoke-live_v2.json`).
+
+Ledger (`ledger.jsonl`, 65 entries, all `phase=pilot`, `measurement_mode=live`):
+- gpt-6.1-sol: 11 entries, **$0.1026 measured** (this smoke), plus 1 exploratory shape-check call ($0.005 upper bound, estimated).
+- gpt-6-sol (dropped, historical): 39 entries, **$0.3159 estimated** (unverified rate).
+- Meta: 14 HTTP attempts, **cost unknown**.
+- OpenAI total: **$0.4235** across 51 entries. Every pre-launch job estimate was ≤ $2.
 
 ## Known limitations
-- gpt-6-sol does not appear in the public pricing table (2026-11-07). The assessment rate of $2 / $0.20 / $10 per 1M tokens is
-  unverified, so its costs are marked `estimated`. gpt-6-astra and gpt-6.1-sol rates were verified on that page.
-- `frontier_agent_free_input` raises NotImplementedError. The frozen `Selector.choose` must return an `input_sha256` from
-  `state.available`, so free inputs need an interface change, which is the setup lane's call.
+- Historical gpt-6-sol pilot spend is priced at the unverified assessment rate and marked `estimated`.
+- gpt-6-astra (optional arm) is pinned and priced but was not run live.
+- `frontier_agent_free_input` is out of scope for v1 (coordinator decision) and raises NotImplementedError; the frozen
+  `Selector.choose` can only return an `input_sha256` from `state.available`. The pool-restricted agent is the plan's arm.
 - The reviewer returns an empty ranking on the no-defect case, so the episode falls back to fixed order (`degraded=empty_ranking`).
 - The smoke cases are easy: every arm except fixed order and random finds the bug at pair 1. This is not evidence of arm quality.
 - `smoke.py` is a local stand-in episode loop, not the measurement lane's `EpisodeRunner`, and it runs no confirmation step.
 - `JsonlLedger` is a local helper; switch to `research.metrics` when it lands.
 
 ## Dependencies
-Dataset lane (validation cases), measurement lane (`EpisodeRunner`, shared ledger, how `degraded` is censored),
-and the coordinator (verified gpt-6-sol price; a decision on the free-input interface).
+Dataset lane (validation cases), measurement lane (`EpisodeRunner`, shared ledger),
+which must apply the degraded-row rule above.

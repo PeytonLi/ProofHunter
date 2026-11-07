@@ -147,6 +147,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out", type=Path, default=ARTIFACTS)
     parser.add_argument("--case", action="append", choices=sorted({x for x, _ in CASES}))
     parser.add_argument("--tag", default="")
+    parser.add_argument("--max-cases", type=int, default=len(CASES))
     args = parser.parse_args(argv)
     args.out.mkdir(parents=True, exist_ok=True)
     ledger: Ledger = JsonlLedger(args.out / "ledger.jsonl")
@@ -154,7 +155,7 @@ def main(argv: list[str] | None = None) -> int:
     common: dict[str, Any] = {"ledger": ledger, "phase": LedgerPhase.PILOT, "mode": mode}
     rows: list[dict[str, Any]] = []
     builtin = c.builtin_hypothesis_payload()
-    cases = [x for x in CASES if not args.case or x[0] in args.case]
+    cases = [x for x in CASES if not args.case or x[0] in args.case][: args.max_cases]
     for case, seed in cases:
         ctx = make_context(case, seed, builtin)
         arms: list[tuple[Selector, EpisodeContext]] = [

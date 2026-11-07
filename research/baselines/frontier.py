@@ -9,7 +9,9 @@
 The model never executes anything: the selector only returns a pool ``input_sha256``; the harness
 runs reviewed Track A template code. Provider bodies and credentials are never logged. Any provider
 failure (outage, timeout, malformed or refused output, cap exceeded) degrades to the deterministic
-fixed order and is reported on ``degraded`` so rows can mark it.
+fixed order and is reported on ``degraded``. Degraded episodes count as the arm's own results
+(fallback outcome and all provider cost incurred); the measurement lane reports the
+degraded rate per arm by reason. ``frontier_agent_free_input`` is out of scope for v1 and raises.
 """
 
 from __future__ import annotations
@@ -427,6 +429,6 @@ def frontier_reviewer(model_id: str, **kwargs: Any) -> Selector:
 def frontier_agent(model_id: str, *, free_input: bool = False, **kwargs: Any) -> Selector:
     if free_input:
         raise NotImplementedError(
-            "frontier_agent_free_input needs a free-input episode interface: the frozen "
+            "frontier_agent_free_input is out of scope for research-protocol-v1: the frozen "
             "Selector.choose must return an input_sha256 from state.available")
     return FrontierAgent(_client(model_id, **kwargs))
