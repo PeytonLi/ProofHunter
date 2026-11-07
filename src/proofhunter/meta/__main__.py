@@ -3,18 +3,41 @@
 import argparse
 import asyncio
 import json
+import uuid
 
-from fixtures import catalog
-from fixtures.adapters import FixtureRepositoryValidator, FixtureSource
 from proofhunter.config import load_settings
-from proofhunter.contracts import PlanningContext, ReasonCode
+from proofhunter.contracts import (
+    MAX_PROPOSALS,
+    ContextFile,
+    HypothesisMode,
+    PlanningContext,
+)
 from proofhunter.meta import MetaError, build_request, create_meta_port
 
+# Public demo head (buggy per-line rounding); smoke uses only this public text.
+DEMO_SOURCE = (
+    '"""Demo checkout module, buggy head: discounts and rounds each line separately."""\n'
+    "\n\n"
+    "def total_cents(prices_cents: list[int], discount_percent: int) -> int:\n"
+    "    total = 0\n"
+    "    for price in prices_cents:\n"
+    "        total += (price * (100 - discount_percent) + 50) // 100\n"
+    "    return total\n"
+)
+DEMO_CONTRACT = (
+    "checkout.total_cents(prices_cents: list[int], discount_percent: int) -> int. "
+    "0-8 items of 0-10000 integer cents, integer discount 0-100. Round the discounted "
+    "subtotal once, half up: n = sum(prices_cents) * (100 - discount_percent); "
+    "return (n + 50) // 100."
+)
 
-async def demo_context() -> PlanningContext:
-    target, enrollment = FixtureRepositoryValidator().resolve(catalog.PR_CASES["buggy"].url)
-    source = FixtureSource()
-    return (await source.fetch(await source.pin(target), enrollment)).context
+
+def demo_context() -> PlanningContext:
+    return PlanningContext(
+        run_id=str(uuid.uuid4()), contract_id="checkout-rounding@1",
+        entrypoint="checkout.total_cents", contract_text=DEMO_CONTRACT,
+        files=[ContextFile(path="checkout.py", start_line=1, text=DEMO_SOURCE)],
+        diff="", supported_modes=list(HypothesisMode), max_hypotheses=MAX_PROPOSALS)
 
 
 async def main() -> None:
@@ -26,15 +49,13 @@ async def main() -> None:
     settings = load_settings() if args.live else load_settings({"PROOFHUNTER_PROFILE": "offline"})
     if args.live and settings.offline:
         parser.error("--live requires PROOFHUNTER_PROFILE=live")
-    context = await demo_context()
+    context = demo_context()
     if not args.live:
         print(json.dumps(build_request(context, settings.meta.model), sort_keys=True))
         return
     # A smoke gate spends exactly one HTTP request, even on a transient failure.
-    async def no_retry(_: float) -> None:
-        raise MetaError(ReasonCode.PROVIDER_UNAVAILABLE, attempts=1)
     try:
-        result = await create_meta_port(settings, sleep=no_retry).propose(context)
+        result = await create_meta_port(settings, max_attempts=1).propose(context)
     except MetaError as error:
         print(json.dumps({"provider": "meta", "reason_code": error.code.value,
                           "attempts": error.attempts}))

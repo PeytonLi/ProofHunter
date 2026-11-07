@@ -9,12 +9,17 @@ import pytest
 from pydantic import SecretStr
 
 from fixtures import catalog
-from fixtures.adapters import load_plan_payload
+from fixtures.adapters import FixtureRepositoryValidator, FixtureSource, load_plan_payload
 from proofhunter.config import MetaSettings, Profile, Settings, load_settings
 from proofhunter.contracts import PlanningContext, ReasonCode
 from proofhunter.meta import MetaError, build_request, create_meta_port
-from proofhunter.meta.__main__ import demo_context
 from proofhunter.ports import MetaPort
+
+
+async def demo_context() -> PlanningContext:
+    target, enrollment = FixtureRepositoryValidator().resolve(catalog.PR_CASES["buggy"].url)
+    source = FixtureSource()
+    return (await source.fetch(await source.pin(target), enrollment)).context
 
 
 @pytest.fixture
@@ -104,7 +109,10 @@ async def test_invalid(context: PlanningContext, kind: str) -> None:
     elif kind == "content_size":
         message["content"] = "x" * 17000
     elif kind in {"tool", "function"}:
-        message["tool_calls" if kind == "tool" else "function_call"] = []
+        message["tool_calls" if kind == "tool" else "function_call"] = (
+            [{"id": "call_1", "type": "function",
+              "function": {"name": "run_tests", "arguments": "{}"}}]
+            if kind == "tool" else {"name": "run_tests", "arguments": "{}"})
     elif kind in {"refusal", "filter"}:
         code = ReasonCode.PROVIDER_REFUSED
         if kind == "refusal":
@@ -205,3 +213,35 @@ def test_bounds(context: PlanningContext) -> None:
         build_request(context.model_copy(update={"diff": "x" * 40000}), "model")
     with pytest.raises(MetaError):
         build_request(context.model_copy(update={"diff": "\x00" * 15000}), "model")
+
+
+@pytest.mark.parametrize("empty", [None, []])
+async def test_null_tool_calls_accepted(context: PlanningContext, empty: object) -> None:
+    outer = response()
+    outer["choices"][0]["message"]["tool_calls"] = empty
+    port = create_meta_port(settings(), transport=httpx.MockTransport(
+        lambda _: httpx.Response(200, json=outer)))
+    plan = await port.propose(context)
+    assert plan.hypotheses == load_plan_payload().hypotheses
+
+
+async def test_single_attempt_mode(context: PlanningContext) -> None:
+    calls = 0
+    def handler(_: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return httpx.Response(503)
+    port = create_meta_port(settings(), transport=httpx.MockTransport(handler),
+                            sleep=no_sleep, max_attempts=1)
+    with pytest.raises(MetaError) as caught:
+        await port.propose(context)
+    assert calls == caught.value.attempts == 1
+    assert caught.value.retryable
+
+
+def test_smoke_context_matches_fixture_source() -> None:
+    from proofhunter.meta.__main__ import DEMO_SOURCE
+    from proofhunter.meta.__main__ import demo_context as smoke_context
+    buggy = (catalog.REVISIONS_DIR / "buggy" / "checkout.py").read_text()
+    assert buggy == DEMO_SOURCE
+    assert smoke_context().files[0].text == DEMO_SOURCE

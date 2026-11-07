@@ -109,7 +109,7 @@ def _payload(body: bytes, context: PlanningContext) -> tuple[HypothesisPlanPaylo
         message = choice["message"]
         if message.get("refusal") is not None or choice.get("finish_reason") == "content_filter":
             raise MetaError(ReasonCode.PROVIDER_REFUSED, request_id=request_id)
-        if ("tool_calls" in message or "function_call" in message
+        if (message.get("tool_calls") or message.get("function_call")
                 or choice.get("finish_reason") != "stop"):
             raise ValueError
         content = message["content"]
@@ -145,7 +145,11 @@ def _backoff(value: str | None) -> float:
 
 class MetaAdapter:
     def __init__(self, settings: Settings, *, transport: httpx.AsyncBaseTransport | None,
-                 sleep: Callable[[float], Awaitable[None]], clock: Callable[[], float]) -> None:
+                 sleep: Callable[[float], Awaitable[None]], clock: Callable[[], float],
+                 max_attempts: int = 2) -> None:
+        if max_attempts not in (1, 2):
+            raise ValueError("max_attempts must be 1 or 2")
+        self._max_attempts = max_attempts
         self._settings = settings
         self._transport = transport
         self._sleep = sleep
@@ -163,7 +167,7 @@ class MetaAdapter:
             async with asyncio.timeout(OVERALL_TIMEOUT):
                 async with httpx.AsyncClient(transport=self._transport, trust_env=False,
                                             timeout=REQUEST_TIMEOUT) as client:
-                    for attempt in range(2):
+                    for attempt in range(self._max_attempts):
                         delay = 0.25
                         try:
                             if self._clock() - start >= OVERALL_TIMEOUT:
@@ -199,7 +203,7 @@ class MetaAdapter:
                         except MetaError as caught:
                             error = caught
                         error.attempts = attempts
-                        if not error.retryable or attempt == 1:
+                        if not error.retryable or attempt == self._max_attempts - 1:
                             raise error from None
                         if self._clock() - start + delay >= OVERALL_TIMEOUT:
                             raise error from None
@@ -212,5 +216,7 @@ class MetaAdapter:
 
 def create_meta_port(settings: Settings, *, transport: httpx.AsyncBaseTransport | None = None,
                      sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
-                     clock: Callable[[], float] = time.monotonic) -> MetaAdapter:
-    return MetaAdapter(settings, transport=transport, sleep=sleep, clock=clock)
+                     clock: Callable[[], float] = time.monotonic,
+                     max_attempts: int = 2) -> MetaAdapter:
+    return MetaAdapter(settings, transport=transport, sleep=sleep, clock=clock,
+                       max_attempts=max_attempts)

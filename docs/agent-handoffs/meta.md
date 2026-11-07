@@ -39,12 +39,16 @@ request_id=error.request_id, latency_ms=None)`. Never label fallback live.
 Mocks: `fixtures/providers/meta_request.json`, `meta_response.json`, and
 `meta_plan_payload.json`. The request adds typed `contract_text` and `diff` to
 the fixture user JSON; system policy and structured schema are identical.
-Tests fetch the demo PlanningContext through FixtureSource.
+Tests fetch the demo PlanningContext through FixtureSource. Mock responses with
+`tool_calls`/`function_call` set to null or [] are accepted; any non-empty tool call
+is rejected and never executed.
 
 `UV_OFFLINE=1 uv run --locked python -m proofhunter.meta --dry-run` (also the
 default) prints sanitized request JSON without reading credentials or networking.
-It prints no Authorization header or key. Production proposal code does not
-import fixtures; only the smoke CLI loads the demo fixture source.
+It prints no Authorization header or key. No module under `src/proofhunter/meta`
+imports `fixtures`; the smoke CLI embeds the public buggy demo head text and the
+contract rule (a test pins it byte-equal to the reviewed fixture revision).
+`create_meta_port(..., max_attempts=1)` disables the retry for the smoke gate.
 
 Live smoke is operator-only on a separate staging host, per
 `docs/provider-smoke.md`: provision all required live settings securely, set
