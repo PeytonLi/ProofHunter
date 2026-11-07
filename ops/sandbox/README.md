@@ -23,7 +23,8 @@ only integer input on stdin, not the nonce or binding file. The root parent owns
 the output envelope. Resource limits cap address space, CPU, processes, files,
 core dumps and both output streams; a new sandbox is always deleted afterward.
 
-Stable snapshot creation parameters **do not accept resources**. Provision the
+In daytona 0.231.0, `CreateSnapshotParams` accepts `resources`;
+`CreateSandboxFromSnapshotParams` does not. Provision the
 snapshot with 1 CPU and 1 GiB memory; the adapter inspects these values before
 upload. Per-invocation child memory is at most 1024 MiB (default 256 MiB) and
 process count at most 64 (default 16). A request for two CPUs still runs on the
@@ -34,7 +35,10 @@ stricter one-CPU snapshot. There is no resource fallback to provider defaults.
 1. Inspect the account's effective strict block-all policy (including essential
    services), private ingress, snapshot image digest, absence of injected secrets,
    sudo rules and resource configuration. Record effective policy and account
-   tier evidence in provider-smoke. The SDK cannot cryptographically establish
+   tier evidence in provider-smoke. Tier 1/2 organization policy overrides
+   sandbox block-all and allows essential services: **do not approve Tier 1/2**.
+   Tier >= 3 and denied probes are both mandatory; an echoed block-all flag
+   proves neither. The SDK cannot cryptographically establish
    the image digest: the operator must verify the immutable snapshot-to-digest
    mapping. Never attest a mutable snapshot alias.
 2. The benign commands in that **fresh snapshot only** are:
@@ -46,7 +50,8 @@ stricter one-CPU snapshot. There is no resource fallback to provider defaults.
 
    Run only the canary first. It checks DNS, controlled HTTPS, known essential
    services, public IP HTTPS, link-local metadata TCP access, secret-like env
-   names and restricted UID. All four JSON booleans must be true. A canary is
+   names and restricted UID. All four top-level JSON booleans and every value
+   in `probes_denied` must be true. All probes run even after a failure. A canary is
    necessary, not sufficient: additionally verify actual timeout, CPU/memory,
    descendant termination, upload, private ingress and deletion on the account.
    An unavailable endpoint does not establish isolation by itself.
@@ -59,7 +64,21 @@ stricter one-CPU snapshot. There is no resource fallback to provider defaults.
 4. Only after review, write `runner-isolation-approval.json` beside the database:
 
    ```json
-   {"config_fingerprint":"<runner.fingerprint>","image_digest":"sha256:<64 hex>","effective_policy_reviewed":true}
+   {
+     "config_fingerprint":"<runner.fingerprint>",
+     "image_digest":"sha256:<64 hex>",
+     "effective_policy_reviewed":true,
+     "daytona_account_tier":3,
+     "canary_result":{
+       "egress_denied":true,"metadata_denied":true,
+       "secrets_absent":true,"restricted_child":true,
+       "probes_denied":{
+         "github.com":true,"raw.githubusercontent.com":true,"pypi.org":true,
+         "files.pythonhosted.org":true,"registry.npmjs.org":true,"1.1.1.1":true,
+         "app.daytona.io":true,"169.254.169.254":true,"169.254.170.2":true
+       }
+     }
+   }
    ```
 
    This is a trusted operator artifact, not a provider response or PR input.
@@ -68,6 +87,30 @@ stricter one-CPU snapshot. There is no resource fallback to provider defaults.
    cannot make it pass. Missing approval or any mismatch denies source upload.
    Observations require an attestation less than 15 minutes old and unchanged
    approval. Refresh it before expiry. Revoke approval on policy changes.
+   Record the actual operator-reviewed canary JSON, not a copied success template.
+   `runner.approval_refusal_reason` exposes only fixed sanitized diagnostics:
+   `approval_invalid`, `account_tier_invalid` (missing/non-integer/nonpositive),
+   `account_tier_insufficient`, `canary_result_missing`, or
+   `canary_result_not_denied` (malformed, incomplete or any non-true result).
+   Frozen public attestation reason remains `isolation_unverified`.
+
+There is no standalone host-side launcher in this directory. After separate live
+authorization, an operator must build the image and create its immutable named
+snapshot via `client.snapshot.create(CreateSnapshotParams(..., resources=...))`.
+No image or snapshot name is supplied by this repository: configure the reviewed
+snapshot and its verified image digest in settings. A bootstrap canary (before
+writing approval) uses `DaytonaRunner._create("preflight", 15)`, then verifies
+`_policy(sandbox)`, calls
+`sandbox.process.exec(CANARY_COMMAND, cwd="/", env=ENV, timeout=10)`, and always
+`_delete(sandbox, "preflight")` in `finally`. These private helpers describe the
+existing lifecycle, not a public CLI. `_create` calls
+`client.create(CreateSandboxFromSnapshotParams(...), timeout=15)` with the
+configured snapshot, private ingress, block-all, empty volumes/secrets, minimal
+environment and the labels below. `_delete` calls
+`client.delete(sandbox, timeout=5, wait=True)` and records deletion in the ledger.
+After approval, public `await runner.attest()` repeats this fresh lifecycle; it
+will not launch a bootstrap canary without approval. Never upload target source
+for the bootstrap or preflight.
 
 ## Tagged orphan cleanup recipe
 

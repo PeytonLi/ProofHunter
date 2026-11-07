@@ -6,6 +6,16 @@ import socket
 import subprocess
 
 ENV = {"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", "HOME": "/nonexistent"}
+EGRESS_HOSTS = (
+    "github.com",
+    "raw.githubusercontent.com",
+    "pypi.org",
+    "files.pythonhosted.org",
+    "registry.npmjs.org",
+    "1.1.1.1",
+    "app.daytona.io",
+)
+METADATA_HOSTS = ("169.254.169.254", "169.254.170.2")
 
 
 def denied(host: str, port: int) -> bool:
@@ -30,17 +40,11 @@ def main() -> None:
         dns_denied = False
     except socket.gaierror:
         dns_denied = True
-    egress = dns_denied and all(
-        denied(host, 443)
-        for host in (
-            controlled_host,
-            "1.1.1.1",
-            "github.com",
-            "pypi.org",
-            "app.daytona.io",
-        )
-    )
-    metadata = all(denied(host, 80) for host in ("169.254.169.254", "169.254.170.2"))
+    probes = {host: denied(host, 443) for host in EGRESS_HOSTS}
+    probes.update({host: denied(host, 80) for host in METADATA_HOSTS})
+    controlled_denied = denied(controlled_host, 443)
+    egress = dns_denied and controlled_denied and all(probes[h] for h in EGRESS_HOSTS)
+    metadata = all(probes[h] for h in METADATA_HOSTS)
     child = subprocess.run(
         [
             "/usr/bin/setpriv",
@@ -66,6 +70,7 @@ def main() -> None:
                 "metadata_denied": metadata,
                 "secrets_absent": secrets_absent,
                 "restricted_child": child.returncode == 0,
+                "probes_denied": probes,
             }
         )
     )

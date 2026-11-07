@@ -22,8 +22,9 @@ an adjacent-boundary stand-in in tests, not a production fallback.
 observation and per attestation. Private ingress, block-all network, empty
 volumes/secrets, minimal environment, fixed commands, bounded source and request
 uploads, execution/control deadlines, TTL and stop/delete policies are explicit.
-Snapshot CPU/memory are checked before upload; stable snapshot params do not
-accept resource overrides. Strict host parsing checks nonce, attempt, side,
+Snapshot CPU/memory are checked before upload; daytona 0.231.0
+`CreateSnapshotParams` accepts `resources`, whereas
+`CreateSandboxFromSnapshotParams` does not. Strict host parsing checks nonce, attempt, side,
 commit/source/input hashes, exact keys, output size, signed integer type/range
 and truncation. It rejects duplicate keys and multiple JSON envelopes. Oracle
 values and receipt/ledger data never enter the sandbox.
@@ -90,6 +91,16 @@ skip the canary. The stable SDK does not independently prove snapshot digest:
 the operator must verify the immutable snapshot-to-digest mapping and effective
 policy before approving its fingerprint. A failed/unapproved gate denies all
 target uploads. No setting silently selects fixture execution for a live request.
+
+Approval now additionally requires strict integer `daytona_account_tier >= 3`
+and `canary_result` containing the exact four successful checks and per-host
+`probes_denied` booleans documented in the sandbox README. Tier 1/2 is refused
+even if the provider echoes `network_block_all=True`. Every essential-service,
+generic IP and metadata probe runs without short-circuiting. Both recorded and
+fresh canary evidence are required. Missing/invalid evidence fails before
+allocation; approval is rechecked before observations. Fixed sanitized local
+diagnostics are exposed through `approval_refusal_reason`; frozen public DTOs
+still report `isolation_unverified`. No Daytona calls were made for this change.
 
 ## Checks
 
