@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -35,6 +35,14 @@ class WallClock:
 
 
 @dataclass
+class _GithubCalls:
+    total: int = 0
+
+    def observe(self, record: object) -> None:
+        self.total += 1
+
+
+@dataclass
 class VerificationPipeline:
     settings: Settings
     enrollment: c.Enrollment
@@ -50,6 +58,7 @@ class VerificationPipeline:
     route_requests_per_call: int = 2
     route_request_limit: int | None = None
     expected_pins: tuple[str, str] | None = None
+    github_calls: Callable[[], int] | None = None
 
     async def run(self, record: RunRecord, lease: c.RunLease) -> c.ReceiptV1:
         if not self.settings.offline:
@@ -62,6 +71,7 @@ class VerificationPipeline:
                 raise ValueError("enrollment identity mismatch")
             self.enrollment = enrollment
         mode = c.ExecutionMode.OFFLINE_FIXTURE if self.settings.offline else c.ExecutionMode.LIVE
+        github_started = self.github_calls() if self.github_calls else 0
         budget = record.status.budget
         usage = budget.used.model_dump()
         probes = list(record.probes)
@@ -531,6 +541,10 @@ class VerificationPipeline:
             for attempt in self.store.load_run(record.run_id).attempts
             if attempt.attempt_id not in paired
         ]
+        if self.github_calls is not None:
+            providers[c.ProviderName.GITHUB] = providers[c.ProviderName.GITHUB].model_copy(
+                update={"calls": self.github_calls() - github_started}
+            )
         receipt = oracle.seal(
             c.ReceiptV1(
                 schema_version=c.SCHEMA_VERSION,
@@ -620,14 +634,16 @@ def compose(
     from proofhunter.snap import create_route_port
 
     enrollments = load_enrollments(settings.enrollments_path)
+    github_calls = _GithubCalls()
     return VerificationPipeline(
         settings,
         enrollments[0],
-        create_source_port(settings, enrollments),
+        create_source_port(settings, enrollments, observer=github_calls.observe),
         create_meta_port(settings),
         create_route_port(settings),
         create_runner_port(settings),
         create_check_port(settings),
         store,
         clock or WallClock(),
+        github_calls=lambda: github_calls.total,
     )

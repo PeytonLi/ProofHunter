@@ -1,9 +1,40 @@
 # Integration release: offline G2
 
+## Intake-held stack and Render preparation
+
+The previous standalone staging API/worker have been stopped. The combined
+stack was smoked on loopback port 8766 with a fresh
+`/home/ubuntu/ph-staging/stack/runs.sqlite3`, the same enrollment/bindings, and
+`--intake-disabled`. Its operator-side wrapper normalized saved secret formatting
+in memory and blocked all outbound HTTP attempts. No runs were submitted.
+Both `/healthz` and `/readyz` returned 200; the fresh DB contained zero runs.
+SIGTERM terminated the stack with signal exit `-15`, no traceback and the
+listening port closed. Offline supervisor tests cover both worker-return and
+API-return failures (`test_supervisor_exits_when_worker_stops` and
+`test_supervisor_exits_when_api_stops`); unexpected component termination raises
+`stack component stopped`, producing a nonzero CLI exit.
+
+```sh
+uv run --locked python /home/ubuntu/ph-staging/stack/smoke.py
+# Wrapper launches the equivalent production command, with loopback/disk env:
+uv run --locked python -m proofhunter stack --profile live --intake-disabled
+```
+
+Live `serve` and `stack` accept `--intake-disabled`; the existing public setting
+`PROOFHUNTER_ENABLE_INTAKE=false` also activates the CLI-owned middleware.
+Run and replay POST intake returns sanitized 503 `intake_disabled` before
+store/provider use. Health and existing heartbeat readiness remain independent
+of intake/execution approval. VM staging defaults remain intake-enabled.
+`PROOFHUNTER_ENROLLMENTS_JSON` optionally materializes a validated external
+registry atomically with mode 0600. Render's proposed core uses these safeguards.
+See `ops/deploy/README.md` and `render.yaml` for the unapplied two-service
+proposal, publication-held ACP failure caveat, price and credential preparation.
+No Render state-changing calls or new provider runs were made.
+
 ## Verified private live staging — 2026-11-07
 
 At integration commit `d84d86c`, two authorized real-provider runs completed on
-this VM. No whole-run retries were made. The API is loopback-only on port 8765;
+this VM. No whole-run retries were made. The API was loopback-only on port 8765;
 API and worker share `/home/ubuntu/ph-staging/runs.sqlite3` and the external
 mode-0600 registry. Enrollment repository/installation identity **matched** the
 authorized demo. `/healthz` and fresh-heartbeat `/readyz` returned **200**.
@@ -50,8 +81,12 @@ snapshot/image values. There were zero sandbox invocations/probes, zero SQLite
 observations, no sandbox ledger and no Daytona HTTP calls. Meta/Snap each made
 exactly one HTTP request per run. GitHub made 20 total requests: five enrollment,
 eight first-run (including token exchange), seven second-run (cached token).
-Receipt GitHub `calls=0` is an existing pipeline accounting limitation; the
-observer, durable pins and fetched source hashes provide actual call evidence.
+Those historical receipts have GitHub `calls=0`; the observer, durable pins and
+fetched source hashes provide actual call evidence. This accounting defect is
+now fixed for future receipts by counting production GitHub HTTP observer events
+within each pipeline run (including token exchanges/retries and failed requests).
+Enrollment/API validation calls outside the worker run are not receipt usage.
+Existing sealed receipts were not rewritten, and no new live run was submitted.
 
 API operator `POST /v1/retention/purge` with `{}` returned 200 and defaulted to
 dry-run. CLI dry-run matched: all 15 count categories were zero. No apply was

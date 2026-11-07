@@ -7,12 +7,13 @@ import asyncio
 import json
 import os
 import tempfile
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from pydantic import SecretStr
+from starlette.responses import JSONResponse, Response
 
 from proofhunter import contracts as c
 from proofhunter import oracle
@@ -60,8 +61,29 @@ def live_trust_gate(settings: Settings, enrollments: Sequence[c.Enrollment]) -> 
 
 def live_settings(env: dict[str, str], role: ServiceRole) -> Settings:
     settings = load_settings(env, role=role)
+    raw = env.get("PROOFHUNTER_ENROLLMENTS_JSON")
+    if raw is not None:
+        materialize_enrollments(settings, raw)
     live_trust_gate(settings, load_enrollments(settings.enrollments_path))
     return settings
+
+
+def materialize_enrollments(settings: Settings, raw: str) -> None:
+    registry = c.EnrollmentRegistry.model_validate_json(raw)
+    live_trust_gate(settings, [item for item in registry.enrollments if item.enabled])
+    path = settings.enrollments_path
+    if path.is_symlink() or path.resolve().is_relative_to(Path(__file__).resolve().parents[2]):
+        raise ConfigError("inline enrollment requires external regular path")
+    descriptor, temporary = tempfile.mkstemp(prefix=".enrollment-", dir=path.parent)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as output:
+            os.fchmod(output.fileno(), 0o600)
+            output.write(registry.model_dump_json(indent=2) + "\n")
+            output.flush()
+            os.fsync(output.fileno())
+        os.replace(temporary, path)
+    finally:
+        Path(temporary).unlink(missing_ok=True)
 
 
 def live_app(settings: Settings) -> FastAPI:
@@ -70,7 +92,7 @@ def live_app(settings: Settings) -> FastAPI:
 
     enrollments = load_enrollments(settings.enrollments_path)
     store = create_store(settings)
-    return create_app(
+    app = create_app(
         ApiDependencies(
             settings,
             store,
@@ -81,6 +103,31 @@ def live_app(settings: Settings) -> FastAPI:
             config_fingerprint=mode_config_fingerprint(settings, enrollments),
         )
     )
+    if not settings.enable_intake:
+
+        @app.middleware("http")
+        async def refuse_intake(
+            request: Request,
+            call_next: Callable[[Request], Awaitable[Response]],
+        ) -> Response:
+            path = request.url.path.rstrip("/")
+            if request.method == "POST" and (
+                path == "/v1/runs" or (path.startswith("/v1/runs/") and path.endswith("/replays"))
+            ):
+                return JSONResponse(
+                    {
+                        "error": {
+                            "code": "intake_disabled",
+                            "message": "intake disabled",
+                            "request_id": uuid4().hex,
+                            "retryable": False,
+                        }
+                    },
+                    status_code=503,
+                )
+            return await call_next(request)
+
+    return app
 
 
 def live_worker(settings: Settings, args: argparse.Namespace) -> VerificationWorker:
@@ -244,12 +291,20 @@ def enroll(settings: Settings, args: argparse.Namespace) -> None:
 def live_main(args: argparse.Namespace) -> int:
     env = dict(os.environ)
     env["PROOFHUNTER_PROFILE"] = "live"
+    if getattr(args, "intake_disabled", False):
+        env["PROOFHUNTER_ENABLE_INTAKE"] = "false"
     role = ServiceRole.API if args.command == "serve" else ServiceRole.WORKER
     if args.command == "enroll":
         settings = load_settings(env, role=role)
         enroll(settings, args)
         return 0
     settings = live_settings(env, role)
+    if args.command in ("serve", "stack") and not settings.daytona.enable_live_runner:
+        print(
+            "runner disabled: isolation_unverified; intake "
+            + ("enabled" if settings.enable_intake else "disabled"),
+            flush=True,
+        )
     if args.command == "serve":
         import uvicorn
 
@@ -409,6 +464,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     for command in ("demo", "replay", "serve", "worker", "stack", "enroll", "retention"):
         sub = commands.add_parser(command)
         sub.add_argument("--profile", choices=("offline", "live"), default="offline")
+        if command in ("serve", "stack"):
+            sub.add_argument("--intake-disabled", action="store_true")
         if command in ("demo", "replay"):
             sub.add_argument("--offline", action="store_true")
             sub.add_argument("--receipt", type=Path, required=True)

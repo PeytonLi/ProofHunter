@@ -72,6 +72,15 @@ Mode fingerprint for every row below:
 Latency is request-start to response headers. `evidence.json` contains all 24
 allowlisted call rows (20 GitHub, 2 Meta, 2 Snap); no response bodies.
 
+The historical receipts' zero GitHub call counts are fixed for future runs by
+the pipeline's production HTTP observer accounting; offline tests cover normal,
+failed and zero-I/O paths. No live receipts were rewritten or new runs spent.
+The subsequent fresh-DB stack smoke returned health/readiness 200, submitted no
+runs and closed its port on SIGTERM. Render remains a proposal only: core intake
+is held, runner stays disabled, and the ACP publication hold makes that worker
+exit before Agent construction. See `ops/deploy/README.md` for the unapplied
+two-service manifests, read-only inspection and remaining authorization caveats.
+
 | Provider | UTC timestamp | Request ID (sanitized) | Status | Latency ms | Config fingerprint | Result | Operator |
 |---|---|---|---|---|---|---|---|
 | Meta PR #1 | 2026-11-07T20:57:36.018790Z | bfa920bf-7e68-44e1-86ef-e31cef5c14a5 | 200 | 14867 | above | live hypotheses, no fallback | authorized VM staging |
