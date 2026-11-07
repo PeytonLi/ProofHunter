@@ -17,8 +17,8 @@ changes cwd before Agent construction, so both SDK state and the reply ledger us
 that directory. Use an absolute, private writable directory and one process per seed.
 No secret values are placed in its JSON ledger. The seed is always supplied explicitly.
 
-**Publication hold (default OFF):** Both normal mailbox startup and `register`
-refuse before Agent construction unless `PROOFHUNTER_ACP_PUBLISH=true`. Leave it
+**Publication hold (default OFF):** Normal mailbox startup
+refuses before Agent construction unless `PROOFHUNTER_ACP_PUBLISH=true`. Leave it
 unset until the operator confirms the actual isolated three-run gate has passed.
 Render hosting approval is not publication approval. `--address` and offline/local
 chat do not require publication approval and do not instantiate a network agent.
@@ -51,14 +51,20 @@ Identity references are `secret:personal:AGENT_SEED_PHRASE` and
 
 ### Exact connection and discovery prerequisites
 
-**Render/headless path:** `uv run --locked python -m proofhunter.acp register` is
-now a one-shot command. Supply the same live role settings as the mailbox process
-and `AGENTVERSE_API_KEY` only to this command, plus the post-gate explicit
-`PROOFHUNTER_ACP_PUBLISH=true` approval. It builds the SDK inspector's
-registration payload, signs the identity challenge with the saved seed, connects
+**Private Render/headless path:** `uv run --locked python -m proofhunter.acp register`
+is a one-shot command allowed without the publication flag. Supply the same live
+role settings and `AGENTVERSE_API_KEY` only to this command. It never constructs
+an Agent, registers Almanac endpoints, or schedules a manifest. It sends only the
+seed-derived address, neutral name `ProofHunter staging mailbox` and mailbox type,
+signs the identity challenge with the saved seed, connects
 as `agent_type="mailbox"`, and exits. It never starts polling, runs a control API
 request, or prints remote error bodies. Success exits 0; missing configuration 2;
-SDK/registration failure 1 with a fixed sanitized failure description. The normal
+SDK/registration failure 1 with a classified sanitized failure detail. The SDK
+discards HTTP status, so CLI failures honestly print `status=unavailable`; external
+one-shot HTTP tracing is required for actual status codes. No provider body is
+printed. SDK RegistrationRequest requires a profile object, so its default blank
+description/README/avatar/banner/prompts are sent; endpoint/protocol lists are
+empty and optional handle/URL/metadata remain null. No public toggle is sent. The normal
 mailbox process does not read or require `AGENTVERSE_API_KEY`. Remove it from the
 long-running service after this one-shot task. Do not pass it in argv.
 
@@ -72,7 +78,9 @@ as secret `AGENTVERSE_API_KEY` (prefer qualified reference
 password, OAuth token or browser cookie in chat. The official guide does not give
 granular scope names for identity challenge versus new-agent creation; if the UI
 cannot scope a new resource, report that limitation before broadening access.
-No interactive login/session is needed in the registering process once the API key
+`secret:personal:AGENTVERSE_API_KEY` is now saved; the suggested scope labels are
+AllResourcesWrite and MailboxWrite, with endpoint mapping undocumented. Do not
+widen scopes after any 401/403. No interactive login/session is needed in the registering process once the API key
 exists. No wallet, FET or payment is required for this SDK connection flow.
 Source: https://innovationlab.fetch.ai/resources/docs/agentverse/agentverse-api-key
 and https://docs.agentverse.ai/documentation/launch-agents/agentverse-sdk/u-agents.
@@ -97,9 +105,9 @@ endpoints, protocols, metadata)` and calls
 agent_details)`. That function GETs the identity challenge, POSTs the signed proof,
 and POSTs agent details, using the user token as a bearer credential. This is the
 SDK-supported headless primitive, not a `register(api_key=...)` method on Agent.
-The headless command mirrors this handler, including profile, protocols and
-metadata; private SDK attributes are used only where 0.26.1 exposes no public
-equivalent. Never log the SDK response detail (provider-controlled text).
+The private headless command deliberately omits the handler's public profile,
+protocols and metadata; it needs no private Agent attributes. Never log the raw
+SDK response detail (provider-controlled text).
 
 The official launch guide also describes Agents → Launch an Agent → Connect Agent
 → Chat Protocol, with a public HTTPS endpoint and a generated registration script.
@@ -167,7 +175,7 @@ Aggregate Ruff passed; aggregate mypy checked 73 files; setup and integrated gat
 Registration tests mock the SDK for success, missing/empty key, remote failure,
 exception redaction, conflicting arguments, normal mailbox credential isolation,
 and default-off/missing/invalid publication approval for both network entrypoints.
-No live registration was attempted; no Agentverse API key has been supplied.
+These were pre-connection checks; see the private connection follow-up below.
 
 Checks: owned ACP suite `108 passed in 1.68s`; full suite `898 passed, 1 warning in
 14.40s`; Ruff `All checks passed!`; aggregate mypy `Success: no issues found in 72

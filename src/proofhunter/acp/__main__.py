@@ -67,9 +67,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.address:
         print(Identity.from_seed(seed.get_secret_value(), 0).address)
         return 0
+    if args.command == "register":
+        try:
+            key = registration_key()
+        except ConfigError as error:
+            print(f"configuration error: {error}", file=sys.stderr)
+            return 2
+        result = asyncio.run(register_mailbox(seed.get_secret_value(), key))
+        print("registration succeeded" if result.success else
+              f"registration failed: status=unavailable detail={result.detail}")
+        return 0 if result.success else 1
     try:
         require_publication_approval()
-        key = registration_key() if args.command == "register" else None
         prepare_storage()
     except ConfigError as error:
         print(f"configuration error: {error}", file=sys.stderr)
@@ -77,11 +86,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     agent = build_agent(seed.get_secret_value(), default_service_factory(client),
                         port=settings.agent.port, mailbox=settings.agent.mailbox,
                         publish_agent_details=True)
-    if key is not None:
-        success = asyncio.run(register_mailbox(agent, key))
-        print("registration succeeded" if success else
-              "registration failed: account connection unavailable")
-        return 0 if success else 1
     agent.run()
     return 0
 

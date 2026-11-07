@@ -2,10 +2,9 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-from uagents_core.registration import AgentProfile
 
 from proofhunter.acp import registration
 from proofhunter.acp.__main__ import main
@@ -26,7 +25,6 @@ def agent(monkeypatch: pytest.MonkeyPatch) -> Any:
         address="agent1test", name="proofhunter", _handle=None, _prefix="agent",
         _endpoints=[], protocols={"chat-digest": object()}, metadata={},
         identity=object(), agentverse=object(), run=Mock(),
-        _build_registration_profile=lambda: AgentProfile(description="public metadata"),
     )
     monkeypatch.setattr("proofhunter.acp.__main__.build_agent", Mock(return_value=fake))
     monkeypatch.setattr("proofhunter.acp.__main__.prepare_storage", Mock())
@@ -41,9 +39,13 @@ def test_register_uses_sdk_connect_flow(agent: Any, monkeypatch: pytest.MonkeyPa
     kwargs = sdk.call_args.kwargs
     assert kwargs["request"].user_token == KEY
     assert kwargs["request"].agent_type == "mailbox"
-    assert kwargs["identity"] is agent.identity
-    assert kwargs["agent_details"].protocols == ["chat-digest"]
-    assert kwargs["agent_details"].profile.description == "public metadata"
+    details = kwargs["agent_details"]
+    assert kwargs["identity"].address == details.address
+    assert details.protocols == []
+    assert details.endpoints == []
+    assert details.profile.description == details.profile.readme == ""
+    assert details.metadata is details.handle is details.url is None
+    assert details.agent_type == "mailbox"
     assert KEY not in repr(kwargs["agent_details"])
     assert not agent.run.called
     output = capsys.readouterr()
@@ -92,7 +94,7 @@ def test_registration_rejects_conflicting_flags(agent: Any) -> None:
         main(["register", "--address"])
 
 
-@pytest.mark.parametrize("command", [[], ["register"]])
+@pytest.mark.parametrize("command", [[]])
 @pytest.mark.parametrize("flag", [None, "", "false", "invalid"])
 def test_default_off_blocks_all_agent_network_startup(
     agent: Any, command: list[str], flag: str | None,
@@ -107,3 +109,25 @@ def test_default_off_blocks_all_agent_network_startup(
     assert main(command) == 2
     assert "isolated three-run gate" in capsys.readouterr().err
     builder.assert_not_called()
+
+
+def test_private_registration_without_publication_approval(
+    agent: Any, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("PROOFHUNTER_ACP_PUBLISH")
+    builder = Mock(side_effect=AssertionError("must not construct public agent"))
+    monkeypatch.setattr("proofhunter.acp.__main__.build_agent", builder)
+    sdk = AsyncMock(return_value=SimpleNamespace(success=True, detail=None))
+    monkeypatch.setattr(registration, "register_in_agentverse", sdk)
+    assert main(["register"]) == 0
+    builder.assert_not_called()
+
+
+async def test_sanitized_permission_failure() -> None:
+    with patch.object(registration, "register_in_agentverse", AsyncMock(
+        return_value=SimpleNamespace(success=False, detail=f"Forbidden {KEY}"),
+    )):
+        result = await registration.register_mailbox("test-only-seed", KEY)
+    assert not result.success
+    assert result.detail == "permission_denied"
+    assert KEY not in repr(result)
