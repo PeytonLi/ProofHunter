@@ -45,3 +45,24 @@ groups that contain a positive. `wall_ms` is the batch wall time amortised per i
   stopping rule inside an episode group (top gain feature is `step`). Use dense as primary.
 - Tuning and every reported comparison use dense **validation** decision points only
   (`python -m research.ranker.compare`). Test rows and test labels are never read.
+
+## `ranker-features-v2` (real-v2)
+
+v2 = v1 plus a `heuristic` group, all pre-execution and computed from the candidate and
+`state.available` only:
+
+| feature | definition |
+|---|---|
+| `n_distinct_predictions` | distinct values among H0, per-item and half-even predictions (1–3) |
+| `residue_dist_half` | `|(total * (100-d)) % 100 - 50|` |
+| `heuristic_score` | `10000*n_distinct + (50-residue_dist_half)*100 + min(n_items, 99)`: the spec `simple_heuristic` lexicographic key as one number |
+| `heuristic_rank`, `heuristic_rank_frac`, `heuristic_is_top` | the candidate's position in the available set under that key (0 = the heuristic's pick) |
+
+v1 lacked `n_distinct_predictions` (it had `n_predictors_differ`, which counts predictions
+differing from H0), the folded residue distance, the combined key and any pool-relative rank.
+`relabel.augment_v1` upgrades dense v1 rows to v2 exactly (dense groups hold the whole available
+set; test `test_v1_augment_matches_v2_extractor`). The selector still loads v1 checkpoints
+(model input = v2 minus the heuristic group). New ablations: `no_heuristic`, `no_diff`.
+
+real-v2 result: 288 validation-only configs; v2_full validation MRR 0.352 vs heuristic 0.557
+(see `research/artifacts/ranker/HANDOFF.md`).

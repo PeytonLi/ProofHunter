@@ -1,0 +1,148 @@
+{
+  "ablation": "no_diff",
+  "checkpoint_version": "ranker-checkpoint-v1",
+  "configs_tried": 96,
+  "feature_names": [
+    "strategy_boundary",
+    "strategy_constraint",
+    "strategy_seeded_fuzz",
+    "is_anchor",
+    "tag_empty",
+    "tag_singleton",
+    "tag_multi_item",
+    "tag_zero_discount",
+    "tag_full_discount",
+    "tag_half_cent",
+    "tag_max_items",
+    "tag_max_price",
+    "n_coverage_tags",
+    "n_items",
+    "total_cents",
+    "log1p_total_cents",
+    "max_price",
+    "min_price",
+    "distinct_prices",
+    "all_equal",
+    "discount_percent",
+    "kept_percent",
+    "total_residue",
+    "fractional_cent",
+    "half_cent",
+    "line_residue_sum",
+    "lines_with_fraction",
+    "lines_at_or_above_half",
+    "per_item_differs",
+    "half_even_differs",
+    "n_predictors_differ",
+    "abs_per_item_delta",
+    "abs_half_even_delta",
+    "step",
+    "remaining_pairs",
+    "budget_fraction_used",
+    "pool_available",
+    "history_matches",
+    "history_mismatches",
+    "history_base_mismatches",
+    "history_unusable",
+    "missing_coverage_count",
+    "covers_missing_count",
+    "p_h0",
+    "p_per_item_rounding",
+    "p_half_even_rounding",
+    "p_other",
+    "belief_entropy",
+    "eig_bits",
+    "p_mismatch",
+    "n_distinct_predictions",
+    "residue_dist_half",
+    "heuristic_score",
+    "heuristic_rank",
+    "heuristic_rank_frac",
+    "heuristic_is_top"
+  ],
+  "feature_set_version": "ranker-features-v2",
+  "fixed_params": {
+    "bagging_fraction": 1.0,
+    "bagging_freq": 0,
+    "bagging_seed": 20261107,
+    "data_random_seed": 20261107,
+    "deterministic": true,
+    "eval_at": [
+      1,
+      3,
+      6
+    ],
+    "feature_fraction": 1.0,
+    "feature_fraction_seed": 20261107,
+    "force_row_wise": true,
+    "metric": "ndcg",
+    "num_threads": 1,
+    "objective": "lambdarank",
+    "seed": 20261107,
+    "verbosity": -1
+  },
+  "grid": {
+    "label_gain": [
+      [
+        0.0,
+        1.0
+      ],
+      [
+        0.0,
+        3.0
+      ],
+      [
+        0.0,
+        10.0
+      ]
+    ],
+    "learning_rate": [
+      0.03,
+      0.1
+    ],
+    "min_data_in_leaf": [
+      20,
+      100
+    ],
+    "num_boost_round": [
+      100,
+      300
+    ],
+    "num_leaves": [
+      7,
+      15,
+      31,
+      63
+    ]
+  },
+  "ips_clip": null,
+  "lightgbm_version": "4.7.0",
+  "model_sha256": "3424bf7cad1f32f0b9709cdee341d9561b0e99f80ba657dad6e88cc9c1b24380",
+  "params": {
+    "label_gain": [
+      0.0,
+      1.0
+    ],
+    "learning_rate": 0.1,
+    "min_data_in_leaf": 100,
+    "num_boost_round": 100,
+    "num_leaves": 31
+  },
+  "train_group_by": "decision",
+  "train_groups": 10415,
+  "train_rows": 439377,
+  "train_sha256": "492ada74686751afedc11ad07422160500a6d354e4a5b8b3b596743d745655cf",
+  "train_unknown_rows": 12612,
+  "train_weighting": "none",
+  "validation_groups": 1642,
+  "validation_metrics": {
+    "groups": 747.0,
+    "hit_at_1": 0.12182061579651941,
+    "hit_at_3": 0.41231593038821956,
+    "hit_at_6": 0.5796519410977242,
+    "mrr": 0.3200250931255685
+  },
+  "validation_rows": 68482,
+  "validation_sha256": "70fd1e20074603bb3db496d5d1c8a1ce0014a470aec7dd7b311cfe853d4fff80",
+  "validation_unknown_rows": 1099
+}

@@ -5,7 +5,10 @@ from __future__ import annotations
 import hashlib
 import itertools
 import json
+import multiprocessing
+import tempfile
 from collections.abc import Iterable
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import Any, Final
 
@@ -28,6 +31,45 @@ GRID: Final[dict[str, tuple[Any, ...]]] = {
     "num_leaves": (7, 15, 31), "learning_rate": (0.05, 0.1), "min_data_in_leaf": (5, 20),
     "num_boost_round": (50, 150),
 }
+GRID_V2: Final[dict[str, tuple[Any, ...]]] = {
+    "num_leaves": (7, 15, 31, 63), "min_data_in_leaf": (20, 100),
+    "learning_rate": (0.03, 0.1), "num_boost_round": (100, 300),
+    "label_gain": ((0.0, 1.0), (0.0, 3.0), (0.0, 10.0)),
+}
+GRIDS: Final = {"v1": GRID, "v2": GRID_V2}
+_DATA: dict[str, metrics.Groups] = {}
+
+
+def _load(path: str) -> None:
+    for split in ("train", "validation"):
+        z = np.load(f"{path}/{split}.npz")
+        _DATA[split] = metrics.Groups([], z["sizes"].tolist(), z["x"], z["y"],
+                                      z["ids"].tolist(), z["w"], "", 0, 0)
+
+
+def _trial(params: dict[str, Any]) -> dict[str, Any]:
+    tr, va = _DATA["train"], _DATA["validation"]
+    booster = _fit(tr, params)
+    return {"params": params, "train": metrics.evaluate(tr, _predict(booster, tr.x)),
+            "validation": metrics.evaluate(va, _predict(booster, va.x))}
+
+
+def run_trials(tr: metrics.Groups, va: metrics.Groups, grid: dict[str, tuple[Any, ...]],
+               jobs: int) -> list[dict[str, Any]]:
+    """Every grid point, in grid order; parallel workers each fit single-threaded."""
+    configs = [dict(zip(grid, (list(v) if isinstance(v, tuple) else v for v in values),
+                        strict=True)) for values in itertools.product(*grid.values())]
+    if jobs <= 1:
+        _DATA.update(train=tr, validation=va)
+        return [_trial(p) for p in configs]
+    with tempfile.TemporaryDirectory() as tmp:
+        for split, g in (("train", tr), ("validation", va)):
+            np.savez(f"{tmp}/{split}.npz", x=g.x, y=g.y, w=g.w,
+                     sizes=np.asarray(g.sizes), ids=np.asarray(g.ids))
+        ctx = multiprocessing.get_context("forkserver")
+        with ProcessPoolExecutor(jobs, mp_context=ctx, initializer=_load,
+                                 initargs=(tmp,)) as pool:
+            return list(pool.map(_trial, configs))
 
 
 def sha256_file(path: Path) -> str:
@@ -50,7 +92,10 @@ class LambdaRankTrainer:
     """``RankerTrainer``: writes model.txt and checkpoint.json; returns the checkpoint hash."""
 
     def __init__(self, ablation: str = "full", *, group_by: metrics.GroupBy = "decision",
-                 weighting: metrics.Weighting = "none") -> None:
+                 weighting: metrics.Weighting = "none",
+                 grid: dict[str, tuple[Any, ...]] = GRID, jobs: int = 1) -> None:
+        self.grid = grid
+        self.jobs = jobs
         self.ablation = ablation
         self.group_by: metrics.GroupBy = group_by
         self.weighting: metrics.Weighting = weighting
@@ -67,13 +112,7 @@ class LambdaRankTrainer:
             raise ValueError("need labelled multi-candidate groups with positives in train")
         if set(k[0] for k in tr.keys) & set(k[0] for k in va.keys):
             raise ValueError("train and validation share case ids")
-        trials = []
-        for values in itertools.product(*GRID.values()):
-            params = dict(zip(GRID, values, strict=True))
-            booster = _fit(tr, params)
-            trials.append({"params": params,
-                           "train": metrics.evaluate(tr, _predict(booster, tr.x)),
-                           "validation": metrics.evaluate(va, _predict(booster, va.x))})
+        trials = run_trials(tr, va, self.grid, self.jobs)
         best = max(range(len(trials)), key=lambda i: (
             round(trials[i]["validation"]["mrr"], 12),
             round(trials[i]["validation"]["hit_at_1"], 12), -i))
@@ -88,6 +127,9 @@ class LambdaRankTrainer:
             "train_group_by": self.group_by, "train_weighting": self.weighting,
             "ips_clip": metrics.IPS_CLIP if self.weighting == "ips" else None,
             "lightgbm_version": lgb.__version__, "fixed_params": FIXED, "params": params,
+            "grid": {k: [list(v) if isinstance(v, tuple) else v for v in vs]
+                     for k, vs in self.grid.items()},
+            "configs_tried": len(trials),
             "model_sha256": sha256_file(model), "train_sha256": tr.sha256,
             "validation_sha256": va.sha256,
             "train_rows": tr.rows_in, "train_unknown_rows": tr.rows_unknown,

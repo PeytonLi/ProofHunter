@@ -170,9 +170,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--out", type=Path, required=True)
     a = ap.parse_args(argv)
     from research.ranker.commands import read_rows
+    from research.ranker.relabel import upgrade
 
     ckpts = dict(item.split("=", 1) for item in a.checkpoint)
-    report = compare(read_rows(a.validation), {k: Path(v) for k, v in ckpts.items()}, a.primary)
+    rows = upgrade(read_rows(a.validation))
+    report = compare(rows, {k: Path(v) for k, v in ckpts.items()}, a.primary)
     a.out.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
     print(json.dumps(report["arms"], indent=1, sort_keys=True))
     return 0

@@ -18,7 +18,9 @@ from proofhunter import contracts as c
 from research.schemas.interfaces import EpisodeContext, EpisodeState, FeatureVector, PairFeedback
 from research.schemas.models import FORBIDDEN_FEATURE_PREFIXES, MAX_PAIRS, Outcome
 
-FEATURE_SET_VERSION: Final = "ranker-features-v1"
+FEATURE_SET_VERSION: Final = "ranker-features-v2"
+V1: Final = "ranker-features-v1"
+SUPPORTED_VERSIONS: Final = (V1, FEATURE_SET_VERSION)
 
 _STRATEGIES = tuple(c.Strategy)
 _TAGS = tuple(c.CoverageTag)
@@ -51,20 +53,30 @@ GROUPS: Final[dict[str, tuple[str, ...]]] = {
                 "history_unusable", "missing_coverage_count", "covers_missing_count"),
     "belief": (*(f"p_{h.value.lower()}" for h in _HYPOTHESES), "belief_entropy", "eig_bits",
                "p_mismatch"),
+    # v2: the spec's simple_heuristic signals, its lexicographic score and its rank in the pool.
+    "heuristic": ("n_distinct_predictions", "residue_dist_half", "heuristic_score",
+                  "heuristic_rank", "heuristic_rank_frac", "heuristic_is_top"),
 }
 FEATURE_NAMES: Final[tuple[str, ...]] = tuple(n for names in GROUPS.values() for n in names)
 ABLATIONS: Final[dict[str, tuple[str, ...]]] = {
     "full": (),
     "no_belief": ("belief",),
     "no_belief_no_predictor": ("belief", "predictor"),
+    "no_heuristic": ("heuristic",),
+    "no_diff": ("diff",),
 }
 assert not any(n.startswith(FORBIDDEN_FEATURE_PREFIXES) for n in FEATURE_NAMES)
 
 
-def feature_names(ablation: str = "full") -> tuple[str, ...]:
+def feature_names(ablation: str = "full", version: str = FEATURE_SET_VERSION) -> tuple[str, ...]:
+    """Model input names; ``ranker-features-v1`` is v2 without the heuristic group."""
     if ablation not in ABLATIONS:
         raise ValueError(f"unknown ablation {ablation!r}")
+    if version not in SUPPORTED_VERSIONS:
+        raise ValueError(f"unsupported feature set {version!r}")
     dropped = {n for g in ABLATIONS[ablation] for n in GROUPS[g]}
+    if version == V1:
+        dropped |= set(GROUPS["heuristic"])
     return tuple(n for n in FEATURE_NAMES if n not in dropped)
 
 
@@ -130,8 +142,35 @@ def _predictor(prices: Sequence[int], discount: int) -> dict[str, float]:
     }
 
 
+def heuristic_key(prices: Sequence[int], discount: int,
+                  input_sha256: str) -> tuple[int, int, int, str]:
+    """RESEARCH-SPEC ``simple_heuristic`` order: predictor disagreement count (distinct
+    predictions) desc, |fractional residue - 50| asc, basket size desc, input hash."""
+    preds = {bayes.predict_h0(prices, discount), bayes.predict_per_item(prices, discount),
+             bayes.predict_half_even(prices, discount)}
+    residue = sum(prices) * (100 - discount) % 100
+    return (-len(preds), abs(residue - 50), -len(prices), input_sha256)
+
+
+def heuristic_group(items: Sequence[tuple[Sequence[int], int, str]]) -> dict[str, dict[str, float]]:
+    """Heuristic features of every candidate ``(prices, discount, sha)`` in one available set."""
+    keys = {sha: heuristic_key(p, d, sha) for p, d, sha in items}
+    order = sorted(keys, key=lambda sha: keys[sha])
+    n = len(order)
+    out: dict[str, dict[str, float]] = {}
+    for rank, sha in enumerate(order):
+        distinct, dist, neg_size, _ = keys[sha]
+        out[sha] = {
+            "n_distinct_predictions": -distinct, "residue_dist_half": dist,
+            "heuristic_score": -distinct * 10_000 + (50 - dist) * 100 + min(-neg_size, 99),
+            "heuristic_rank": rank, "heuristic_rank_frac": rank / max(n - 1, 1),
+            "heuristic_is_top": float(rank == 0)}
+    return out
+
+
 def compute(candidate: c.Candidate, *, state: EpisodeState,
-            belief: Mapping[c.HypothesisId, float], diff: Mapping[str, float]) -> dict[str, float]:
+            belief: Mapping[c.HypothesisId, float], diff: Mapping[str, float],
+            heuristic: Mapping[str, float]) -> dict[str, float]:
     prices, discount = candidate.prices_cents, candidate.discount_percent
     tags = set(candidate.coverage_tags)
     missing = set(state.missing_coverage)
@@ -159,6 +198,7 @@ def compute(candidate: c.Candidate, *, state: EpisodeState,
     values["belief_entropy"] = bayes.entropy(belief)
     values["eig_bits"] = bayes.eig(belief, q)
     values["p_mismatch"] = bayes.p_mismatch(belief, q)
+    values.update(heuristic)
     return {name: float(values[name]) for name in FEATURE_NAMES}
 
 
@@ -170,6 +210,14 @@ class CheckoutFeatures:
     def __init__(self) -> None:
         self._diff: tuple[str, dict[str, float]] | None = None
         self._belief: tuple[tuple[object, ...], dict[c.HypothesisId, float]] | None = None
+        self._heuristic: tuple[tuple[str, ...], dict[str, dict[str, float]]] | None = None
+
+    def heuristic_for(self, state: EpisodeState) -> dict[str, dict[str, float]]:
+        key = tuple(x.input_sha256 for x in state.available)
+        if self._heuristic is None or self._heuristic[0] != key:
+            self._heuristic = (key, heuristic_group(
+                [(x.prices_cents, x.discount_percent, x.input_sha256) for x in state.available]))
+        return self._heuristic[1]
 
     def _diff_for(self, context: EpisodeContext) -> dict[str, float]:
         if self._diff is None or self._diff[0] != context.unified_diff:
@@ -187,5 +235,9 @@ class CheckoutFeatures:
 
     def extract(self, context: EpisodeContext, state: EpisodeState,
                 candidate: c.Candidate) -> FeatureVector:
+        group = self.heuristic_for(state)
+        heuristic = group.get(candidate.input_sha256) or heuristic_group(
+            [(candidate.prices_cents, candidate.discount_percent, candidate.input_sha256)]
+        )[candidate.input_sha256]
         return compute(candidate, state=state, belief=self.belief_for(context, state),
-                       diff=self._diff_for(context))
+                       diff=self._diff_for(context), heuristic=heuristic)
