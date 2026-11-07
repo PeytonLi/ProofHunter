@@ -13,10 +13,17 @@ import asyncio
 import sys
 from collections.abc import Sequence
 
+from uagents.crypto import Identity
+
 from proofhunter.acp.agent import build_agent, default_service_factory
 from proofhunter.acp.client import create_control_client
+from proofhunter.acp.registration import register_mailbox, registration_key
 from proofhunter.acp.service import ChatService, MemoryKeyValue, ReplyLedger
-from proofhunter.config import load_settings
+from proofhunter.acp.settings import (
+    load_acp_settings,
+    prepare_storage,
+    require_publication_approval,
+)
 from proofhunter.ports import ConfigError
 
 
@@ -32,11 +39,17 @@ async def _local_chat(service: ChatService) -> int:
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m proofhunter.acp", description=__doc__)
+    parser.add_argument("command", nargs="?", choices=["register"],
+                        help="connect the mailbox once using AGENTVERSE_API_KEY")
     parser.add_argument("--local", action="store_true",
                         help="chat over stdin/stdout instead of starting the agent")
+    parser.add_argument("--address", action="store_true",
+                        help="print the seed-derived public address without connecting")
     args = parser.parse_args(argv)
+    if args.command and (args.local or args.address):
+        parser.error("register cannot be combined with --local or --address")
     try:
-        settings = load_settings()
+        settings = load_acp_settings()
         client = create_control_client(settings)
     except ConfigError as error:
         print(f"configuration error: {error}", file=sys.stderr)
@@ -51,8 +64,28 @@ def main(argv: Sequence[str] | None = None) -> int:
     if seed is None:
         print("configuration error: AGENT_SEED_PHRASE is required", file=sys.stderr)
         return 2
+    if args.address:
+        print(Identity.from_seed(seed.get_secret_value(), 0).address)
+        return 0
+    if args.command == "register":
+        try:
+            key = registration_key()
+        except ConfigError as error:
+            print(f"configuration error: {error}", file=sys.stderr)
+            return 2
+        result = asyncio.run(register_mailbox(seed.get_secret_value(), key))
+        print("registration succeeded" if result.success else
+              f"registration failed: status=unavailable detail={result.detail}")
+        return 0 if result.success else 1
+    try:
+        require_publication_approval()
+        prepare_storage()
+    except ConfigError as error:
+        print(f"configuration error: {error}", file=sys.stderr)
+        return 2
     agent = build_agent(seed.get_secret_value(), default_service_factory(client),
-                        port=settings.agent.port, mailbox=settings.agent.mailbox)
+                        port=settings.agent.port, mailbox=settings.agent.mailbox,
+                        publish_agent_details=True)
     agent.run()
     return 0
 
