@@ -49,18 +49,25 @@ Both API tokens must differ wherever both are loaded. Worker/pipeline currently
 use neither control token, so worker reads neither. Other roles' secrets and
 GitHub App ID are never read and become `None`, even if present or malformed.
 Nonsecret configuration (including Daytona URL/snapshot/digest) remains shared
-to keep public configuration consistent between processes.
+between API and worker to keep public configuration consistent.
 
-Strict flag rules: `all` permits all three live flags; `api` permits only
-`PROOFHUNTER_ENABLE_GITHUB_WEBHOOK`; `worker` permits only
-`PROOFHUNTER_ENABLE_LIVE_RUNNER` and `PROOFHUNTER_ENABLE_GITHUB_CHECKS`;
-`agent` permits none. An enabled flag outside the role is a `ConfigError`, not
-silently ignored. Offline ignores all secrets and rejects all three live flags
-in every role. `PROOFHUNTER_ENABLE_INTAKE` is not a live feature flag.
-The enabled live runner additionally requires `DAYTONA_API_KEY`,
-`DAYTONA_SNAPSHOT`, `DAYTONA_IMAGE_DIGEST`; `DAYTONA_API_URL` is optional.
-An enabled webhook requires `GITHUB_WEBHOOK_SECRET`. Missing-variable errors
-contain variable names only, never values.
+| Live role | Runner/checks/webhook flags | Runner-on additional requirements | Webhook-on additional requirements |
+|---|---|---|---|
+| `all` | Preserve all three | `DAYTONA_API_KEY`, `DAYTONA_SNAPSHOT`, `DAYTONA_IMAGE_DIGEST` | `GITHUB_WEBHOOK_SECRET` |
+| `api` | Preserve all three | `DAYTONA_SNAPSHOT`, `DAYTONA_IMAGE_DIGEST`; never the key | `GITHUB_WEBHOOK_SECRET` |
+| `worker` | Preserve all three | `DAYTONA_API_KEY`, `DAYTONA_SNAPSHOT`, `DAYTONA_IMAGE_DIGEST` | None; never reads webhook secret |
+| `agent` | Ignore all three, leaving them false | None; ignores Daytona policy and credentials | None |
+
+Flags are shared public policy, not permission for a role to read another
+role's credentials or execute its adapters. API and worker can load one env
+with all flags enabled and produce identical public configuration/fingerprints.
+Live agent ignores even malformed worker flags/policy, consistent with the
+standalone ACP loader's environment scoping. Offline still rejects all three
+live flags in every role. Live requires explicit `PROOFHUNTER_PROFILE=live`;
+all flags default false. `PROOFHUNTER_ENABLE_INTAKE` is not a live feature flag.
+`DAYTONA_API_URL` is optional. Missing-variable errors contain variable names
+only, never values. Policy validation does not establish readiness: worker
+heartbeat, trust and live isolation gates must still succeed.
 
 GitHub key sources are `GITHUB_PRIVATE_KEY` (in-memory PEM) or
 `GITHUB_PRIVATE_KEY_PATH` (file fallback). For roles reading GitHub keys, setting
@@ -74,14 +81,12 @@ path contents. Offline never reads either source. Never log unwrapped secrets.
 `public_mode_config` and `mode_config_fingerprint` exclude role, key source,
 secrets, secret hashes and local paths. Identical public configuration has the
 same fingerprint across roles and PEM/path choices; the default fingerprint
-and public receipt schemas remain unchanged. Role-incompatible flags must be
-removed explicitly before loading; roles with differing public flags are not
-the same configuration.
+and public receipt schemas remain unchanged. Agent intentionally discards
+worker flags and Daytona policy, so its fingerprint need not match API/worker.
 
-These contract tests do **not** exercise live calls. Service owners must opt
-into the role at their load sites; the GitHub factory must adopt the accessor
-before in-memory PEM can be used by the live adapter. CLI live execution is
-still gated independently.
+These contract tests do **not** exercise live calls. Service owners must use
+the appropriate role at their load sites. CLI live execution is still gated
+independently.
 
 - `PROOFHUNTER_PROFILE=offline` is the default and the only profile used in automation. `proofhunter.config.load_settings` never reads provider credentials in this profile and raises `ConfigError` if any `PROOFHUNTER_ENABLE_*` live flag is true.
 - `live` requirements are scoped by the explicit service role below; the default `all` retains the original required set (with an additional in-memory GitHub key alternative).
