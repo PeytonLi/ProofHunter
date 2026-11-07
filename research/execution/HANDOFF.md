@@ -27,7 +27,7 @@ measurement, execution. No conflicts so far.
 UV_OFFLINE=1 PROOFHUNTER_PROFILE=offline uv run --project research --locked pytest -q tests/research   # 137 passed, 4 skipped (skips: other lanes' pending setup checks)
 UV_OFFLINE=1 uv run --project research --locked ruff check research/execution tests/research/execution  # All checks passed
 UV_OFFLINE=1 uv run --project research --locked mypy research/execution                               # no issues (8 files)
-UV_OFFLINE=1 PROOFHUNTER_PROFILE=offline uv run --locked pytest -q                                      # 1278 passed, 2 skipped (pre-merge of generator/verification)
+UV_OFFLINE=1 PROOFHUNTER_PROFILE=offline uv run --locked pytest -q                                      # 1314 passed, 4 skipped (after merging generator/verification)
 UV_OFFLINE=1 PROOFHUNTER_PROFILE=offline uv run --locked ruff check .                                   # All checks passed
 UV_OFFLINE=1 PROOFHUNTER_PROFILE=offline uv run --locked mypy src bench tools tests/integration          # no issues (81 files)
 UV_OFFLINE=1 PROOFHUNTER_PROFILE=offline uv run --project research --locked python -m research.cli run-pilot --doubles --seeds 5
