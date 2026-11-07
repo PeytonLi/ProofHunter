@@ -11,7 +11,7 @@ import difflib
 import hashlib
 import importlib
 import subprocess
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -234,12 +234,20 @@ class ResearchEpisodeRunner:
     implementation: str = field(default_factory=implementation_sha)
     enrollment: Enrollment = field(default_factory=catalog.demo_enrollment)
     events: list[dict[str, object]] = field(default_factory=list)
+    #: Add-on (non-protocol) arm id -> frozen base arm whose spec, budget and loop it reuses.
+    addons: Mapping[str, str] = field(default_factory=dict)
 
     def arm(self, arm_id: str) -> ArmSpec:
+        base_id = self.addons.get(arm_id, arm_id)
         for spec in self.protocol.arms:
-            if spec.arm_id == arm_id:
-                return spec
-        raise ValueError(f"arm {arm_id!r} is not in the frozen protocol")
+            if spec.arm_id == base_id:
+                return spec if base_id == arm_id else spec.model_copy(update={"arm_id": arm_id})
+        raise ValueError(f"arm {arm_id!r} is not in the frozen protocol or the add-on arms")
+
+    def arm_specs(self) -> dict[str, ArmSpec]:
+        """Frozen protocol arms plus configured add-on arms (rows record the add-on id)."""
+        ids = [a.arm_id for a in self.protocol.arms] + list(self.addons)
+        return {arm_id: self.arm(arm_id) for arm_id in ids}
 
     def run(
         self,

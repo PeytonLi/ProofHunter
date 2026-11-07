@@ -1,0 +1,14 @@
+{
+  "addon_arms": {
+    "learned_ranker": {
+      "base": "builtin_ranker",
+      "ranker_checkpoint": "../../artifacts/ranker/real-v1/checkpoints/dense_full/checkpoint.json",
+      "ranker_checkpoint_sha256": "cc02fb161aa7689438d1329914c447bda7cf943e6165d0941b49f145fb6e5174"
+    },
+    "learned_ranker_no_belief": {
+      "base": "builtin_ranker",
+      "ranker_checkpoint": "../../artifacts/ranker/real-v1/checkpoints/dense_no_belief/checkpoint.json",
+      "ranker_checkpoint_sha256": "d57c4fc0fdce36e5ae83e77a3198a59262c54ae121ebd6f56fea48700cdd8af1"
+    }
+  }
+}

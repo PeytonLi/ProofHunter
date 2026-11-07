@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import importlib
 import json
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, cast
@@ -43,6 +43,7 @@ class FrozenArtifacts:
     generator_revision: str | None = None
     frontier_model_id: str | None = None
     arms: Sequence[str] | None = None
+    addon_arms: Mapping[str, Mapping[str, str]] | None = None
 
     @classmethod
     def load(cls, path: Path | None) -> FrozenArtifacts:
@@ -56,6 +57,10 @@ class FrozenArtifacts:
         for key in ("ranker_checkpoint", "generator_adapter"):
             if data.get(key) is not None:
                 data[key] = (path.parent / data[key]).resolve()
+        for addon in (data.get("addon_arms") or {}).values():
+            if addon.get("ranker_checkpoint") is not None:
+                checkpoint = path.parent / addon["ranker_checkpoint"]
+                addon["ranker_checkpoint"] = str(checkpoint.resolve())
         return cls(**data)
 
 
@@ -100,10 +105,16 @@ class ArmFactory:
             selector = _attr("research.baselines.selectors", "make_selector")(arm_id, seed=seed)
             return selector
         if spec.selector == "lambdarank":
-            checkpoint = _check_hash(self.artifacts.ranker_checkpoint,
-                                     self.artifacts.ranker_checkpoint_sha256, "ranker checkpoint")
+            addon = (self.artifacts.addon_arms or {}).get(spec.arm_id)
+            if addon is not None:
+                checkpoint = _check_hash(Path(addon["ranker_checkpoint"]),
+                                         addon["ranker_checkpoint_sha256"], "ranker checkpoint")
+            else:
+                checkpoint = _check_hash(self.artifacts.ranker_checkpoint,
+                                         self.artifacts.ranker_checkpoint_sha256,
+                                         "ranker checkpoint")
             selector = _attr("research.ranker.selector", "load_ranker_selector")(
-                checkpoint, arm_id=spec.arm_id)
+                checkpoint, arm_id=addon["base"] if addon is not None else spec.arm_id)
             return selector
         model_id = self.artifacts.frontier_model_id
         if spec.selector in ("frontier_reviewer", "frontier_agent") and model_id is None:

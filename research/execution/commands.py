@@ -98,6 +98,8 @@ def _setup(
             mode=MeasurementMode(args.mode),
             phase=LedgerPhase.PILOT if args.command == "pilot" else LedgerPhase.EVALUATION,
             estimated_job_usd=_estimates(args.estimate))
+    addons = getattr(getattr(factory, "artifacts", None), "addon_arms", None) or {}
+    runner.addons = {arm_id: spec["base"] for arm_id, spec in addons.items()}
     return protocol, out, store, runner, factory
 
 
@@ -145,7 +147,7 @@ def evaluate(argv: Sequence[str]) -> int:
         protocol, out, store, runner, factory = _setup(args, Split(args.split))
         arm_ids = (args.arms.split(",") if args.arms else list(artifacts.arms or [])
                    or [a.arm_id for a in protocol.arms])
-        specs = {a.arm_id: a for a in protocol.arms}
+        specs = runner.arm_specs()
         if set(arm_ids) - set(specs):
             raise ValueError(f"arms not in protocol: {sorted(set(arm_ids) - set(specs))}")
         cases = sorted((c for c in store.manifest().cases

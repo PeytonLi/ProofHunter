@@ -215,7 +215,7 @@ def run(store: CaseStore, protocol: ProtocolV1, runner: ResearchEpisodeRunner,
                    key=lambda c: hashlib.sha256(c.case_id.encode()).hexdigest())
     cases = cases[:max_cases]
     labels = {lab.case_id: lab for lab in store.labels(split.value)}
-    specs = {a.arm_id: a for a in protocol.arms}
+    specs = runner.arm_specs()
     unknown_arms = [a for a in arms if a not in specs]
     if unknown_arms:
         raise ValueError(f"arms not in protocol: {unknown_arms}")
