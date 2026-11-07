@@ -249,3 +249,22 @@ def test_sealed_test_labels_absent_is_warning_only() -> None:
     bound["manifest_cases_sha256"] = sha
     gate = provenance.audit_label_files([*cases, extra], {lf["split"]: bound}, sha)
     assert "unlabelled_case" in codes(gate)
+
+
+def test_normalised_diff_catches_light_rewrites() -> None:
+    cases = _cases()
+    base_a = b"def f(xs, d):\n    t = 0\n    i = 0\n    while i < len(xs):\n" \
+             b"        t += xs[i]\n        i += 1\n    return t * (100 - d)\n"
+    head_a = b'def f(xs, d):\n    """Doc."""\n    t = 0\n    for x in xs:\n' \
+             b"        t += x\n    return t * (100 - d)\n"
+    base_b = b"def g(p,pct):\n  acc=0\n  j=0\n  while j<len(p):  # loop\n" \
+             b"    acc+=p[j]\n    j+=1\n  return acc*(100-pct)\n"
+    head_b = b"def g(p, pct):\n  acc = 0\n  for q in p:  # rewritten\n" \
+             b"    acc += q\n  return acc * (100 - pct)\n"
+    srcs = {cases[0]["case_id"]: (base_a, head_a), cases[1]["case_id"]: (b"x = 1\n", b"x = 2\n"),
+            cases[2]["case_id"]: (base_b, head_b)}
+    assert splits.change_text(base_a, head_a) != splits.change_text(base_b, head_b)
+    gate = splits.audit_manifest_splits(cases, sources=srcs)
+    assert "near_duplicate_normalised_change" in codes(gate)
+    assert "near_duplicate_change" not in codes(gate)
+    assert splits.normalised_change_text(base_a, base_a.replace(b"t = 0", b"t = 0  # c")) == ""
