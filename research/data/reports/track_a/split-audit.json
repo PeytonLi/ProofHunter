@@ -1,0 +1,94 @@
+{
+ "behavior_fingerprint_shared_across_splits": 0,
+ "clusters_recorded": 3332,
+ "code_shape_shared_across_splits": [],
+ "grouping_key_violations": {
+  "defect_origin_cross_split": [],
+  "family_id_cross_split": [],
+  "near_dup_cluster_cross_split": [],
+  "template_id_cross_split": []
+ },
+ "known_shared_structure": "Rounding helper styles (addfloor/divmod/float/fraction/decimal) recur across splits in different shape combinations; shapes, template ids, families, defect origins and behavior clusters do not. CaseRecord.params/family_id are public by schema design; arms must not read them (EpisodeContext excludes them).",
+ "manifest_cases_sha256": "ba3d927d994c4c54944ab42a03b2b253ac97bbfa0193fca37e28b22c87b21520",
+ "production_benchmark_source_overlap": [],
+ "schema": "track-a-split-audit-v1",
+ "source_sha256_shared_across_splits": 0,
+ "source_sha256_shared_examples": [],
+ "split_policy": "grouped-family-origin-cluster-v1",
+ "summary": {
+  "test": {
+   "cases": 639,
+   "cases_per_family": {
+    "clean_s10": 50,
+    "clean_s11": 44,
+    "clean_s12": 45,
+    "discount_step": 97,
+    "half_even_rounding": 41,
+    "item_cap": 97,
+    "offset_high_rounding": 97,
+    "subtotal_residue_glitch": 72,
+    "total_cap": 96
+   },
+   "clean_controls": 139,
+   "defect_cases": 500,
+   "defect_families": 6,
+   "existing_defects": 58,
+   "max_cases_per_cluster": 1,
+   "near_dup_clusters": 639,
+   "templates": 21
+  },
+  "train": {
+   "cases": 2333,
+   "cases_per_family": {
+    "bulk_discount_extra": 173,
+    "clean_s01": 42,
+    "clean_s02": 48,
+    "clean_s03": 45,
+    "clean_s04": 50,
+    "clean_s05": 60,
+    "clean_s06": 43,
+    "clean_s07": 45,
+    "dedupe_prices": 30,
+    "discount_clamp_max": 330,
+    "discount_ignored": 24,
+    "discount_off_by_one": 53,
+    "empty_basket_charge": 45,
+    "floor_rounding": 39,
+    "full_discount_special": 51,
+    "half_down_rounding": 13,
+    "min_charge": 330,
+    "offset_low_rounding": 330,
+    "per_line_rounding": 42,
+    "price_cap": 318,
+    "small_price_dropped": 222
+   },
+   "clean_controls": 333,
+   "defect_cases": 2000,
+   "defect_families": 14,
+   "existing_defects": 205,
+   "max_cases_per_cluster": 1,
+   "near_dup_clusters": 2333,
+   "templates": 104
+  },
+  "validation": {
+   "cases": 360,
+   "cases_per_family": {
+    "ceil_rounding": 33,
+    "clean_s08": 32,
+    "clean_s09": 28,
+    "discount_floor_min": 118,
+    "drop_max_item": 31,
+    "skip_index": 118
+   },
+   "clean_controls": 60,
+   "defect_cases": 300,
+   "defect_families": 4,
+   "existing_defects": 29,
+   "max_cases_per_cluster": 1,
+   "near_dup_clusters": 360,
+   "templates": 10
+  }
+ },
+ "test_label_file": "labels/test.sealed.json (read only via store.labels('test', unseal=...))",
+ "test_labels_sealed": true
+}
