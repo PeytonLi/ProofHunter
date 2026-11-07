@@ -1,8 +1,12 @@
 # Dataset lane handoff
 
-- Setup SHA: `cadc5b4d91828fec1adcb5341a11c2c466e57c1f` (schemas/interfaces at `13b96671`).
-- Branch: `devin/1794090000-research/dataset`. Artifacts were generated from code at `3cbb199`
-  (template code is unchanged after that commit; later commits only touch lint/docs).
+- Setup SHA: `280f28cc0cca2449179501e0e0073cd63e617a82`, which widens `SweSmithTask.dataset_id`.
+  It sits on `cadc5b4`, with schemas and interfaces at `13b96671`.
+- Branch: `devin/1794090000-research/dataset`.
+- Track A artifacts were generated from the first dataset commit. Template code has not changed
+  since, so the Track A hashes are unchanged.
+- Track B was regenerated after the rebase onto `280f28c`, with
+  `dataset_id="SWE-bench/SWE-smith-py"`.
 - Owned files: `research/data/**`, `tests/research/dataset/**`. Nothing shared or production edited.
 
 ## Regenerate (deterministic, about 4 min, no network, no paid calls)
@@ -47,7 +51,7 @@ Track B `metadata.jsonl` comes from the pinned Parquet shards (data read only):
 | observations/validation.jsonl (4,282) | 1e88d2c4573eb2bac1e8b8197e36b97f0be798afdd90e6b2260a71b55e289cb7 |
 | generator/train.jsonl (2,000) | cc5c14121f548500dff1aa3a2810dea02e33b737b901d1b3d22debe2ad5e48e9 |
 | generator/validation.jsonl (300) | 57a119d8bbf92b9816e0af52bb40fd597808818a144dc896b4593e6910c48866 |
-| public tarball (no sealed labels) | 046c59ca78329a9f31ea98d196bf95cd24571cc69f38b030851e5b47b151da98 |
+| public tarball (no sealed labels) | 88dc28f10b1a6357880d02f972b01ace55cc1edc46e7dc29d39f944e4cdce308 |
 
 ## Track B (metadata only, nothing executed)
 
@@ -57,12 +61,19 @@ Track B `metadata.jsonl` comes from the pinned Parquet shards (data read only):
   more than one split.
 - Candidate tests: FAIL_TO_PASS, then PASS_TO_PASS, capped at 200 allowlisted IDs. They must be run
   from the clean mirror commit (`repo_commit`).
-- Output hashes: train `7d47ac2a…09d5`, validation `528a50c6…7b5`, test `21f9c16d…7268`.
+- Every row has `dataset_id="SWE-bench/SWE-smith-py"` and
+  `dataset_revision="77cab9055d42ab4a5c25c89a8f937096db13558e"`.
+- Output hashes:
+  - train: `c48460a7c48563626ef8fa4838cb23239cd5f5c46ed9249d474f1a452b6d00a8`
+  - validation: `ddd58ea5595e707c536d121c7e167e8710da85ec2673129d4c05f1f04ffdf65f`
+  - test: `ec5b0783c1d7bf546e67e1873986d4e1b924348be2ca5124b1846b0b78af3377`
+  - manifest hash (sha256 of train, validation and test concatenated in that order):
+    `3b8e1086acd54e2678061bca3dd5225452790f465d61705e47c42d9f61412433`
 
 ## Tests
 
 - `UV_OFFLINE=1 PROOFHUNTER_PROFILE=offline uv run --project research --locked pytest -q tests/research`
-  gave 82 passed, 2 skipped.
+  gave 85 passed, 2 skipped (after the rebase onto `280f28c`).
 - `uv run --locked pytest -q` (production) gave 1259 passed, 2 skipped.
 - `git diff origin/devin/1794090000-research/setup -- src bench schemas fixtures tools config pyproject.toml uv.lock .github research/schemas research/spec research/cli.py`
   is empty.
@@ -72,8 +83,6 @@ Track B `metadata.jsonl` comes from the pinned Parquet shards (data read only):
 - Clean controls are short in train (333 of 400) and test (139 of 150). Variants whose source text
   collided across splits were removed (`cross_split_source_duplicate`).
 - Track B:
-  - Rows carry `dataset_id="SWE-bench/SWE-smith"` because the frozen schema forces that value; the
-    true dataset is SWE-smith-py. Setup needs to widen the schema.
   - My filters reproduce the proposal approximately, not exactly: 130 proposal IDs are dropped.
   - `license_verified` means only that GitHub reported an SPDX ID. NOASSERTION repositories are
     marked unknown.
@@ -89,5 +98,3 @@ Track B `metadata.jsonl` comes from the pinned Parquet shards (data read only):
 
 - Cost: $0. No paid calls, no provisioned resources, no secrets used. Compute was local CPU only.
 - Ranker and generator lanes can consume the artifacts above.
-- Setup lane: widen the Track B `dataset_id` value if SWE-smith-py rows must validate under its
-  real ID.

@@ -24,7 +24,6 @@ from research.schemas import models as M
 
 DATASET_HF_ID: Final = "SWE-bench/SWE-smith-py"
 DATASET_REVISION: Final = "77cab9055d42ab4a5c25c89a8f937096db13558e"
-SCHEMA_DATASET_ID: Final = "SWE-bench/SWE-smith"  # frozen schema literal; see schema_gaps
 MAX_F2P: Final = 20
 MAX_TESTS: Final = 200
 TEST_ID: Final = re.compile(r"^[A-Za-z0-9_./\[\]:,=+-]{1,300}$")
@@ -142,7 +141,7 @@ def prepare_swe_smith_manifest(source: Path, out: Path) -> Sequence[M.SweSmithTa
         p2p = [M.TestCandidate(test_id=t, origin="pass_to_pass") for t in p2p_ids[:room]]
         tasks.append(M.SweSmithTask(
             schema_version="research-swe-smith-task-v1", track=M.Track.B, instance_id=iid,
-            dataset_id=SCHEMA_DATASET_ID, dataset_revision=DATASET_REVISION,
+            dataset_id=DATASET_HF_ID, dataset_revision=DATASET_REVISION,
             dataset_file_sha256=files_sha, repo=str(row["repo"]),
             repo_commit=pin["mirror_main_sha"], license_spdx=spdx,
             license_verified=spdx in PERMISSIVE | COPYLEFT, redistribution=redistribution(spdx),
@@ -181,9 +180,6 @@ def prepare_swe_smith_manifest(source: Path, out: Path) -> Sequence[M.SweSmithTa
         "repo_commit_source": "pins.json swe_smith_py_repos[*].mirror_main_sha",
         "executed": False,
         "schema_gaps": [
-            "SweSmithTask.dataset_id is Literal['SWE-bench/SWE-smith'] but the pinned dataset is "
-            "SWE-bench/SWE-smith-py; rows carry the schema literal and this report records the "
-            "true id. Setup must widen the literal in a new schema version.",
             "license_verified=True means a GitHub SPDX id was recorded by the assessment "
             "(not a manual LICENSE review); NOASSERTION repos are unverified/unknown.",
         ],

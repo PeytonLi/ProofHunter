@@ -154,6 +154,8 @@ def test_swe_smith_metadata_only(tmp_path: Path) -> None:
     assert {(t.instance_id, t.split.value) for t in tasks} == {
         ("o__a.1234abcd.func_basic__x1", "train"), ("o__b.1234abcd.func_basic__x5", "test")}
     assert all(not t.executed and t.repo_commit == "a" * 40 for t in tasks)
+    assert {t.dataset_id for t in tasks} == {"SWE-bench/SWE-smith-py"}
+    assert {t.dataset_revision for t in tasks} == {"77cab9055d42ab4a5c25c89a8f937096db13558e"}
     report = json.loads((tmp_path / "out" / "exclusion-report.json").read_text())
     assert report["rejections"]["lm_rewrite_label_noise"] == 1
     assert report["rejections"]["patch_touches_tests"] == 1
