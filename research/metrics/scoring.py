@@ -359,7 +359,7 @@ def _summarize_arm(
         "estimated_cost_usd": sum(r.cost_usd or 0.0 for r in estimated),
         "estimated_cost_runs": len(estimated),
         "unknown_cost_runs": unknown_cost,
-        "usd_per_case": (known_cost / len(cases)) if cases and not unknown_cost else None,
+        "usd_per_case": (known_cost / len(rows)) if rows and not unknown_cost else None,
         "usd_per_confirmed_defect": (
             (known_cost / true_defects) if true_defects and not unknown_cost else None
         ),

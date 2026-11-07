@@ -241,7 +241,7 @@ def _split_section(
             "known cost",
             "estimated-cost runs",
             "unknown-cost runs",
-            "$/case",
+            "$/case run",
             "$/confirmed defect",
             "confirmation rate",
         ],
