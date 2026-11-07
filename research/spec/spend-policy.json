@@ -1,0 +1,82 @@
+{
+  "approval_quote": "don't worry about spending cap. just go fast",
+  "mandatory_guards": [
+    "Record every paid call or provisioned resource in the cost/timing ledger (LedgerEntry, paid=true) with its pre-launch estimate.",
+    "Shut down idle resources automatically and verify teardown with a provider listing recorded in the ledger.",
+    "Check in with the coordinator before launching any single job estimated above 50 USD and record the check-in reference.",
+    "Include unsuccessful and retried calls in costs; never present estimates as measured."
+  ],
+  "providers": [
+    {
+      "hard_stop": "Local per-run token cap and per-job estimate; stop the job when the ledger total for the job exceeds its estimate by 25 percent.",
+      "idle_shutdown_minutes": null,
+      "keys": [
+        "PROOFHUNTER_OPENAI_API_KEY"
+      ],
+      "provider": "openai",
+      "teardown_check": "No persistent resources; confirm no background batches or files remain via the API listing.",
+      "use": "Frontier reviewer and tool-using agent arms; optional teacher drafting."
+    },
+    {
+      "hard_stop": "One job at a time; cancel the fine-tuning job and undeploy any deployment on estimate overrun.",
+      "idle_shutdown_minutes": 15,
+      "keys": [
+        "PROOFHUNTER_FIREWORKS_API_KEY"
+      ],
+      "provider": "fireworks",
+      "teardown_check": "List fine-tuning jobs and deployments under accounts/peli; none running or deployed after the lane finishes.",
+      "use": "Preferred generator LoRA SFT (qwen2p5-coder-7b-instruct) and hosted inference, if adapter export works."
+    },
+    {
+      "hard_stop": "Pods created with a termination deadline; local watchdog terminates the pod at the job time limit.",
+      "idle_shutdown_minutes": 10,
+      "keys": [
+        "RUNPOD_API_KEY"
+      ],
+      "provider": "runpod",
+      "teardown_check": "List pods, network volumes and templates; zero running pods and no unexpected volumes.",
+      "use": "Fallback GPU training for QLoRA if Fireworks adapter export fails; ranker stays on CPU."
+    },
+    {
+      "hard_stop": "Read-only token use; no paid endpoints.",
+      "idle_shutdown_minutes": null,
+      "keys": [
+        "HF_TOKEN"
+      ],
+      "provider": "huggingface",
+      "teardown_check": "No inference endpoints or Spaces created.",
+      "use": "Read-only download of the pinned base model and tokenizer revision and of datasets."
+    },
+    {
+      "hard_stop": "At most two plan requests per episode (production limit).",
+      "idle_shutdown_minutes": null,
+      "keys": [
+        "MODEL_API_KEY"
+      ],
+      "provider": "meta",
+      "teardown_check": "No persistent resources.",
+      "use": "Meta Muse Spark system baseline hypothesis plans."
+    },
+    {
+      "hard_stop": "Production limit of three decisions per run.",
+      "idle_shutdown_minutes": null,
+      "keys": [
+        "SUBQ_API_KEY"
+      ],
+      "provider": "subq",
+      "teardown_check": "No persistent resources.",
+      "use": "Not used in controlled comparisons (Snap disabled); only an optional separately reported routing ablation."
+    }
+  ],
+  "schema_version": "research-spend-policy-v1",
+  "single_job_checkin_usd": 50.0,
+  "status": "user_approved_uncapped",
+  "superseded_proposal": {
+    "contingency": 10,
+    "evaluation": 15,
+    "pilot": 5,
+    "total": 50,
+    "training": 20
+  },
+  "total_cap_usd": null
+}

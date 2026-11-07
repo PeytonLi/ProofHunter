@@ -1,0 +1,61 @@
+{
+  "arm_id": "builtin_eig",
+  "case_id": "a-per_line-0001",
+  "censored": false,
+  "cost_status": "measured",
+  "cost_usd": 0.0,
+  "implementation_sha": "b97210ac37e9a352f7fcd5a3c4f013ab876b39a6",
+  "invocations": {
+    "base": 1,
+    "confirm": 1,
+    "failed": 0,
+    "head": 1
+  },
+  "measurement_mode": "offline",
+  "models": {
+    "adapter_sha256": null,
+    "frontier_model_id": null,
+    "generator_model_id": null,
+    "generator_revision": null,
+    "prompt_sha256": null,
+    "ranker_checkpoint_sha256": null
+  },
+  "pairs_to_first_confirmed_witness": 1,
+  "pool_sha256": "7777777777777777777777777777777777777777777777777777777777777777",
+  "probes": [
+    {
+      "candidate_input_sha256": "326b2a8732d3411ecd4165eeab7faf0abb8efc089d0b3f333c5ec1264635635a",
+      "confirmation": "reproduced",
+      "outcome": "mismatch",
+      "retries": 0,
+      "step": 1
+    }
+  ],
+  "protocol_version": "research-protocol-v1",
+  "reason_code": "confirmed_regression",
+  "repetition": 0,
+  "run_id": "run-0001",
+  "schema_version": "research-raw-result-v1",
+  "seed": 1633385816,
+  "snap_routing": "disabled",
+  "split": "validation",
+  "timings": {
+    "cleanup_ms": null,
+    "cold_start": null,
+    "confirmation_ms": 0.8,
+    "execution_ms": 2.9,
+    "feature_ms": null,
+    "generation_ms": null,
+    "queue_ms": null,
+    "ranking_ms": 0.4,
+    "sandbox_startup_ms": null,
+    "wall_ms": 4.1
+  },
+  "tokens": {
+    "input_tokens": null,
+    "output_tokens": null,
+    "reasoning_tokens": null
+  },
+  "track": "track_a",
+  "verdict": "confirmed_regression"
+}

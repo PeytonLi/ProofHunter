@@ -1,0 +1,162 @@
+{
+  "$defs": {
+    "Split": {
+      "enum": [
+        "train",
+        "validation",
+        "test"
+      ],
+      "title": "Split",
+      "type": "string"
+    },
+    "TestCandidate": {
+      "additionalProperties": false,
+      "properties": {
+        "origin": {
+          "enum": [
+            "fail_to_pass",
+            "pass_to_pass"
+          ],
+          "title": "Origin",
+          "type": "string"
+        },
+        "test_id": {
+          "pattern": "^[A-Za-z0-9_./\\[\\]:,=+-]{1,300}$",
+          "title": "Test Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "test_id",
+        "origin"
+      ],
+      "title": "TestCandidate",
+      "type": "object"
+    }
+  },
+  "$id": "https://proofhunter.research/schemas/v1/SweSmithTask.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "candidate_tests": {
+      "items": {
+        "$ref": "#/$defs/TestCandidate"
+      },
+      "maxItems": 200,
+      "minItems": 1,
+      "title": "Candidate Tests",
+      "type": "array"
+    },
+    "dataset_file_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Dataset File Sha256",
+      "type": "string"
+    },
+    "dataset_id": {
+      "enum": [
+        "SWE-bench/SWE-smith",
+        "SWE-bench/SWE-smith-py"
+      ],
+      "title": "Dataset Id",
+      "type": "string"
+    },
+    "dataset_revision": {
+      "pattern": "^[0-9a-f]{40}$",
+      "title": "Dataset Revision",
+      "type": "string"
+    },
+    "defect_origin": {
+      "pattern": "^[A-Za-z0-9._:@/+-]{1,128}$",
+      "title": "Defect Origin",
+      "type": "string"
+    },
+    "executed": {
+      "const": false,
+      "title": "Executed",
+      "type": "boolean"
+    },
+    "execution_status": {
+      "const": "blocked_no_qualified_sandbox",
+      "title": "Execution Status",
+      "type": "string"
+    },
+    "instance_id": {
+      "pattern": "^[A-Za-z0-9._:@/+-]{1,128}$",
+      "title": "Instance Id",
+      "type": "string"
+    },
+    "label_status": {
+      "const": "unverified_design_only",
+      "title": "Label Status",
+      "type": "string"
+    },
+    "license_spdx": {
+      "pattern": "^[A-Za-z0-9.+-]{1,64}$",
+      "title": "License Spdx",
+      "type": "string"
+    },
+    "license_verified": {
+      "title": "License Verified",
+      "type": "boolean"
+    },
+    "redistribution": {
+      "enum": [
+        "allowed",
+        "restricted",
+        "unknown"
+      ],
+      "title": "Redistribution",
+      "type": "string"
+    },
+    "repo": {
+      "pattern": "^[\\w.-]+/[\\w.-]+$",
+      "title": "Repo",
+      "type": "string"
+    },
+    "repo_commit": {
+      "pattern": "^[0-9a-f]{40}$",
+      "title": "Repo Commit",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "research-swe-smith-task-v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "split": {
+      "$ref": "#/$defs/Split"
+    },
+    "split_group": {
+      "pattern": "^[A-Za-z0-9._:@/+-]{1,128}$",
+      "title": "Split Group",
+      "type": "string"
+    },
+    "track": {
+      "const": "track_b",
+      "title": "Track",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "track",
+    "instance_id",
+    "dataset_id",
+    "dataset_revision",
+    "dataset_file_sha256",
+    "repo",
+    "repo_commit",
+    "license_spdx",
+    "license_verified",
+    "redistribution",
+    "defect_origin",
+    "split",
+    "split_group",
+    "candidate_tests",
+    "label_status",
+    "execution_status",
+    "executed"
+  ],
+  "title": "SweSmithTask",
+  "type": "object"
+}

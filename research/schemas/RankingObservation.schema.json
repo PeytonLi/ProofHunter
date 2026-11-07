@@ -1,0 +1,380 @@
+{
+  "$defs": {
+    "CheckoutCandidate": {
+      "additionalProperties": false,
+      "properties": {
+        "coverage_tags": {
+          "items": {
+            "$ref": "#/$defs/CoverageTag"
+          },
+          "title": "Coverage Tags",
+          "type": "array"
+        },
+        "input": {
+          "$ref": "#/$defs/CheckoutInput"
+        },
+        "input_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Input Sha256",
+          "type": "string"
+        },
+        "is_anchor": {
+          "title": "Is Anchor",
+          "type": "boolean"
+        },
+        "kind": {
+          "const": "checkout_input",
+          "title": "Kind",
+          "type": "string"
+        },
+        "strategy": {
+          "$ref": "#/$defs/Strategy"
+        }
+      },
+      "required": [
+        "kind",
+        "input_sha256",
+        "input",
+        "strategy",
+        "is_anchor",
+        "coverage_tags"
+      ],
+      "title": "CheckoutCandidate",
+      "type": "object"
+    },
+    "CheckoutInput": {
+      "additionalProperties": false,
+      "properties": {
+        "discount_percent": {
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Discount Percent",
+          "type": "integer"
+        },
+        "prices_cents": {
+          "items": {
+            "maximum": 10000,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 8,
+          "title": "Prices Cents",
+          "type": "array"
+        }
+      },
+      "required": [
+        "prices_cents",
+        "discount_percent"
+      ],
+      "title": "CheckoutInput",
+      "type": "object"
+    },
+    "Confirmation": {
+      "enum": [
+        "reproduced",
+        "not_reproduced",
+        "unusable",
+        "not_run"
+      ],
+      "title": "Confirmation",
+      "type": "string"
+    },
+    "CoverageTag": {
+      "enum": [
+        "empty",
+        "singleton",
+        "multi_item",
+        "zero_discount",
+        "full_discount",
+        "half_cent",
+        "max_items",
+        "max_price"
+      ],
+      "title": "CoverageTag",
+      "type": "string"
+    },
+    "ExecutionCost": {
+      "additionalProperties": false,
+      "properties": {
+        "base_invocations": {
+          "minimum": 0,
+          "title": "Base Invocations",
+          "type": "integer"
+        },
+        "confirm_invocations": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confirm Invocations",
+          "type": "integer"
+        },
+        "head_invocations": {
+          "minimum": 0,
+          "title": "Head Invocations",
+          "type": "integer"
+        },
+        "retries": {
+          "maximum": 2,
+          "minimum": 0,
+          "title": "Retries",
+          "type": "integer"
+        },
+        "wall_ms": {
+          "minimum": 0,
+          "title": "Wall Ms",
+          "type": "number"
+        }
+      },
+      "required": [
+        "base_invocations",
+        "head_invocations",
+        "confirm_invocations",
+        "retries",
+        "wall_ms"
+      ],
+      "title": "ExecutionCost",
+      "type": "object"
+    },
+    "MeasurementMode": {
+      "enum": [
+        "offline",
+        "recorded",
+        "live"
+      ],
+      "title": "MeasurementMode",
+      "type": "string"
+    },
+    "Outcome": {
+      "description": "Pair outcome relative to the trusted oracle (bench/production semantics).",
+      "enum": [
+        "match",
+        "mismatch",
+        "base_mismatch",
+        "unusable"
+      ],
+      "title": "Outcome",
+      "type": "string"
+    },
+    "Relevance": {
+      "enum": [
+        "positive",
+        "zero",
+        "unknown"
+      ],
+      "title": "Relevance",
+      "type": "string"
+    },
+    "Strategy": {
+      "enum": [
+        "boundary",
+        "constraint",
+        "seeded_fuzz"
+      ],
+      "title": "Strategy",
+      "type": "string"
+    }
+  },
+  "$id": "https://proofhunter.research/schemas/v1/RankingObservation.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "One executed candidate at one decision step. Untested candidates never get rows.",
+  "properties": {
+    "base_cents": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Base Cents"
+    },
+    "candidate": {
+      "$ref": "#/$defs/CheckoutCandidate"
+    },
+    "case_id": {
+      "pattern": "^[A-Za-z0-9._:@/+-]{1,128}$",
+      "title": "Case Id",
+      "type": "string"
+    },
+    "collection_policy": {
+      "pattern": "^[A-Za-z0-9._:@/+-]{1,128}$",
+      "title": "Collection Policy",
+      "type": "string"
+    },
+    "confirmation": {
+      "$ref": "#/$defs/Confirmation"
+    },
+    "cost": {
+      "$ref": "#/$defs/ExecutionCost"
+    },
+    "decision_step": {
+      "maximum": 6,
+      "minimum": 1,
+      "title": "Decision Step",
+      "type": "integer"
+    },
+    "episode_seed": {
+      "maximum": 4294967295,
+      "minimum": 0,
+      "title": "Episode Seed",
+      "type": "integer"
+    },
+    "expected_cents": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Expected Cents"
+    },
+    "exploration": {
+      "title": "Exploration",
+      "type": "boolean"
+    },
+    "feature_set_version": {
+      "pattern": "^[A-Za-z0-9._:@/+-]{1,128}$",
+      "title": "Feature Set Version",
+      "type": "string"
+    },
+    "features": {
+      "patternProperties": {
+        "^[a-z][a-z0-9_]{0,63}$": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "boolean"
+            }
+          ]
+        }
+      },
+      "title": "Features",
+      "type": "object"
+    },
+    "head_cents": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Head Cents"
+    },
+    "measurement_mode": {
+      "$ref": "#/$defs/MeasurementMode"
+    },
+    "observation_id": {
+      "pattern": "^[A-Za-z0-9._:@/+-]{1,128}$",
+      "title": "Observation Id",
+      "type": "string"
+    },
+    "outcome": {
+      "$ref": "#/$defs/Outcome"
+    },
+    "pool_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Pool Sha256",
+      "type": "string"
+    },
+    "pool_size": {
+      "maximum": 64,
+      "minimum": 1,
+      "title": "Pool Size",
+      "type": "integer"
+    },
+    "relevance": {
+      "$ref": "#/$defs/Relevance"
+    },
+    "remaining_pairs_before": {
+      "maximum": 6,
+      "minimum": 1,
+      "title": "Remaining Pairs Before",
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": "research-ranking-observation-v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "selection_probability": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Selection Probability"
+    },
+    "split": {
+      "enum": [
+        "train",
+        "validation"
+      ],
+      "title": "Split",
+      "type": "string"
+    },
+    "track": {
+      "const": "track_a",
+      "title": "Track",
+      "type": "string"
+    },
+    "unusable_reason": {
+      "anyOf": [
+        {
+          "pattern": "^[a-z][a-z0-9_]{0,63}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Unusable Reason"
+    }
+  },
+  "required": [
+    "schema_version",
+    "track",
+    "observation_id",
+    "case_id",
+    "split",
+    "collection_policy",
+    "episode_seed",
+    "decision_step",
+    "remaining_pairs_before",
+    "pool_sha256",
+    "pool_size",
+    "candidate",
+    "feature_set_version",
+    "features",
+    "exploration",
+    "selection_probability",
+    "outcome",
+    "unusable_reason",
+    "expected_cents",
+    "base_cents",
+    "head_cents",
+    "confirmation",
+    "relevance",
+    "cost",
+    "measurement_mode"
+  ],
+  "title": "RankingObservation",
+  "type": "object"
+}

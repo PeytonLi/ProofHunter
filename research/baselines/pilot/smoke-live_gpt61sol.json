@@ -1,0 +1,382 @@
+{
+  "generated_at": "2026-11-07T22:55:12.559328+00:00",
+  "measurement_mode": "live",
+  "phase": "pilot",
+  "frontier_model_id": "gpt-6.1-sol",
+  "cases": [
+    [
+      "buggy",
+      1633385816
+    ],
+    [
+      "half_even",
+      1633385816
+    ],
+    [
+      "fixed",
+      1633385816
+    ]
+  ],
+  "rows": [
+    {
+      "arm_id": "fixed_order",
+      "case_id": "demo-buggy-1633385816",
+      "expected_verdict": "confirmed_regression",
+      "pairs": 4,
+      "first_mismatch_step": 4,
+      "outcomes": [
+        "match",
+        "match",
+        "match",
+        "mismatch"
+      ],
+      "degraded": null,
+      "episode_wall_ms": 0.1
+    },
+    {
+      "arm_id": "uniform_random",
+      "case_id": "demo-buggy-1633385816",
+      "expected_verdict": "confirmed_regression",
+      "pairs": 3,
+      "first_mismatch_step": 3,
+      "outcomes": [
+        "match",
+        "match",
+        "mismatch"
+      ],
+      "degraded": null,
+      "episode_wall_ms": 0.1
+    },
+    {
+      "arm_id": "simple_heuristic",
+      "case_id": "demo-buggy-1633385816",
+      "expected_verdict": "confirmed_regression",
+      "pairs": 1,
+      "first_mismatch_step": 1,
+      "outcomes": [
+        "mismatch"
+      ],
+      "degraded": null,
+      "episode_wall_ms": 0.1
+    },
+    {
+      "arm_id": "builtin_eig",
+      "case_id": "demo-buggy-1633385816",
+      "expected_verdict": "confirmed_regression",
+      "pairs": 1,
+      "first_mismatch_step": 1,
+      "outcomes": [
+        "mismatch"
+      ],
+      "degraded": null,
+      "episode_wall_ms": 2.8
+    },
+    {
+      "arm_id": "meta_muse_spark_eig",
+      "case_id": "demo-buggy-1633385816",
+      "expected_verdict": "confirmed_regression",
+      "pairs": 1,
+      "first_mismatch_step": 1,
+      "outcomes": [
+        "mismatch"
+      ],
+      "degraded": null,
+      "episode_wall_ms": 0.6,
+      "meta_wall_ms": 10052.1,
+      "meta_mode": "live",
+      "meta_attempts": 1,
+      "meta_reason": null,
+      "meta_hypotheses": [
+        "per_item_rounding"
+      ]
+    },
+    {
+      "arm_id": "frontier_reviewer",
+      "case_id": "demo-buggy-1633385816",
+      "expected_verdict": "confirmed_regression",
+      "pairs": 1,
+      "first_mismatch_step": 1,
+      "outcomes": [
+        "mismatch"
+      ],
+      "degraded": null,
+      "episode_wall_ms": 4294.1,
+      "model_calls": 1,
+      "input_tokens": 3954,
+      "cached_tokens": 0,
+      "output_tokens": 208,
+      "cost_usd": 0.009988,
+      "provider_wall_ms": 4282.6,
+      "frontier_model_id": "gpt-6.1-sol"
+    },
+    {
+      "arm_id": "frontier_agent",
+      "case_id": "demo-buggy-1633385816",
+      "expected_verdict": "confirmed_regression",
+      "pairs": 1,
+      "first_mismatch_step": 1,
+      "outcomes": [
+        "mismatch"
+      ],
+      "degraded": null,
+      "episode_wall_ms": 1704.4,
+      "model_calls": 1,
+      "input_tokens": 4094,
+      "cached_tokens": 0,
+      "output_tokens": 20,
+      "cost_usd": 0.008388,
+      "provider_wall_ms": 1695.7,
+      "frontier_model_id": "gpt-6.1-sol"
+    },
+    {
+      "arm_id": "fixed_order",
+      "case_id": "demo-half_even-1633385816",
+      "expected_verdict": "confirmed_regression",
+      "pairs": 4,
+      "first_mismatch_step": 4,
+      "outcomes": [
+        "match",
+        "match",
+        "match",
+        "mismatch"
+      ],
+      "degraded": null,
+      "episode_wall_ms": 0.1
+    },
+    {
+      "arm_id": "uniform_random",
+      "case_id": "demo-half_even-1633385816",
+      "expected_verdict": "confirmed_regression",
+      "pairs": 1,
+      "first_mismatch_step": 1,
+      "outcomes": [
+        "mismatch"
+      ],
+      "degraded": null,
+      "episode_wall_ms": 0.0
+    },
+    {
+      "arm_id": "simple_heuristic",
+      "case_id": "demo-half_even-1633385816",
+      "expected_verdict": "confirmed_regression",
+      "pairs": 1,
+      "first_mismatch_step": 1,
+      "outcomes": [
+        "mismatch"
+      ],
+      "degraded": null,
+      "episode_wall_ms": 0.1
+    },
+    {
+      "arm_id": "builtin_eig",
+      "case_id": "demo-half_even-1633385816",
+      "expected_verdict": "confirmed_regression",
+      "pairs": 1,
+      "first_mismatch_step": 1,
+      "outcomes": [
+        "mismatch"
+      ],
+      "degraded": null,
+      "episode_wall_ms": 4.8
+    },
+    {
+      "arm_id": "meta_muse_spark_eig",
+      "case_id": "demo-half_even-1633385816",
+      "expected_verdict": "confirmed_regression",
+      "pairs": 1,
+      "first_mismatch_step": 1,
+      "outcomes": [
+        "mismatch"
+      ],
+      "degraded": null,
+      "episode_wall_ms": 0.6,
+      "meta_wall_ms": 18782.8,
+      "meta_mode": "live",
+      "meta_attempts": 1,
+      "meta_reason": null,
+      "meta_hypotheses": [
+        "half_even_rounding"
+      ]
+    },
+    {
+      "arm_id": "frontier_reviewer",
+      "case_id": "demo-half_even-1633385816",
+      "expected_verdict": "confirmed_regression",
+      "pairs": 1,
+      "first_mismatch_step": 1,
+      "outcomes": [
+        "mismatch"
+      ],
+      "degraded": null,
+      "episode_wall_ms": 2313.2,
+      "model_calls": 1,
+      "input_tokens": 3994,
+      "cached_tokens": 0,
+      "output_tokens": 111,
+      "cost_usd": 0.009098,
+      "provider_wall_ms": 2301.8,
+      "frontier_model_id": "gpt-6.1-sol"
+    },
+    {
+      "arm_id": "frontier_agent",
+      "case_id": "demo-half_even-1633385816",
+      "expected_verdict": "confirmed_regression",
+      "pairs": 1,
+      "first_mismatch_step": 1,
+      "outcomes": [
+        "mismatch"
+      ],
+      "degraded": null,
+      "episode_wall_ms": 2328.0,
+      "model_calls": 1,
+      "input_tokens": 4134,
+      "cached_tokens": 0,
+      "output_tokens": 20,
+      "cost_usd": 0.008468,
+      "provider_wall_ms": 2319.5,
+      "frontier_model_id": "gpt-6.1-sol"
+    },
+    {
+      "arm_id": "fixed_order",
+      "case_id": "demo-fixed-1633385816",
+      "expected_verdict": "no_defect_found",
+      "pairs": 6,
+      "first_mismatch_step": null,
+      "outcomes": [
+        "match",
+        "match",
+        "match",
+        "match",
+        "match",
+        "match"
+      ],
+      "degraded": null,
+      "episode_wall_ms": 0.1
+    },
+    {
+      "arm_id": "uniform_random",
+      "case_id": "demo-fixed-1633385816",
+      "expected_verdict": "no_defect_found",
+      "pairs": 6,
+      "first_mismatch_step": null,
+      "outcomes": [
+        "match",
+        "match",
+        "match",
+        "match",
+        "match",
+        "match"
+      ],
+      "degraded": null,
+      "episode_wall_ms": 0.1
+    },
+    {
+      "arm_id": "simple_heuristic",
+      "case_id": "demo-fixed-1633385816",
+      "expected_verdict": "no_defect_found",
+      "pairs": 6,
+      "first_mismatch_step": null,
+      "outcomes": [
+        "match",
+        "match",
+        "match",
+        "match",
+        "match",
+        "match"
+      ],
+      "degraded": null,
+      "episode_wall_ms": 0.5
+    },
+    {
+      "arm_id": "builtin_eig",
+      "case_id": "demo-fixed-1633385816",
+      "expected_verdict": "no_defect_found",
+      "pairs": 6,
+      "first_mismatch_step": null,
+      "outcomes": [
+        "match",
+        "match",
+        "match",
+        "match",
+        "match",
+        "match"
+      ],
+      "degraded": null,
+      "episode_wall_ms": 11.3
+    },
+    {
+      "arm_id": "meta_muse_spark_eig",
+      "case_id": "demo-fixed-1633385816",
+      "expected_verdict": "no_defect_found",
+      "pairs": 6,
+      "first_mismatch_step": null,
+      "outcomes": [
+        "match",
+        "match",
+        "match",
+        "match",
+        "match",
+        "match"
+      ],
+      "degraded": null,
+      "episode_wall_ms": 8.0,
+      "meta_wall_ms": 12700.8,
+      "meta_mode": "live",
+      "meta_attempts": 1,
+      "meta_reason": null,
+      "meta_hypotheses": [
+        "per_item_rounding",
+        "half_even_rounding",
+        "other"
+      ]
+    },
+    {
+      "arm_id": "frontier_reviewer",
+      "case_id": "demo-fixed-1633385816",
+      "expected_verdict": "no_defect_found",
+      "pairs": 6,
+      "first_mismatch_step": null,
+      "outcomes": [
+        "match",
+        "match",
+        "match",
+        "match",
+        "match",
+        "match"
+      ],
+      "degraded": "empty_ranking",
+      "episode_wall_ms": 1695.0,
+      "model_calls": 1,
+      "input_tokens": 4005,
+      "cached_tokens": 0,
+      "output_tokens": 27,
+      "cost_usd": 0.00828,
+      "provider_wall_ms": 1679.6,
+      "frontier_model_id": "gpt-6.1-sol"
+    },
+    {
+      "arm_id": "frontier_agent",
+      "case_id": "demo-fixed-1633385816",
+      "expected_verdict": "no_defect_found",
+      "pairs": 6,
+      "first_mismatch_step": null,
+      "outcomes": [
+        "match",
+        "match",
+        "match",
+        "match",
+        "match",
+        "match"
+      ],
+      "degraded": null,
+      "episode_wall_ms": 9316.3,
+      "model_calls": 6,
+      "input_tokens": 28608,
+      "cached_tokens": 0,
+      "output_tokens": 120,
+      "cost_usd": 0.058416,
+      "provider_wall_ms": 9273.6,
+      "frontier_model_id": "gpt-6.1-sol"
+    }
+  ]
+}

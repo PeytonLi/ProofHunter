@@ -1,0 +1,31 @@
+{
+  "cases": [
+    {
+      "base_source_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+      "candidate_seed": 1633385816,
+      "case_id": "a-per_line-0001",
+      "contract_id": "checkout-rounding@1",
+      "defect_origin": "tpl-per_line@1",
+      "family_id": "per_line_rounding",
+      "head_source_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+      "near_dup_cluster": "per_line-c001",
+      "params": {
+        "discount_mode": "per_line",
+        "round_at": "line"
+      },
+      "params_sha256": "fb4b86d1d63a2a13fd4456a6b108f7dc93427a466012a9096ce0b6f3ddccd3f8",
+      "schema_version": "research-case-v1",
+      "split": "train",
+      "template_id": "per_line",
+      "template_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+      "template_version": "1",
+      "track": "track_a"
+    }
+  ],
+  "cases_sha256": "f33da530fd26ba8215203adb5d75112cdda769e163976c9455361d70cb134cff",
+  "dataset_commit": "b97210ac37e9a352f7fcd5a3c4f013ab876b39a6",
+  "manifest_version": "research-cases-v1-sample",
+  "schema_version": "research-case-manifest-v1",
+  "split_policy": "grouped-family-origin-cluster-v1",
+  "track": "track_a"
+}

@@ -1,0 +1,51 @@
+{
+  "case_id": "a-per_line-0001",
+  "contains_fix_patch": false,
+  "contains_template_params": false,
+  "example_id": "gen-a-per_line-0001",
+  "input": {
+    "allowed_test_interface": "checkout.total_cents(prices_cents, discount_percent)",
+    "behavior_spec_sha256": "8888888888888888888888888888888888888888888888888888888888888888",
+    "context_files": [
+      {
+        "content": "def total_cents(prices_cents, discount_percent):\n    ...\n",
+        "path": "checkout.py",
+        "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "side": "base"
+      },
+      {
+        "content": "def total_cents(prices_cents, discount_percent):\n    ...\n",
+        "path": "checkout.py",
+        "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "side": "head"
+      }
+    ],
+    "contract_id": "checkout-rounding@1",
+    "prompt_format_version": "gen-prompt-v1",
+    "unified_diff": "--- a/checkout.py\n+++ b/checkout.py\n"
+  },
+  "schema_version": "research-generator-example-v1",
+  "split": "train",
+  "target": [
+    {
+      "constraints": {
+        "discount_percent": null,
+        "max_items": null,
+        "min_items": 2,
+        "require_fractional_cent": true
+      },
+      "grounding_witness_sha256": "326b2a8732d3411ecd4165eeab7faf0abb8efc089d0b3f333c5ec1264635635a",
+      "mode": "per_item_rounding",
+      "rationale": "Head rounds each discounted line before summing.",
+      "source_refs": [
+        {
+          "line": 3,
+          "path": "checkout.py"
+        }
+      ],
+      "suggested_strategy": "constraint",
+      "triggering_conditions": "Two or more items whose discounted line totals each have a half-cent or larger residue."
+    }
+  ],
+  "teacher": null
+}

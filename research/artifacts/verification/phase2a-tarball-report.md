@@ -1,0 +1,263 @@
+# Verification report
+
+| Gate | Result | Errors | Warnings |
+|---|---|---|---|
+| production_frozen | PASS | 0 | 0 |
+| schemas_frozen | PASS | 0 | 0 |
+| schema:ProtocolV1:protocol-v1.json | PASS | 0 | 0 |
+| schema:SpendPolicy:spend-policy.json | PASS | 0 | 0 |
+| schema:CaseManifest | PASS | 0 | 0 |
+| schema:GeneratorExample | PASS | 0 | 0 |
+| schema:LabelFile | PASS | 0 | 0 |
+| schema:RankingObservation | PASS | 0 | 0 |
+| schema:SweSmithTask | PASS | 0 | 0 |
+| source_hashes | PASS | 0 | 0 |
+| split_leakage | FAIL | 7 | 3 |
+| label_provenance | PASS | 0 | 1 |
+| test_label_unreachable | PASS | 0 | 0 |
+| row_splits:observations | PASS | 0 | 0 |
+| observation_provenance | PASS | 0 | 0 |
+| row_splits:generator | PASS | 0 | 0 |
+| generator_example_provenance | PASS | 0 | 0 |
+| split_leakage_track_b | PASS | 0 | 0 |
+| cost_ledger | PASS | 0 | 0 |
+| teardown_ledger | PASS | 0 | 0 |
+
+## schemas_frozen
+
+```json
+{
+  "models": 11
+}
+```
+
+## schema:ProtocolV1:protocol-v1.json
+
+```json
+{
+  "invalid": 0,
+  "rows": 1
+}
+```
+
+## schema:SpendPolicy:spend-policy.json
+
+```json
+{
+  "invalid": 0,
+  "rows": 1
+}
+```
+
+## schema:CaseManifest
+
+```json
+{
+  "invalid": 0,
+  "rows": 1
+}
+```
+
+## schema:GeneratorExample
+
+```json
+{
+  "invalid": 0,
+  "rows": 2300
+}
+```
+
+## schema:LabelFile
+
+```json
+{
+  "invalid": 0,
+  "rows": 2
+}
+```
+
+## schema:RankingObservation
+
+```json
+{
+  "invalid": 0,
+  "rows": 36411
+}
+```
+
+## schema:SweSmithTask
+
+```json
+{
+  "invalid": 0,
+  "rows": 3480
+}
+```
+
+## source_hashes
+
+```json
+{
+  "sources": 3820
+}
+```
+
+## split_leakage
+
+```json
+{
+  "bench_source_overlap": 0,
+  "counts": {
+    "test": {
+      "cases": 639,
+      "families": 9,
+      "unlabelled": 639
+    },
+    "train": {
+      "cases": 2333,
+      "clean": 333,
+      "existing_defect": 205,
+      "families": 21,
+      "introduced_regression": 1795
+    },
+    "validation": {
+      "cases": 360,
+      "clean": 60,
+      "existing_defect": 29,
+      "families": 6,
+      "introduced_regression": 271
+    }
+  },
+  "defect_origin_cross_split": 0,
+  "family_id_cross_split": 0,
+  "head_source_sha256_cross_split": 0,
+  "near_dup_cluster_cross_split": 0,
+  "near_duplicate_pairs": 7,
+  "template_id_cross_split": 0
+}
+```
+- WARNING below_defect_target: test: 0 < 500
+- WARNING below_clean_target: test: 0 < 150
+- WARNING below_clean_target: train: 333 < 400
+- ERROR near_duplicate_change: a-0ba3f8d684ce1f42c2df (test) ~ a-71a0d2927d6688c546f6 (validation) jaccard=1.0
+- ERROR near_duplicate_change: a-0ba3f8d684ce1f42c2df (test) ~ a-daf265c4770e19b4e32c (validation) jaccard=1.0
+- ERROR near_duplicate_change: a-172630062b0b036f4bb4 (train) ~ a-ab38df6530f763cfd00d (test) jaccard=1.0
+- ERROR near_duplicate_change: a-3d46488b7de37c9e2a90 (train) ~ a-a3bb32bb48b20cb5cce2 (test) jaccard=1.0
+- ERROR near_duplicate_change: a-431c6e2b2507b9f71126 (train) ~ a-bd34b515d34ed998950e (test) jaccard=1.0
+- ERROR near_duplicate_change: a-4556635d45c5d8c42c1b (validation) ~ a-abf509dc3e6c46c43472 (test) jaccard=1.0
+- ERROR near_duplicate_change: a-5442f2593426846d071c (train) ~ a-d6ab4fbdfb90a9827495 (test) jaccard=1.0
+
+## label_provenance
+
+```json
+{
+  "counts": {
+    "train": {
+      "clean": 333,
+      "existing_defect": 205,
+      "introduced_regression": 1795
+    },
+    "validation": {
+      "clean": 60,
+      "existing_defect": 29,
+      "introduced_regression": 271
+    }
+  },
+  "unlabelled": 639
+}
+```
+- WARNING sealed_labels_unavailable: 639 test cases unlabelled: sealed test labels not supplied
+
+## test_label_unreachable
+
+```json
+{
+  "files_scanned": 6,
+  "hits_by_file": {
+    "/home/ubuntu/phase2a/tar2/track_a/generator/train.jsonl": 0,
+    "/home/ubuntu/phase2a/tar2/track_a/generator/validation.jsonl": 0,
+    "/home/ubuntu/phase2a/tar2/track_a/labels/train.json": 0,
+    "/home/ubuntu/phase2a/tar2/track_a/labels/validation.json": 0,
+    "/home/ubuntu/phase2a/tar2/track_a/observations/train.jsonl": 0,
+    "/home/ubuntu/phase2a/tar2/track_a/observations/validation.jsonl": 0
+  },
+  "test_tokens": 2021
+}
+```
+
+## row_splits:observations
+
+```json
+{
+  "by_manifest_split": {
+    "train": 32129,
+    "validation": 4282
+  },
+  "rows": 36411
+}
+```
+
+## observation_provenance
+
+```json
+{
+  "cases_with_positive": 1294,
+  "relevance": {
+    "positive": 3078,
+    "unknown": 1203,
+    "zero": 32130
+  },
+  "rows": 36411
+}
+```
+
+## row_splits:generator
+
+```json
+{
+  "by_manifest_split": {
+    "train": 2000,
+    "validation": 300
+  },
+  "rows": 2300
+}
+```
+
+## generator_example_provenance
+
+```json
+{
+  "examples": 2300
+}
+```
+
+## split_leakage_track_b
+
+```json
+{
+  "tasks": 3480
+}
+```
+
+## cost_ledger
+
+```json
+{
+  "entries": 0,
+  "paid_jobs": 0,
+  "raw_rows": 0,
+  "raw_rows_unknown_cost": 0,
+  "unknown_cost_entries": 0,
+  "usd_by_category": {},
+  "usd_by_status": {}
+}
+```
+
+## teardown_ledger
+
+```json
+{
+  "paid_providers": [],
+  "resources": 0
+}
+```

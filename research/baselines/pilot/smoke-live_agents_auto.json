@@ -1,0 +1,374 @@
+{
+  "generated_at": "2026-11-07T23:33:49.367712+00:00",
+  "measurement_mode": "live",
+  "phase": "pilot",
+  "grid_arms": [
+    "agent:gpt-6.1-sol",
+    "agent:gpt-6-astra",
+    "agent:muse-spark-1.3",
+    "agent:muse-wonder-1.0"
+  ],
+  "skipped_cells": {},
+  "cases": [
+    [
+      "buggy",
+      1633385816
+    ],
+    [
+      "half_even",
+      1633385816
+    ],
+    [
+      "fixed",
+      1633385816
+    ]
+  ],
+  "per_arm": {
+    "agent:gpt-6.1-sol": {
+      "cases": 3,
+      "cost_usd": 0.05403,
+      "model_calls": 6,
+      "pairs": [
+        1,
+        1,
+        6
+      ],
+      "degraded": {
+        "malformed_output": 1
+      },
+      "mean_cost_usd_per_case": 0.01801,
+      "provider_wall_ms_min_mean_max": [
+        995.3,
+        3198.2,
+        6950.4
+      ]
+    },
+    "agent:gpt-6-astra": {
+      "cases": 3,
+      "cost_usd": 0.27008,
+      "model_calls": 6,
+      "pairs": [
+        1,
+        1,
+        6
+      ],
+      "degraded": {
+        "malformed_output": 1
+      },
+      "mean_cost_usd_per_case": 0.090027,
+      "provider_wall_ms_min_mean_max": [
+        1378.8,
+        3841.9,
+        8740.1
+      ]
+    },
+    "agent:muse-spark-1.3": {
+      "cases": 3,
+      "cost_usd": 0.057738,
+      "model_calls": 8,
+      "pairs": [
+        1,
+        1,
+        6
+      ],
+      "degraded": {},
+      "mean_cost_usd_per_case": 0.019246,
+      "provider_wall_ms_min_mean_max": [
+        2771.3,
+        11062.5,
+        26866.3
+      ]
+    },
+    "agent:muse-wonder-1.0": {
+      "cases": 3,
+      "cost_usd": 0.178514,
+      "model_calls": 9,
+      "pairs": [
+        1,
+        1,
+        6
+      ],
+      "degraded": {},
+      "mean_cost_usd_per_case": 0.059505,
+      "provider_wall_ms_min_mean_max": [
+        1779.1,
+        66454.2,
+        195066.2
+      ]
+    }
+  },
+  "rows": [
+    {
+      "arm_id": "agent:gpt-6.1-sol",
+      "case_id": "demo-buggy-1633385816",
+      "expected_verdict": "confirmed_regression",
+      "pairs": 1,
+      "first_mismatch_step": 1,
+      "outcomes": [
+        "mismatch"
+      ],
+      "degraded": null,
+      "episode_wall_ms": 1676.4,
+      "model_calls": 1,
+      "input_tokens": 4016,
+      "cached_tokens": 0,
+      "output_tokens": 20,
+      "cost_usd": 0.008232,
+      "provider_wall_ms": 1649.0,
+      "role": "agent",
+      "model_id": "gpt-6.1-sol",
+      "provider": "openai"
+    },
+    {
+      "arm_id": "agent:gpt-6-astra",
+      "case_id": "demo-buggy-1633385816",
+      "expected_verdict": "confirmed_regression",
+      "pairs": 1,
+      "first_mismatch_step": 1,
+      "outcomes": [
+        "mismatch"
+      ],
+      "degraded": null,
+      "episode_wall_ms": 1411.6,
+      "model_calls": 1,
+      "input_tokens": 4016,
+      "cached_tokens": 0,
+      "output_tokens": 20,
+      "cost_usd": 0.04116,
+      "provider_wall_ms": 1406.9,
+      "role": "agent",
+      "model_id": "gpt-6-astra",
+      "provider": "openai"
+    },
+    {
+      "arm_id": "agent:muse-spark-1.3",
+      "case_id": "demo-buggy-1633385816",
+      "expected_verdict": "confirmed_regression",
+      "pairs": 1,
+      "first_mismatch_step": 1,
+      "outcomes": [
+        "mismatch"
+      ],
+      "degraded": null,
+      "episode_wall_ms": 2776.3,
+      "model_calls": 1,
+      "input_tokens": 4502,
+      "cached_tokens": 0,
+      "output_tokens": 258,
+      "cost_usd": 0.006724,
+      "provider_wall_ms": 2771.3,
+      "role": "agent",
+      "model_id": "muse-spark-1.3",
+      "provider": "meta"
+    },
+    {
+      "arm_id": "agent:muse-wonder-1.0",
+      "case_id": "demo-buggy-1633385816",
+      "expected_verdict": "confirmed_regression",
+      "pairs": 1,
+      "first_mismatch_step": 1,
+      "outcomes": [
+        "mismatch"
+      ],
+      "degraded": null,
+      "episode_wall_ms": 2527.0,
+      "model_calls": 1,
+      "input_tokens": 4447,
+      "cached_tokens": 0,
+      "output_tokens": 190,
+      "cost_usd": 0.021588,
+      "provider_wall_ms": 2517.2,
+      "role": "agent",
+      "model_id": "muse-wonder-1.0",
+      "provider": "meta"
+    },
+    {
+      "arm_id": "agent:gpt-6.1-sol",
+      "case_id": "demo-half_even-1633385816",
+      "expected_verdict": "confirmed_regression",
+      "pairs": 1,
+      "first_mismatch_step": 1,
+      "outcomes": [
+        "mismatch"
+      ],
+      "degraded": null,
+      "episode_wall_ms": 1000.0,
+      "model_calls": 1,
+      "input_tokens": 4056,
+      "cached_tokens": 0,
+      "output_tokens": 20,
+      "cost_usd": 0.008312,
+      "provider_wall_ms": 995.3,
+      "role": "agent",
+      "model_id": "gpt-6.1-sol",
+      "provider": "openai"
+    },
+    {
+      "arm_id": "agent:gpt-6-astra",
+      "case_id": "demo-half_even-1633385816",
+      "expected_verdict": "confirmed_regression",
+      "pairs": 1,
+      "first_mismatch_step": 1,
+      "outcomes": [
+        "mismatch"
+      ],
+      "degraded": null,
+      "episode_wall_ms": 1385.2,
+      "model_calls": 1,
+      "input_tokens": 4056,
+      "cached_tokens": 0,
+      "output_tokens": 20,
+      "cost_usd": 0.04156,
+      "provider_wall_ms": 1378.8,
+      "role": "agent",
+      "model_id": "gpt-6-astra",
+      "provider": "openai"
+    },
+    {
+      "arm_id": "agent:muse-spark-1.3",
+      "case_id": "demo-half_even-1633385816",
+      "expected_verdict": "confirmed_regression",
+      "pairs": 1,
+      "first_mismatch_step": 1,
+      "outcomes": [
+        "mismatch"
+      ],
+      "degraded": null,
+      "episode_wall_ms": 3562.3,
+      "model_calls": 1,
+      "input_tokens": 4542,
+      "cached_tokens": 0,
+      "output_tokens": 374,
+      "cost_usd": 0.007267,
+      "provider_wall_ms": 3549.9,
+      "role": "agent",
+      "model_id": "muse-spark-1.3",
+      "provider": "meta"
+    },
+    {
+      "arm_id": "agent:muse-wonder-1.0",
+      "case_id": "demo-half_even-1633385816",
+      "expected_verdict": "confirmed_regression",
+      "pairs": 1,
+      "first_mismatch_step": 1,
+      "outcomes": [
+        "mismatch"
+      ],
+      "degraded": null,
+      "episode_wall_ms": 1784.0,
+      "model_calls": 1,
+      "input_tokens": 4487,
+      "cached_tokens": 0,
+      "output_tokens": 195,
+      "cost_usd": 0.021848,
+      "provider_wall_ms": 1779.1,
+      "role": "agent",
+      "model_id": "muse-wonder-1.0",
+      "provider": "meta"
+    },
+    {
+      "arm_id": "agent:gpt-6.1-sol",
+      "case_id": "demo-fixed-1633385816",
+      "expected_verdict": "no_defect_found",
+      "pairs": 6,
+      "first_mismatch_step": null,
+      "outcomes": [
+        "match",
+        "match",
+        "match",
+        "match",
+        "match",
+        "match"
+      ],
+      "degraded": "malformed_output",
+      "episode_wall_ms": 6984.1,
+      "model_calls": 4,
+      "input_tokens": 17813,
+      "cached_tokens": 0,
+      "output_tokens": 186,
+      "cost_usd": 0.037486,
+      "provider_wall_ms": 6950.4,
+      "role": "agent",
+      "model_id": "gpt-6.1-sol",
+      "provider": "openai"
+    },
+    {
+      "arm_id": "agent:gpt-6-astra",
+      "case_id": "demo-fixed-1633385816",
+      "expected_verdict": "no_defect_found",
+      "pairs": 6,
+      "first_mismatch_step": null,
+      "outcomes": [
+        "match",
+        "match",
+        "match",
+        "match",
+        "match",
+        "match"
+      ],
+      "degraded": "malformed_output",
+      "episode_wall_ms": 8770.0,
+      "model_calls": 4,
+      "input_tokens": 17966,
+      "cached_tokens": 0,
+      "output_tokens": 154,
+      "cost_usd": 0.18736,
+      "provider_wall_ms": 8740.1,
+      "role": "agent",
+      "model_id": "gpt-6-astra",
+      "provider": "openai"
+    },
+    {
+      "arm_id": "agent:muse-spark-1.3",
+      "case_id": "demo-fixed-1633385816",
+      "expected_verdict": "no_defect_found",
+      "pairs": 6,
+      "first_mismatch_step": null,
+      "outcomes": [
+        "match",
+        "match",
+        "match",
+        "match",
+        "match",
+        "match"
+      ],
+      "degraded": null,
+      "episode_wall_ms": 26898.5,
+      "model_calls": 6,
+      "input_tokens": 31511,
+      "cached_tokens": 4465,
+      "output_tokens": 2181,
+      "cost_usd": 0.043747,
+      "provider_wall_ms": 26866.3,
+      "role": "agent",
+      "model_id": "muse-spark-1.3",
+      "provider": "meta"
+    },
+    {
+      "arm_id": "agent:muse-wonder-1.0",
+      "case_id": "demo-fixed-1633385816",
+      "expected_verdict": "no_defect_found",
+      "pairs": 6,
+      "first_mismatch_step": null,
+      "outcomes": [
+        "match",
+        "match",
+        "match",
+        "match",
+        "match",
+        "match"
+      ],
+      "degraded": null,
+      "episode_wall_ms": 196109.8,
+      "model_calls": 7,
+      "input_tokens": 31299,
+      "cached_tokens": 4468,
+      "output_tokens": 1343,
+      "cost_usd": 0.135078,
+      "provider_wall_ms": 195066.2,
+      "role": "agent",
+      "model_id": "muse-wonder-1.0",
+      "provider": "meta"
+    }
+  ]
+}

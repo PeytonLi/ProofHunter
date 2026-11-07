@@ -1,0 +1,35 @@
+{
+ "behavior_spec_sha256": "a9576375541f5a03ad9584e9db65e43ee41277d32492b6bc2b61fdb6b9a84afc",
+ "collection_policy": "eps0.3-heuristic-v1",
+ "feature_set_version": "dataset-features-v1",
+ "prompt_format_version": "gen-prompt-v1",
+ "schema": "track-a-learning-data-v1",
+ "train": {
+  "exploration_rows": 9672,
+  "generator_examples": 2000,
+  "generator_sha256": "cc5c14121f548500dff1aa3a2810dea02e33b737b901d1b3d22debe2ad5e48e9",
+  "max_rows_per_case": 18,
+  "observation_cases": 2333,
+  "observations": 32129,
+  "observations_sha256": "d349fb46b948813ad19fc26dca119904d507f7b70cd5c9cfc272c11e9dd83d2c",
+  "relevance": {
+   "positive": 2552,
+   "unknown": 1059,
+   "zero": 28518
+  }
+ },
+ "validation": {
+  "exploration_rows": 1298,
+  "generator_examples": 300,
+  "generator_sha256": "57a119d8bbf92b9816e0af52bb40fd597808818a144dc896b4593e6910c48866",
+  "max_rows_per_case": 18,
+  "observation_cases": 360,
+  "observations": 4282,
+  "observations_sha256": "1e88d2c4573eb2bac1e8b8197e36b97f0be798afdd90e6b2260a71b55e289cb7",
+  "relevance": {
+   "positive": 526,
+   "unknown": 144,
+   "zero": 3612
+  }
+ }
+}

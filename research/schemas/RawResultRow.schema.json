@@ -1,0 +1,571 @@
+{
+  "$defs": {
+    "Confirmation": {
+      "enum": [
+        "reproduced",
+        "not_reproduced",
+        "unusable",
+        "not_run"
+      ],
+      "title": "Confirmation",
+      "type": "string"
+    },
+    "CostStatus": {
+      "enum": [
+        "measured",
+        "estimated",
+        "unknown"
+      ],
+      "title": "CostStatus",
+      "type": "string"
+    },
+    "Invocations": {
+      "additionalProperties": false,
+      "properties": {
+        "base": {
+          "minimum": 0,
+          "title": "Base",
+          "type": "integer"
+        },
+        "confirm": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confirm",
+          "type": "integer"
+        },
+        "failed": {
+          "minimum": 0,
+          "title": "Failed",
+          "type": "integer"
+        },
+        "head": {
+          "minimum": 0,
+          "title": "Head",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base",
+        "head",
+        "confirm",
+        "failed"
+      ],
+      "title": "Invocations",
+      "type": "object"
+    },
+    "MeasurementMode": {
+      "enum": [
+        "offline",
+        "recorded",
+        "live"
+      ],
+      "title": "MeasurementMode",
+      "type": "string"
+    },
+    "ModelRefs": {
+      "additionalProperties": false,
+      "properties": {
+        "adapter_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Adapter Sha256"
+        },
+        "frontier_model_id": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9._:@/+-]{1,128}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Frontier Model Id"
+        },
+        "generator_model_id": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9._:@/+-]{1,128}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Generator Model Id"
+        },
+        "generator_revision": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9._:@/+-]{1,128}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Generator Revision"
+        },
+        "prompt_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Prompt Sha256"
+        },
+        "ranker_checkpoint_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ranker Checkpoint Sha256"
+        }
+      },
+      "required": [
+        "generator_model_id",
+        "generator_revision",
+        "adapter_sha256",
+        "ranker_checkpoint_sha256",
+        "frontier_model_id",
+        "prompt_sha256"
+      ],
+      "title": "ModelRefs",
+      "type": "object"
+    },
+    "Outcome": {
+      "description": "Pair outcome relative to the trusted oracle (bench/production semantics).",
+      "enum": [
+        "match",
+        "mismatch",
+        "base_mismatch",
+        "unusable"
+      ],
+      "title": "Outcome",
+      "type": "string"
+    },
+    "ProbeSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_input_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Candidate Input Sha256",
+          "type": "string"
+        },
+        "confirmation": {
+          "$ref": "#/$defs/Confirmation"
+        },
+        "outcome": {
+          "$ref": "#/$defs/Outcome"
+        },
+        "retries": {
+          "maximum": 2,
+          "minimum": 0,
+          "title": "Retries",
+          "type": "integer"
+        },
+        "step": {
+          "maximum": 6,
+          "minimum": 1,
+          "title": "Step",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "step",
+        "candidate_input_sha256",
+        "outcome",
+        "confirmation",
+        "retries"
+      ],
+      "title": "ProbeSummary",
+      "type": "object"
+    },
+    "Split": {
+      "enum": [
+        "train",
+        "validation",
+        "test"
+      ],
+      "title": "Split",
+      "type": "string"
+    },
+    "Timings": {
+      "additionalProperties": false,
+      "properties": {
+        "cleanup_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Cleanup Ms"
+        },
+        "cold_start": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Cold Start"
+        },
+        "confirmation_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Confirmation Ms"
+        },
+        "execution_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Execution Ms"
+        },
+        "feature_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Feature Ms"
+        },
+        "generation_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Generation Ms"
+        },
+        "queue_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Queue Ms"
+        },
+        "ranking_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ranking Ms"
+        },
+        "sandbox_startup_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Sandbox Startup Ms"
+        },
+        "wall_ms": {
+          "minimum": 0,
+          "title": "Wall Ms",
+          "type": "number"
+        }
+      },
+      "required": [
+        "wall_ms",
+        "queue_ms",
+        "generation_ms",
+        "feature_ms",
+        "ranking_ms",
+        "sandbox_startup_ms",
+        "execution_ms",
+        "confirmation_ms",
+        "cleanup_ms",
+        "cold_start"
+      ],
+      "title": "Timings",
+      "type": "object"
+    },
+    "TokenUsage": {
+      "additionalProperties": false,
+      "properties": {
+        "input_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Input Tokens"
+        },
+        "output_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Output Tokens"
+        },
+        "reasoning_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Reasoning Tokens"
+        }
+      },
+      "required": [
+        "input_tokens",
+        "output_tokens",
+        "reasoning_tokens"
+      ],
+      "title": "TokenUsage",
+      "type": "object"
+    },
+    "Verdict": {
+      "enum": [
+        "confirmed_regression",
+        "confirmed_existing_defect",
+        "no_defect_found",
+        "inconclusive"
+      ],
+      "title": "Verdict",
+      "type": "string"
+    }
+  },
+  "$id": "https://proofhunter.research/schemas/v1/RawResultRow.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "One (case, arm, seed, repetition) evaluation episode. Carries no labels.",
+  "properties": {
+    "arm_id": {
+      "pattern": "^[A-Za-z0-9._:@/+-]{1,128}$",
+      "title": "Arm Id",
+      "type": "string"
+    },
+    "case_id": {
+      "pattern": "^[A-Za-z0-9._:@/+-]{1,128}$",
+      "title": "Case Id",
+      "type": "string"
+    },
+    "censored": {
+      "title": "Censored",
+      "type": "boolean"
+    },
+    "cost_status": {
+      "$ref": "#/$defs/CostStatus"
+    },
+    "cost_usd": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Cost Usd"
+    },
+    "implementation_sha": {
+      "pattern": "^[0-9a-f]{40}$",
+      "title": "Implementation Sha",
+      "type": "string"
+    },
+    "invocations": {
+      "$ref": "#/$defs/Invocations"
+    },
+    "measurement_mode": {
+      "$ref": "#/$defs/MeasurementMode"
+    },
+    "models": {
+      "$ref": "#/$defs/ModelRefs"
+    },
+    "pairs_to_first_confirmed_witness": {
+      "anyOf": [
+        {
+          "maximum": 6,
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Pairs To First Confirmed Witness"
+    },
+    "pool_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Pool Sha256"
+    },
+    "probes": {
+      "items": {
+        "$ref": "#/$defs/ProbeSummary"
+      },
+      "maxItems": 6,
+      "title": "Probes",
+      "type": "array"
+    },
+    "protocol_version": {
+      "const": "research-protocol-v1",
+      "title": "Protocol Version",
+      "type": "string"
+    },
+    "reason_code": {
+      "pattern": "^[a-z][a-z0-9_]{0,63}$",
+      "title": "Reason Code",
+      "type": "string"
+    },
+    "repetition": {
+      "minimum": 0,
+      "title": "Repetition",
+      "type": "integer"
+    },
+    "run_id": {
+      "pattern": "^[A-Za-z0-9._:@/+-]{1,128}$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "research-raw-result-v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "seed": {
+      "maximum": 4294967295,
+      "minimum": 0,
+      "title": "Seed",
+      "type": "integer"
+    },
+    "snap_routing": {
+      "const": "disabled",
+      "title": "Snap Routing",
+      "type": "string"
+    },
+    "split": {
+      "$ref": "#/$defs/Split"
+    },
+    "timings": {
+      "$ref": "#/$defs/Timings"
+    },
+    "tokens": {
+      "$ref": "#/$defs/TokenUsage"
+    },
+    "track": {
+      "const": "track_a",
+      "title": "Track",
+      "type": "string"
+    },
+    "verdict": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Verdict"
+        },
+        {
+          "const": "failed",
+          "type": "string"
+        }
+      ],
+      "title": "Verdict"
+    }
+  },
+  "required": [
+    "schema_version",
+    "protocol_version",
+    "run_id",
+    "implementation_sha",
+    "track",
+    "case_id",
+    "split",
+    "arm_id",
+    "seed",
+    "repetition",
+    "measurement_mode",
+    "snap_routing",
+    "pool_sha256",
+    "models",
+    "probes",
+    "invocations",
+    "verdict",
+    "reason_code",
+    "pairs_to_first_confirmed_witness",
+    "censored",
+    "timings",
+    "tokens",
+    "cost_usd",
+    "cost_status"
+  ],
+  "title": "RawResultRow",
+  "type": "object"
+}

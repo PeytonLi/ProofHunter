@@ -1,0 +1,309 @@
+{
+  "$defs": {
+    "ArmKind": {
+      "enum": [
+        "control",
+        "factorial",
+        "system_baseline",
+        "frontier"
+      ],
+      "title": "ArmKind",
+      "type": "string"
+    },
+    "ArmSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "arm_id": {
+          "pattern": "^[a-z][a-z0-9_]{0,63}$",
+          "title": "Arm Id",
+          "type": "string"
+        },
+        "candidate_freedom": {
+          "enum": [
+            "shared_pool",
+            "free_input_documented"
+          ],
+          "title": "Candidate Freedom",
+          "type": "string"
+        },
+        "claim_scope": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Claim Scope",
+          "type": "string"
+        },
+        "executes": {
+          "title": "Executes",
+          "type": "boolean"
+        },
+        "feedback": {
+          "enum": [
+            "none",
+            "pair_observation"
+          ],
+          "title": "Feedback",
+          "type": "string"
+        },
+        "generator": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9_]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Generator"
+        },
+        "kind": {
+          "$ref": "#/$defs/ArmKind"
+        },
+        "model_status": {
+          "enum": [
+            "not_applicable",
+            "pinned_by_lane",
+            "frozen_by_baselines_lane"
+          ],
+          "title": "Model Status",
+          "type": "string"
+        },
+        "selector": {
+          "pattern": "^[a-z][a-z0-9_]{0,63}$",
+          "title": "Selector",
+          "type": "string"
+        }
+      },
+      "required": [
+        "arm_id",
+        "kind",
+        "generator",
+        "selector",
+        "executes",
+        "feedback",
+        "candidate_freedom",
+        "model_status",
+        "claim_scope"
+      ],
+      "title": "ArmSpec",
+      "type": "object"
+    },
+    "CoverageTag": {
+      "enum": [
+        "empty",
+        "singleton",
+        "multi_item",
+        "zero_discount",
+        "full_discount",
+        "half_cent",
+        "max_items",
+        "max_price"
+      ],
+      "title": "CoverageTag",
+      "type": "string"
+    },
+    "SplitTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "clean_controls": {
+          "minimum": 0,
+          "title": "Clean Controls",
+          "type": "integer"
+        },
+        "defect_cases": {
+          "minimum": 0,
+          "title": "Defect Cases",
+          "type": "integer"
+        },
+        "min_families": {
+          "minimum": 1,
+          "title": "Min Families",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "defect_cases",
+        "clean_controls",
+        "min_families"
+      ],
+      "title": "SplitTarget",
+      "type": "object"
+    }
+  },
+  "$id": "https://proofhunter.research/schemas/v1/ProtocolV1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "arms": {
+      "items": {
+        "$ref": "#/$defs/ArmSpec"
+      },
+      "minItems": 1,
+      "title": "Arms",
+      "type": "array"
+    },
+    "bootstrap": {
+      "patternProperties": {
+        "^[a-z][a-z0-9_]{0,63}$": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "title": "Bootstrap",
+      "type": "object"
+    },
+    "budgets_reported": {
+      "items": {
+        "enum": [
+          1,
+          3,
+          6
+        ],
+        "type": "integer"
+      },
+      "title": "Budgets Reported",
+      "type": "array"
+    },
+    "candidate_pool": {
+      "patternProperties": {
+        "^[a-z][a-z0-9_]{0,63}$": {}
+      },
+      "title": "Candidate Pool",
+      "type": "object"
+    },
+    "contract_id": {
+      "const": "checkout-rounding@1",
+      "title": "Contract Id",
+      "type": "string"
+    },
+    "invocation_timeout_seconds": {
+      "const": 5,
+      "title": "Invocation Timeout Seconds",
+      "type": "integer"
+    },
+    "master_seed": {
+      "title": "Master Seed",
+      "type": "integer"
+    },
+    "max_confirmations": {
+      "const": 1,
+      "title": "Max Confirmations",
+      "type": "integer"
+    },
+    "max_invocations_per_episode": {
+      "const": 15,
+      "title": "Max Invocations Per Episode",
+      "type": "integer"
+    },
+    "max_pairs": {
+      "const": 6,
+      "title": "Max Pairs",
+      "type": "integer"
+    },
+    "max_retries_per_episode": {
+      "const": 2,
+      "title": "Max Retries Per Episode",
+      "type": "integer"
+    },
+    "production_lock_sha256": {
+      "additionalProperties": {
+        "pattern": "^[0-9a-f]{64}$",
+        "type": "string"
+      },
+      "propertyNames": {
+        "enum": [
+          "pyproject.toml",
+          "uv.lock",
+          "bench/policy.json"
+        ]
+      },
+      "title": "Production Lock Sha256",
+      "type": "object"
+    },
+    "replicate_seeds": {
+      "items": {
+        "type": "integer"
+      },
+      "maxItems": 5,
+      "minItems": 5,
+      "title": "Replicate Seeds",
+      "type": "array"
+    },
+    "required_clean_coverage": {
+      "items": {
+        "$ref": "#/$defs/CoverageTag"
+      },
+      "title": "Required Clean Coverage",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "research-protocol-v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "snap_routing": {
+      "const": "disabled",
+      "title": "Snap Routing",
+      "type": "string"
+    },
+    "split_targets": {
+      "additionalProperties": {
+        "$ref": "#/$defs/SplitTarget"
+      },
+      "propertyNames": {
+        "enum": [
+          "train",
+          "validation",
+          "test"
+        ]
+      },
+      "title": "Split Targets",
+      "type": "object"
+    },
+    "starting_sha": {
+      "pattern": "^[0-9a-f]{40}$",
+      "title": "Starting Sha",
+      "type": "string"
+    },
+    "track_b_status": {
+      "const": "design_only_blocked_no_qualified_sandbox",
+      "title": "Track B Status",
+      "type": "string"
+    },
+    "verified_candidate_sha": {
+      "pattern": "^[0-9a-f]{40}$",
+      "title": "Verified Candidate Sha",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "starting_sha",
+    "verified_candidate_sha",
+    "production_lock_sha256",
+    "contract_id",
+    "max_pairs",
+    "max_confirmations",
+    "max_retries_per_episode",
+    "max_invocations_per_episode",
+    "invocation_timeout_seconds",
+    "required_clean_coverage",
+    "candidate_pool",
+    "snap_routing",
+    "master_seed",
+    "replicate_seeds",
+    "bootstrap",
+    "budgets_reported",
+    "split_targets",
+    "arms",
+    "track_b_status"
+  ],
+  "title": "ProtocolV1",
+  "type": "object"
+}

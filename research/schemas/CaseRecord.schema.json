@@ -1,0 +1,139 @@
+{
+  "$defs": {
+    "Split": {
+      "enum": [
+        "train",
+        "validation",
+        "test"
+      ],
+      "title": "Split",
+      "type": "string"
+    }
+  },
+  "$id": "https://proofhunter.research/schemas/v1/CaseRecord.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Public, label-free Track A case row. Labels live in a separate ``LabelFile``.",
+  "properties": {
+    "base_source_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Base Source Sha256",
+      "type": "string"
+    },
+    "candidate_seed": {
+      "maximum": 4294967295,
+      "minimum": 0,
+      "title": "Candidate Seed",
+      "type": "integer"
+    },
+    "case_id": {
+      "pattern": "^[A-Za-z0-9._:@/+-]{1,128}$",
+      "title": "Case Id",
+      "type": "string"
+    },
+    "contract_id": {
+      "const": "checkout-rounding@1",
+      "title": "Contract Id",
+      "type": "string"
+    },
+    "defect_origin": {
+      "pattern": "^[A-Za-z0-9._:@/+-]{1,128}$",
+      "title": "Defect Origin",
+      "type": "string"
+    },
+    "family_id": {
+      "pattern": "^[a-z][a-z0-9_]{0,63}$",
+      "title": "Family Id",
+      "type": "string"
+    },
+    "head_source_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Head Source Sha256",
+      "type": "string"
+    },
+    "near_dup_cluster": {
+      "pattern": "^[A-Za-z0-9._:@/+-]{1,128}$",
+      "title": "Near Dup Cluster",
+      "type": "string"
+    },
+    "params": {
+      "patternProperties": {
+        "^[a-z][a-z0-9_]{0,63}$": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            }
+          ]
+        }
+      },
+      "title": "Params",
+      "type": "object"
+    },
+    "params_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Params Sha256",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "research-case-v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "split": {
+      "$ref": "#/$defs/Split"
+    },
+    "template_id": {
+      "pattern": "^[A-Za-z0-9._:@/+-]{1,128}$",
+      "title": "Template Id",
+      "type": "string"
+    },
+    "template_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Template Sha256",
+      "type": "string"
+    },
+    "template_version": {
+      "pattern": "^[A-Za-z0-9._:@/+-]{1,128}$",
+      "title": "Template Version",
+      "type": "string"
+    },
+    "track": {
+      "const": "track_a",
+      "title": "Track",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "track",
+    "case_id",
+    "split",
+    "family_id",
+    "defect_origin",
+    "near_dup_cluster",
+    "template_id",
+    "template_version",
+    "template_sha256",
+    "params",
+    "params_sha256",
+    "contract_id",
+    "base_source_sha256",
+    "head_source_sha256",
+    "candidate_seed"
+  ],
+  "title": "CaseRecord",
+  "type": "object"
+}

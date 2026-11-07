@@ -1,0 +1,29 @@
+{
+  "candidate_tests": [
+    {
+      "origin": "fail_to_pass",
+      "test_id": "tests/test_core.py::test_total"
+    },
+    {
+      "origin": "pass_to_pass",
+      "test_id": "tests/test_core.py::test_empty"
+    }
+  ],
+  "dataset_file_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+  "dataset_id": "SWE-bench/SWE-smith-py",
+  "dataset_revision": "4444444444444444444444444444444444444444",
+  "defect_origin": "lm_rewrite:example/repo:x1",
+  "executed": false,
+  "execution_status": "blocked_no_qualified_sandbox",
+  "instance_id": "example__repo.abc1234.lm_rewrite__x1",
+  "label_status": "unverified_design_only",
+  "license_spdx": "MIT",
+  "license_verified": true,
+  "redistribution": "allowed",
+  "repo": "example/repo",
+  "repo_commit": "6666666666666666666666666666666666666666",
+  "schema_version": "research-swe-smith-task-v1",
+  "split": "train",
+  "split_group": "example/repo",
+  "track": "track_b"
+}
