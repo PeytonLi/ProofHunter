@@ -5,6 +5,7 @@ from __future__ import annotations
 import threading
 import uuid
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -62,3 +63,15 @@ def model_call_entry(*, provider: str, unit: str, quantity: float, cost_usd: flo
         pricing_date=pricing_date, wall_ms=wall_ms, queue_ms=None, measurement_mode=mode,
         paid=True, estimated_job_usd=estimated_job_usd, coordinator_checkin_ref=None,
         teardown_verified=None)
+
+
+@dataclass
+class Usage:
+    """Per-episode provider usage of one arm (all attempts, including failures)."""
+
+    calls: int = 0
+    input_tokens: int = 0
+    cached_tokens: int = 0
+    output_tokens: int = 0
+    cost_usd: float = 0.0
+    wall_ms: float = 0.0

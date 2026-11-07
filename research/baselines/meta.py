@@ -33,7 +33,7 @@ from proofhunter.meta import (
     create_meta_port,
 )
 from research.baselines.config import load_models
-from research.baselines.ledger import model_call_entry
+from research.baselines.ledger import Usage, model_call_entry
 from research.schemas.interfaces import HypothesisGenerator, Ledger
 from research.schemas.models import CostStatus, GeneratorInput, LedgerPhase, MeasurementMode
 
@@ -163,6 +163,7 @@ class MetaGenerator:
     case_id: str | None = None
     generator_id: str = GENERATOR_ID
     calls: list[MetaCall] = field(default_factory=list)
+    usage: Usage = field(default_factory=Usage)
 
     def __post_init__(self) -> None:
         assert MAX_COMPLETION_TOKENS == 4096
@@ -191,11 +192,23 @@ class MetaGenerator:
                                    plan.provenance.latency_ms, None, self.model))
         return c.HypothesisPlanPayload(hypotheses=plan.hypotheses)
 
+    @property
+    def degraded(self) -> str | None:
+        last = self.last
+        return None if last is None or last.reason_code is None else last.reason_code.value
+
     def _record(self, attempts: list[AttemptUsage], start: float) -> None:
-        if self.ledger is None or not attempts:
-            return
         meta = load_models()["meta"]
         price = meta["pricing_usd_per_1m_tokens"][self.model]
+        self.usage.calls += len(attempts)
+        self.usage.wall_ms += (time.monotonic() - start) * 1000
+        for a in attempts:
+            self.usage.input_tokens += a.prompt_tokens or 0
+            self.usage.cached_tokens += a.cached_tokens or 0
+            self.usage.output_tokens += a.completion_tokens or 0
+            self.usage.cost_usd += attempt_cost(a, price)
+        if self.ledger is None or not attempts:
+            return
         complete = all(a.complete for a in attempts)
         if complete:
             unit, quantity = "tokens", float(sum(

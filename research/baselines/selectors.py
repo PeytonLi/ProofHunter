@@ -149,7 +149,7 @@ class BuiltinEig:
 
 
 def make_selector(arm_id: str, *, seed: int) -> Selector:
-    name = ARM_SELECTORS.get(arm_id, arm_id)
+    name = ARM_SELECTORS.get(arm_id, "eig" if arm_id.startswith("generator:") else arm_id)
     if name == "fixed_order":
         return FixedOrder(arm_id)
     if name == "uniform_random":

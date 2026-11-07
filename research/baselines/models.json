@@ -96,7 +96,8 @@
           }
         }
       }
-    }
+    },
+    "generator_strict_schema": true
   },
   "meta": {
     "provider": "meta",
@@ -132,5 +133,31 @@
       "meta_muse_wonder_eig": "muse-wonder-1.0"
     },
     "arms_note": "Both arms are enabled by default (coordinator decision 2026-11-07) and share the adapter settings: max_completion_tokens=4096, reasoning_effort=low, temperature 0, 2 attempts, Snap disabled."
+  },
+  "grid": {
+    "arm_name": "<role>:<model>",
+    "roles": {
+      "generator": "production plan prompt once (proofhunter.meta.build_request) + production plan validation, then the built-in EIG selector picks; fallback: built-in plan",
+      "reviewer": "rank <=6 pool ids once, no feedback; fallback: fixed order",
+      "agent": "run_pair tool restricted to the pool, harness 6-pair budget, pair feedback; fallback: fixed order"
+    },
+    "models": {
+      "gpt-6.1-sol": "openai",
+      "gpt-6-astra": "openai",
+      "muse-spark-1.3": "meta",
+      "muse-wonder-1.0": "meta"
+    },
+    "clients": {
+      "openai": "Responses API, reasoning low, max_output_tokens 4096, store false",
+      "meta": "chat completions at the production endpoint with the production request settings (max_completion_tokens 4096, reasoning_effort low, temperature 0); generator role uses the production adapter itself"
+    },
+    "retry": "reviewer/agent: frontier.retry_policy for both providers; generator: 2 attempts (production Meta adapter) for both providers",
+    "aliases": {
+      "meta_muse_spark_eig": "generator:muse-spark-1.3",
+      "meta_muse_wonder_eig": "generator:muse-wonder-1.0",
+      "frontier_reviewer": "reviewer:gpt-6.1-sol",
+      "frontier_agent": "agent:gpt-6.1-sol"
+    },
+    "skipped": {}
   }
 }
