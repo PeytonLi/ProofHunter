@@ -42,6 +42,7 @@ from proofhunter.contracts import (
     PlanningContext,
     ProbeRecord,
     ProbeSelection,
+    Profile,
     ProviderName,
     PrTarget,
     PublishResult,
@@ -52,6 +53,7 @@ from proofhunter.contracts import (
     Replay,
     ReplayRequest,
     RouteDecision,
+    RunCheckpoint,
     RunEvent,
     RunKind,
     RunLease,
@@ -62,6 +64,7 @@ from proofhunter.contracts import (
     SourceBundle,
     Strategy,
     VerdictResult,
+    WorkerHeartbeat,
 )
 
 if TYPE_CHECKING:
@@ -268,6 +271,17 @@ class RunStore(Protocol):
     def checkpoint(self, lease: RunLease, event: RunEvent) -> None:
         ...
 
+    def reserve_progress(self, lease: RunLease, checkpoint: RunCheckpoint) -> RunCheckpoint:
+        """Atomically persist immutable pin / increasing pre-call provider allocations.
+
+        Fence owner, epoch, trusted-time expiry and terminal state. Reject target/pin
+        changes, decreasing or unchanged progress and counts above run-specific caps.
+        Reserve before fetch/Meta/Snap I/O (including every retry); never hold a DB
+        transaction across I/O. Ambiguous calls stay charged on reclaim. A rejected
+        or unacknowledged reservation authorizes no provider I/O.
+        """
+        ...
+
     def record_attempt(self, lease: RunLease, attempt: AttemptRecord) -> None:
         ...
 
@@ -297,6 +311,32 @@ class RunRecord:
     probes: tuple[ProbeRecord, ...] = ()
     attempts: tuple[AttemptRecord, ...] = ()
     events: tuple[RunEvent, ...] = field(default_factory=tuple)
+    checkpoint: RunCheckpoint | None = None
+
+    @property
+    def recoverable(self) -> bool:
+        """False for legacy records without a trusted durable progress ledger."""
+        return self.checkpoint is not None
+
+
+@runtime_checkable
+class HeartbeatStore(Protocol):
+    """Durable worker liveness (owner: store); never query providers for readiness."""
+
+    def write_heartbeat(self, heartbeat: WorkerHeartbeat) -> None:
+        """Authenticated internal writer only. Use submitted TTL (0 < TTL <= 60s),
+        but replace both timestamps with trusted store UTC time. Atomic per-worker
+        upsert; reject regressing trusted time, never extend expiry on equal time.
+        A changed profile/fingerprint replaces that worker's previous record.
+        """
+        ...
+
+    def read_heartbeat(self, profile: Profile,
+                       config_fingerprint: str) -> WorkerHeartbeat | None:
+        """Return newest matching fresh heartbeat, or None (also on clock rollback).
+        Read and freshness test use trusted store time; observed <= now < expires.
+        """
+        ...
 
 
 @runtime_checkable
@@ -349,6 +389,8 @@ class ApiDependencies:
     validator: RepositoryValidator
     webhook: WebhookVerifier | None
     clock: Clock
+    heartbeat_store: HeartbeatStore | None = None
+    config_fingerprint: str | None = None
 
 
 # ---------------------------------------------------------------------------

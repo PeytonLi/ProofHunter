@@ -86,6 +86,9 @@ MAX_WEBHOOK_BODY_BYTES: Final = 256 * 1024
 MAX_PR_URL_LENGTH: Final = 512
 MAX_PROBES: Final = 15
 MAX_ATTEMPTS: Final = 15
+HEARTBEAT_TTL_SECONDS: Final = 30
+MAX_HEARTBEAT_TTL_SECONDS: Final = 60
+HEARTBEAT_INTERVAL_SECONDS: Final = 10
 MEASUREMENT_DECIMALS: Final = 12
 PROBABILITY_SUM_TOLERANCE: Final = 1e-9
 ROUTE_PROBABILITY_TOLERANCE: Final = 0.01
@@ -107,6 +110,11 @@ Q_OTHER: Final = 0.20
 # ---------------------------------------------------------------------------
 # Enums
 # ---------------------------------------------------------------------------
+
+
+class Profile(StrEnum):
+    OFFLINE = "offline"
+    LIVE = "live"
 
 
 class RunState(StrEnum):
@@ -1611,6 +1619,49 @@ class ReceiptV1(Contract):
 # ---------------------------------------------------------------------------
 # Persistence, recovery, quotas and publishing
 # ---------------------------------------------------------------------------
+
+
+class WorkerHeartbeat(Contract):
+    """Internal liveness record; persisted timestamps come from the store clock."""
+
+    worker_id: SafeToken
+    profile: Profile
+    config_fingerprint: Sha256Hex
+    observed_at: UtcTimestamp
+    expires_at: UtcTimestamp
+
+    @model_validator(mode="after")
+    def _bounded_ttl(self) -> Self:
+        ttl = (self.expires_at - self.observed_at).total_seconds()
+        if not 0 < ttl <= MAX_HEARTBEAT_TTL_SECONDS:
+            raise ValueError("heartbeat TTL must be positive and at most 60 seconds")
+        return self
+
+    def is_fresh(self, profile: Profile, config_fingerprint: str, now: datetime) -> bool:
+        """Fail closed on clock rollback, expiry, profile or config mismatch."""
+        return (self.profile == profile and self.config_fingerprint == config_fingerprint
+                and self.observed_at <= now < self.expires_at)
+
+
+class ProviderAllocations(Contract):
+    """Pre-call high-water marks, including retries and ambiguous requests."""
+
+    meta: Annotated[StrictInt, Field(ge=0, le=2)] = 0
+    snap: Annotated[StrictInt, Field(ge=0, le=3)] = 0
+
+
+class RunCheckpoint(Contract):
+    """Internal durable progress; the store enforces immutable pin and monotonic counts."""
+
+    pinned_revision: PinnedRevision | None = None
+    provider_allocations: ProviderAllocations = Field(default_factory=ProviderAllocations)
+
+    @model_validator(mode="after")
+    def _pin_before_providers(self) -> Self:
+        if self.pinned_revision is None and (
+                self.provider_allocations.meta or self.provider_allocations.snap):
+            raise ValueError("provider allocation requires a pinned revision")
+        return self
 
 
 class RunLease(Contract):

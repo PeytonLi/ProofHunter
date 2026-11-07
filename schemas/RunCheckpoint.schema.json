@@ -1,0 +1,106 @@
+{
+  "$defs": {
+    "PinnedRevision": {
+      "additionalProperties": false,
+      "properties": {
+        "base_sha": {
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Base Sha",
+          "type": "string"
+        },
+        "head_sha": {
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Head Sha",
+          "type": "string"
+        },
+        "installation_id": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "title": "Installation Id",
+          "type": "integer"
+        },
+        "number": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Number",
+          "type": "integer"
+        },
+        "owner": {
+          "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9._-]{1,100}$",
+          "title": "Owner",
+          "type": "string"
+        },
+        "repo": {
+          "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9._-]{1,100}$",
+          "title": "Repo",
+          "type": "string"
+        },
+        "repo_id": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "title": "Repo Id",
+          "type": "integer"
+        },
+        "resolved_at": {
+          "format": "date-time",
+          "title": "Resolved At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "owner",
+        "repo",
+        "number",
+        "repo_id",
+        "installation_id",
+        "base_sha",
+        "head_sha",
+        "resolved_at"
+      ],
+      "title": "PinnedRevision",
+      "type": "object"
+    },
+    "ProviderAllocations": {
+      "additionalProperties": false,
+      "description": "Pre-call high-water marks, including retries and ambiguous requests.",
+      "properties": {
+        "meta": {
+          "default": 0,
+          "maximum": 2,
+          "minimum": 0,
+          "title": "Meta",
+          "type": "integer"
+        },
+        "snap": {
+          "default": 0,
+          "maximum": 3,
+          "minimum": 0,
+          "title": "Snap",
+          "type": "integer"
+        }
+      },
+      "title": "ProviderAllocations",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Internal durable progress; the store enforces immutable pin and monotonic counts.",
+  "properties": {
+    "pinned_revision": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PinnedRevision"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "provider_allocations": {
+      "$ref": "#/$defs/ProviderAllocations"
+    }
+  },
+  "title": "RunCheckpoint",
+  "type": "object"
+}

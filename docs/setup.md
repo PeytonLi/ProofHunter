@@ -116,3 +116,106 @@ Fixture adapters in `fixtures/adapters.py`:
 - `python tools/gate.py setup` checks the lock (`uv lock --check`, `uv sync --locked --check`), fixture and schema drift (`python -m fixtures.build --check`), runs `pytest tests/contracts`, ruff on setup paths and mypy strict on the shared modules and fixtures.
 - `python tools/gate.py integrated` checks `REQUIRED_IMPLEMENTATIONS`, reruns the setup gate, runs the full `pytest -q`, both demo cases, counterexample replay, refusal of a tampered receipt and the sample bench, with all outputs in a temporary directory. It fails until every role module exists.
 - Both strip provider credentials from the environment and force `PROOFHUNTER_PROFILE=offline`.
+
+## Central refreeze: heartbeat and recovery
+
+These are additive internal contracts, not new public receipt fields. Existing
+receipts, canonical hashes, demo sources, provider fixtures and `uv.lock` remain
+unchanged. Schema version remains `1.0`. New exports:
+
+```python
+from proofhunter.contracts import (
+    Profile, WorkerHeartbeat, ProviderAllocations, RunCheckpoint,
+    HEARTBEAT_TTL_SECONDS, MAX_HEARTBEAT_TTL_SECONDS, HEARTBEAT_INTERVAL_SECONDS,
+)
+from proofhunter.config import public_mode_config, mode_config_fingerprint
+from proofhunter.ports import HeartbeatStore, RunStore, RunRecord, ApiDependencies
+from fixtures.adapters import InMemoryHeartbeatStore, InMemoryRunStore
+```
+
+`proofhunter.config.Profile` re-exports the same enum for old imports. New JSON
+Schema snapshots and matching samples are `schemas/{WorkerHeartbeat,
+ProviderAllocations,RunCheckpoint}.schema.json` and `schemas/samples/<name>.json`.
+The heartbeat sample fingerprint is computed from offline settings and the demo
+enrollment. `tests/contracts/test_progress.py` is the executable wire handoff.
+
+### Heartbeat and readiness
+
+- `HeartbeatStore.write_heartbeat(heartbeat: WorkerHeartbeat) -> None` and
+  `read_heartbeat(profile: Profile, config_fingerprint: str) -> WorkerHeartbeat | None`
+  are synchronous, internal authenticated persistence calls, not provider calls.
+  Production must durably upsert by worker ID, atomically, across API/worker
+  processes and restarts. The in-memory fixture is only an example.
+- `WorkerHeartbeat` has `worker_id: SafeToken`, `profile: Profile`,
+  `config_fingerprint: Sha256Hex`, `observed_at: UtcTimestamp`,
+  `expires_at: UtcTimestamp`. Worker IDs are opaque, never filesystem paths.
+  A submitted heartbeat conveys only identity, config and a requested duration.
+  Ignore its absolute timestamps: assign `observed_at = trusted_store_now` and
+  `expires_at = trusted_store_now + submitted_duration`. Validate positive TTL
+  at most 60 seconds. Default TTL is 30 seconds; worker refresh interval is 10
+  seconds, including while awaiting long-running work, not just when idle.
+- Per-worker timestamps must increase. Reject clock rollback; equal server time
+  is a no-op only for the same mode/fingerprint and never extends expiry (reject
+  config changes at equal time). A newer mode/config replaces that worker's old
+  record. Reads select the newest matching fresh worker, deterministic by worker
+  ID on ties. Fresh means exactly `observed_at <= now < expires_at`; future,
+  absent, expired or mismatched records return `None`.
+- API and worker compute `mode_config_fingerprint(settings, loaded_enrollments)`
+  using the same trusted, enabled registry. This is canonical SHA-256 over
+  `public_mode_config`, an explicit versioned public-safe allowlist of profile,
+  schema/policies, budgets, quotas, intake/runner/check/webhook modes, fixed
+  provider/model identifiers, runner API origin/snapshot/image, heartbeat policy
+  and sorted enrollment fingerprints. It makes no I/O or secret reads. It omits
+  credentials (including their hashes), private-key/database/config paths,
+  installation/app IDs, agent identity, bind host and service origin. Credential
+  rotation does not change it; validate required credentials at startup instead.
+  Changes to included config require a matching new heartbeat before readiness.
+- `ApiDependencies.heartbeat_store: HeartbeatStore | None = None` and
+  `.config_fingerprint: str | None = None` preserve old constructor calls. **None
+  is not a readiness bypass.** Store/API must return 503 if either is missing,
+  the database schema is not ready, required mode configuration is invalid, or
+  no matching fresh heartbeat exists. Only all three predicates permit 200.
+  Return no secrets and make no provider requests. Worker/integration must inject
+  the same HeartbeatStore and fingerprint and refresh at startup and throughout
+  polling/work. No worker means readiness fails closed, including offline mode.
+
+### Atomic durable progress before I/O
+
+- `RunCheckpoint(pinned_revision: PinnedRevision | None = None,
+  provider_allocations: ProviderAllocations = ProviderAllocations())` is frozen.
+  `ProviderAllocations(meta: strict int = 0, snap: strict int = 0)` has global
+  caps 2/3, counting all outbound requests, retries and ambiguous outcomes. A
+  nonzero count requires a pin. There is no expected output or source text here.
+- `RunRecord.checkpoint: RunCheckpoint | None = None` is appended to the existing
+  dataclass. `RunRecord.recoverable` is a read-only bool property indicating a
+  trusted progress ledger exists, **not** that arbitrary partial work may be
+  resumed. New rows start with `RunCheckpoint()`; legacy `None` means fail closed,
+  not a zeroed ledger synthesized from sanitized RunEvent text. Recovery still
+  reconstructs probes/attempts/beliefs and preserves the original deadline.
+- `RunStore.reserve_progress(lease: RunLease, checkpoint: RunCheckpoint) -> RunCheckpoint`
+  commits the proposed absolute high-water state in one transaction. CAS-check
+  the current owner, epoch, trusted-time expiry and nonterminal run. Reject a
+  different target (including repo/installation IDs), clearing/changing an
+  existing pin (including `resolved_at`), decreasing counts, unchanged progress,
+  or counts over this run's potentially lower `BudgetLimits`. Persist checkpoint
+  and corresponding budget provider usage together; rejection changes neither.
+  Replay pins must also match the original replay base/head.
+- After SourcePort.pin resolves once, persist it **before** source fetch or any
+  Meta/Snap call. On reclaim reuse that exact durable pin, never re-resolve a
+  moving PR. Before each provider call/retry reserve its allocation and await
+  successful persistence. For an adapter that retries internally, reserve its
+  entire maximum remaining request allowance before entering it; never refund
+  unused or ambiguous allocations. One serialized writer owns each lease; do
+  not share mutable reservation snapshots across concurrent adapter tasks.
+  Duplicate reservation is an error, not permission to repeat a request. Lost
+  acknowledgement authorizes no I/O; reload and conservatively keep charges.
+- Provider I/O is outside transactions. Lease loss stops old-worker publication;
+  reclaim returns the original pin/counters even before a probe exists. Neither
+  these provider counters nor heartbeat renewal replace sandbox attempt ledger,
+  confirmation reservation, global intake quotas or receipt/probe fencing.
+
+Setup G0 verifies DTOs, schemas and fixture semantics only. Production SQLite
+heartbeat/checkpoint migrations and API wiring belong to **store**; refresh,
+reservation and safe-resume orchestration belong to **integration**. They must
+consume this freeze before claiming readiness or transparent recovery is fixed.
+The independent benchmark/holdout findings remain owned by **bench**.

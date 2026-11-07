@@ -13,7 +13,7 @@ import base64
 import json
 import sys
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -40,6 +40,7 @@ SCHEMA_MODELS: tuple[type[BaseModel], ...] = (
     c.Budget, c.Replay, c.ReceiptV1, c.RunLease, c.RunEvent, c.AttemptRecord, c.QuotaPolicy,
     c.QuotaReservation, c.QuotaDecision, c.CheckIntent, c.PublishResult, c.GithubWebhookEvent,
     c.ProviderProvenance,
+    c.WorkerHeartbeat, c.ProviderAllocations, c.RunCheckpoint,
 )
 
 
@@ -114,6 +115,14 @@ def _samples() -> dict[str, Any]:
         "PrRef": c.PrRef(owner=target.owner, repo=target.repo, number=target.number),
         "PrTarget": target,
         "PinnedRevision": revision,
+        "WorkerHeartbeat": c.WorkerHeartbeat(
+            worker_id="worker-1", profile=c.Profile.OFFLINE,
+            config_fingerprint=_fixture_config_fingerprint(),
+            observed_at=receipt.created_at,
+            expires_at=receipt.created_at + timedelta(seconds=c.HEARTBEAT_TTL_SECONDS)),
+        "ProviderAllocations": c.ProviderAllocations(meta=1, snap=1),
+        "RunCheckpoint": c.RunCheckpoint(
+            pinned_revision=revision, provider_allocations=c.ProviderAllocations(meta=1, snap=1)),
         "PublicRevision": c.public_revision(revision),
         "Enrollment": enrollment,
         "EnrollmentRegistry": c.EnrollmentRegistry(schema_version="1.0",
@@ -190,6 +199,12 @@ def _samples() -> dict[str, Any]:
         "ProviderProvenance": plan.provenance,
     }
     return {name: _json(model) for name, model in samples.items()}
+
+
+def _fixture_config_fingerprint() -> str:
+    from proofhunter.config import load_settings, mode_config_fingerprint
+
+    return mode_config_fingerprint(load_settings({}), [catalog.demo_enrollment()])
 
 
 def _provider_examples() -> dict[str, Any]:

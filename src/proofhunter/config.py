@@ -10,14 +10,28 @@ from __future__ import annotations
 
 import json
 import os
-from collections.abc import Mapping
-from enum import StrEnum
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Annotated, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, StrictBool, StrictInt, ValidationError
 
-from proofhunter.contracts import BudgetLimits, Enrollment, EnrollmentRegistry, QuotaPolicy
+from proofhunter.contracts import (
+    HEARTBEAT_INTERVAL_SECONDS,
+    HEARTBEAT_TTL_SECONDS,
+    MAX_HEARTBEAT_TTL_SECONDS,
+    SCHEMA_VERSION,
+    BudgetLimits,
+    Enrollment,
+    EnrollmentRegistry,
+    PolicyVersions,
+    QuotaPolicy,
+    canonical_sha256,
+    enrollment_fingerprint,
+)
+from proofhunter.contracts import (
+    Profile as Profile,
+)
 from proofhunter.ports import ConfigError
 
 # Fixed provider origins and pinned identifiers (never user-supplied).
@@ -76,11 +90,6 @@ KNOWN_VARIABLES: Final = (
 )
 DEFAULT_ENROLLMENTS: Final = "config/enrollments.example.json"
 DEFAULT_DB_PATH: Final = ".proofhunter/proofhunter.sqlite3"
-
-
-class Profile(StrEnum):
-    OFFLINE = "offline"
-    LIVE = "live"
 
 
 class _Frozen(BaseModel):
@@ -259,6 +268,41 @@ def load_enrollments(path: Path) -> tuple[Enrollment, ...]:
     except (OSError, ValidationError, json.JSONDecodeError) as error:
         raise ConfigError(f"invalid enrollment registry {path.name}") from error
     return tuple(e for e in registry.enrollments if e.enabled)
+
+
+def public_mode_config(settings: Settings, enrollments: Sequence[Enrollment]) -> dict[str, object]:
+    """Explicit public-safe allowlist; no secret, secret digest, path or operator ID.
+
+    API and worker must pass the same loaded trusted enrollment registry. Hash
+    no arbitrary settings dump: redacted SecretStr values are not configuration.
+    """
+    return {
+        "fingerprint_version": "proofhunter-mode-config-v1",
+        "schema_version": SCHEMA_VERSION,
+        "profile": settings.profile.value,
+        "policy_versions": PolicyVersions().model_dump(mode="json"),
+        "budget": settings.budget.model_dump(mode="json"),
+        "quota": settings.quota.model_dump(mode="json"),
+        "enable_intake": settings.enable_intake,
+        "meta": {"model": settings.meta.model, "url": settings.meta.url},
+        "snap": {"model": settings.snap.model, "url": settings.snap.url},
+        "runner": {"enabled": settings.daytona.enable_live_runner,
+                   "api_url": settings.daytona.api_url,
+                   "snapshot": settings.daytona.snapshot,
+                   "image_digest": settings.daytona.image_digest},
+        "github": {"api_version": settings.github.api_version,
+                   "checks": settings.github.enable_checks,
+                   "webhook": settings.github.enable_webhook},
+        "heartbeat": {"ttl_seconds": HEARTBEAT_TTL_SECONDS,
+                      "max_ttl_seconds": MAX_HEARTBEAT_TTL_SECONDS,
+                      "interval_seconds": HEARTBEAT_INTERVAL_SECONDS},
+        "enrollments": sorted(enrollment_fingerprint(e) for e in enrollments if e.enabled),
+    }
+
+
+def mode_config_fingerprint(settings: Settings, enrollments: Sequence[Enrollment]) -> str:
+    """Deterministic canonical SHA-256 of public_mode_config, with no I/O."""
+    return canonical_sha256(public_mode_config(settings, enrollments))
 
 
 __all__ = [name for name in dir() if not name.startswith("_") and name != "annotations"]

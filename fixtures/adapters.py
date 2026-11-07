@@ -51,6 +51,7 @@ from proofhunter.contracts import (
     PinnedRevision,
     PlanningContext,
     ProbeRecord,
+    Profile,
     ProviderMode,
     ProviderName,
     ProviderProvenance,
@@ -66,6 +67,7 @@ from proofhunter.contracts import (
     RouteDecision,
     RouteMode,
     RouteReasonCode,
+    RunCheckpoint,
     RunEvent,
     RunEventKind,
     RunKind,
@@ -80,6 +82,7 @@ from proofhunter.contracts import (
     SourceFile,
     Strategy,
     WebhookAction,
+    WorkerHeartbeat,
     canonical_json,
     canonical_sha256,
     git_blob_sha1,
@@ -444,10 +447,11 @@ class InMemoryRunStore:
     """
 
     def __init__(self, clock: SteppingClock | None = None, ids: SequentialIds | None = None,
-                 quota: QuotaPolicy | None = None) -> None:
+                 quota: QuotaPolicy | None = None, budget: BudgetLimits | None = None) -> None:
         self._clock = clock or SteppingClock()
         self._ids = ids or SequentialIds()
         self._quota = quota or QuotaPolicy()
+        self._budget = budget or BudgetLimits()
         self._lock = threading.RLock()
         self.records: dict[str, RunRecord] = {}
         self.leases: dict[str, RunLease] = {}
@@ -483,10 +487,11 @@ class InMemoryRunStore:
         now = self._clock.now()
         run_id = self._ids.new_run_id()
         status = RunStatus(run_id=run_id, status=RunState.QUEUED, created_at=now, updated_at=now,
-                           is_stale=None, attempts_used=0, budget=initial_budget(now),
+                           is_stale=None, attempts_used=0, budget=initial_budget(now, self._budget),
                            verdict=None, reason_code=None, receipt_sha256=None)
         self.records[run_id] = RunRecord(run_id=run_id, run_kind=kind, target=target, seed=seed,
-                                         status=status, parent_receipt_sha256=parent)
+                                         status=status, parent_receipt_sha256=parent,
+                                         checkpoint=RunCheckpoint())
         self.requester[run_id] = requester_scope
         self.reservations.append(QuotaReservation(
             run_id=run_id, requester_scope=requester_scope, reserved_at=now,
@@ -528,7 +533,7 @@ class InMemoryRunStore:
             self.records[status.run_id] = RunRecord(
                 run_id=status.run_id, run_kind=RunKind.REPLAY, target=parent.target,
                 seed=receipt.seed, status=status, parent_receipt_sha256=receipt.receipt_sha256,
-                replay=receipt.replay)
+                replay=receipt.replay, checkpoint=RunCheckpoint())
             self.idempotency[key] = (body, status.run_id)
             return status
 
@@ -553,7 +558,8 @@ class InMemoryRunStore:
     def _check(self, lease: RunLease) -> RunRecord:
         held = self.leases.get(lease.run_id)
         if held is None or held.owner != lease.owner or held.epoch != lease.epoch or (
-                held.expires_at <= self._clock.now()):
+                held.expires_at <= self._clock.now()) or (
+                self.records[lease.run_id].status.status in TERMINAL_STATES):
             raise LeaseLostError(lease.run_id)
         return self.records[lease.run_id]
 
@@ -598,6 +604,38 @@ class InMemoryRunStore:
                                                    "updated_at": event.at})
             self._replace(record, events=(*record.events, event), status=status)
 
+    def reserve_progress(self, lease: RunLease, checkpoint: RunCheckpoint) -> RunCheckpoint:
+        with self._lock:
+            record = self._check(lease)
+            progress = RunCheckpoint.model_validate(checkpoint.model_dump())
+            previous = record.checkpoint
+            if previous is None:
+                raise ValueError("legacy run has no recoverable progress ledger")
+            pin = progress.pinned_revision
+            if previous.pinned_revision is not None and pin != previous.pinned_revision:
+                raise ValueError("pinned revision is immutable")
+            if pin is not None and any(getattr(pin, name) != getattr(record.target, name)
+                                       for name in PrTarget.model_fields):
+                raise ValueError("pinned revision must match trusted target")
+            if record.replay is not None and pin is not None and (
+                    pin.base_sha != record.replay.base_sha
+                    or pin.head_sha != record.replay.head_sha):
+                raise ValueError("replay pin must match original revisions")
+            before, after = previous.provider_allocations, progress.provider_allocations
+            if after.meta < before.meta or after.snap < before.snap:
+                raise ValueError("provider allocations cannot decrease")
+            limits = record.status.budget.limits
+            if after.meta > limits.max_meta_requests or after.snap > limits.max_snap_requests:
+                raise ValueError("provider allocations exceed run caps")
+            if progress == previous:
+                raise ValueError("progress must advance; duplicate reservation authorizes no I/O")
+            used = record.status.budget.used.model_dump()
+            used.update(meta_requests=after.meta, snap_requests=after.snap)
+            budget = Budget.model_validate({**record.status.budget.model_dump(), "used": used})
+            status = record.status.model_copy(update={"budget": budget})
+            self._replace(record, checkpoint=progress, status=status)
+            return progress
+
     def record_attempt(self, lease: RunLease, attempt: AttemptRecord) -> None:
         with self._lock:
             record = self._check(lease)
@@ -637,6 +675,43 @@ class InMemoryRunStore:
 
     def load_run(self, run_id: str) -> RunRecord:
         return self.records[run_id]
+
+
+class InMemoryHeartbeatStore:
+    """HeartbeatStore wire example only; production must persist across restarts."""
+
+    def __init__(self, clock: SteppingClock | None = None) -> None:
+        self._clock = clock or SteppingClock()
+        self._lock = threading.RLock()
+        self._heartbeats: dict[str, WorkerHeartbeat] = {}
+
+    def write_heartbeat(self, heartbeat: WorkerHeartbeat) -> None:
+        heartbeat = WorkerHeartbeat.model_validate(heartbeat.model_dump())
+        ttl = heartbeat.expires_at - heartbeat.observed_at
+        with self._lock:
+            now = self._clock.now()
+            previous = self._heartbeats.get(heartbeat.worker_id)
+            if previous is not None:
+                if now < previous.observed_at:
+                    raise ValueError("trusted heartbeat time cannot regress")
+                if now == previous.observed_at:
+                    if (heartbeat.profile, heartbeat.config_fingerprint) != (
+                            previous.profile, previous.config_fingerprint):
+                        raise ValueError("changed heartbeat requires advancing trusted time")
+                    return
+            stored = WorkerHeartbeat(
+                worker_id=heartbeat.worker_id, profile=heartbeat.profile,
+                config_fingerprint=heartbeat.config_fingerprint,
+                observed_at=now, expires_at=now + ttl)
+            self._heartbeats[stored.worker_id] = stored
+
+    def read_heartbeat(self, profile: Profile,
+                       config_fingerprint: str) -> WorkerHeartbeat | None:
+        with self._lock:
+            now = self._clock.now()
+            matches = [h for h in self._heartbeats.values()
+                       if h.is_fresh(profile, config_fingerprint, now)]
+            return max(matches, key=lambda h: (h.observed_at, h.worker_id), default=None)
 
 
 # ---------------------------------------------------------------- control API client
