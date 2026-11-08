@@ -13,6 +13,8 @@ from pathlib import Path
 
 ENV = {"PATH": "/usr/local/bin:/usr/bin:/bin", "LANG": "C.UTF-8", "HOME": "/nonexistent"}
 PYTHON = "/usr/local/bin/python3"
+# Public release-signing fingerprint shipped by the digest-pinned Python base image.
+PYTHON_GPG_KEY = "7169605F62C751356D054A26A821E680E5FA6305"
 DNS_NAMES = (
     "github.com",
     "pypi.org",
@@ -29,9 +31,6 @@ CHILD_TARGETS = (
     "169.254.169.254:80",
     "169.254.170.2:80",
 )
-# Public build-time variables baked into the pinned python:3.12-slim image:
-# GPG_KEY is the public fingerprint used to verify the CPython source tarball.
-SAFE_ENV_NAMES = frozenset({"GPG_KEY"})
 CREDENTIAL_PATHS = (
     "/root/.aws",
     "/root/.config/gcloud",
@@ -82,17 +81,25 @@ def metadata_denied(target: str) -> bool:
 
 def dns_denied(name: str) -> bool:
     try:
-        socket.getaddrinfo(name, 443)
-    except OSError:
+        result = subprocess.run(  # noqa: S603
+            [PYTHON, "-I", "-c", (
+                "import socket,sys\n"
+                "try: socket.getaddrinfo(sys.argv[1],443)\n"
+                "except socket.gaierror: sys.exit(2)\n"
+            ), name],
+            env=ENV, cwd="/", timeout=2, capture_output=True, check=False,
+            preexec_fn=isolate,
+        )
+    except subprocess.TimeoutExpired:
         return True
-    return False
+    return result.returncode == 2
 
 
 def main() -> None:
     secrets_absent = not any(
         key.upper().endswith(("KEY", "TOKEN", "SECRET", "PASSWORD", "CREDENTIALS"))
-        and key not in SAFE_ENV_NAMES
-        for key in os.environ
+        for key, value in os.environ.items()
+        if not (key == "GPG_KEY" and value == PYTHON_GPG_KEY)
     ) and not any(Path(path).exists() for path in CREDENTIAL_PATHS)
     os.environ.clear()
     os.environ.update(ENV)

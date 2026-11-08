@@ -62,12 +62,14 @@ async def test_verify_queues_and_polls(fake_http: FakeControlHttp) -> None:
     run_id = run_id_of(reply)
     assert "queued" in reply
     assert f"status {run_id}" in reply
-    assert "offline_fixture" in reply
+    assert "Mode: pending." in reply
+    assert "offline_fixture" not in reply
     assert api.creates == [idempotency_key(SENDER, "m-1")]
     status = await service.reply_for(SENDER, "m-2", f"status {run_id}")
     assert run_id in status
     assert "queued" in status
     assert "Attempts" in status
+    assert "Mode: pending." in status
     pending = await service.reply_for(SENDER, "m-3", f"evidence {run_id}")
     assert "no receipt yet" in pending
 
@@ -192,6 +194,28 @@ async def test_evidence_for_confirmed_counterexample() -> None:
     assert receipt.pinned_revision.head_sha in reply
     assert "offline_fixture" in reply
     assert "replay" in reply.lower()
+
+
+async def test_terminal_status_uses_receipt_mode_when_detail_is_absent() -> None:
+    receipt = fixture_receipt("buggy")
+
+    class Done(FixtureControlApi):
+        async def get_status(self, run_id: str) -> RunStatus:
+            return RunStatus(
+                run_id=receipt.run_id, status="completed", created_at=receipt.created_at,
+                updated_at=receipt.completed_at, is_stale=False, attempts_used=3,
+                budget=receipt.budget, verdict=receipt.verdict, reason_code=receipt.reason_code,
+                receipt_sha256=receipt.receipt_sha256,
+            )
+
+        async def get_receipt(self, run_id: str) -> ReceiptV1:
+            return receipt
+
+    reply = await ChatService(Done(), ReplyLedger(MemoryKeyValue())).reply_for(
+        SENDER, "terminal-mode", f"status {receipt.run_id}")
+    assert "confirmed_regression" in reply
+    assert "Mode: offline_fixture." in reply
+    assert "Mode: pending." not in reply
 
 
 async def test_evidence_for_no_defect_shows_coverage_and_limits() -> None:

@@ -27,6 +27,7 @@ RUN_ID_PATTERN: Final = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
 )
 _UUIDISH: Final = re.compile(r"(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+_AGENT_MENTION: Final = re.compile(r"@agent1[023456789acdefghjklmnpqrstuvwxyz]{59}")
 _MAX_PR_NUMBER: Final = 2**31 - 1
 
 _VERIFY_WORDS: Final = frozenset({"verify", "check", "investigate", "test"})
@@ -104,9 +105,10 @@ def _has_control_chars(text: str) -> bool:
 def _strip_wrapping(token: str) -> str:
     """Remove one layer of chat formatting around a token (``<url>``, backticks, quotes)."""
     token = token.strip()
-    for left, right in (("<", ">"), ("`", "`"), ('"', '"'), ("'", "'"), ("(", ")")):
+    for left, right in (("**", "**"), ("<", ">"), ("`", "`"), ('"', '"'), ("'", "'"),
+                        ("(", ")")):
         if len(token) >= 2 and token.startswith(left) and token.endswith(right):
-            return token[1:-1]
+            return token[len(left):-len(right)]
     return token.rstrip(".,;:!") if _URLISH.search(token) else token
 
 
@@ -149,6 +151,9 @@ def parse_command(text: str) -> Command:
         return InvalidCommand(InvalidReason.CONTROL_CHARACTERS)
     tokens = [_strip_wrapping(t) for t in text.split()]
     tokens = [t for t in tokens if t]
+    # ASI:One may forward the routing mention as part of the command text.
+    if tokens and (tokens[0].lower() == "@proofhunter" or _AGENT_MENTION.fullmatch(tokens[0])):
+        tokens = tokens[1:]
     if not tokens:
         return InvalidCommand(InvalidReason.EMPTY)
     if len(tokens) > MAX_TOKENS:

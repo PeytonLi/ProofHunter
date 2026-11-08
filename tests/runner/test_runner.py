@@ -79,6 +79,7 @@ class FakeSandbox:
         assert command in (CANARY_COMMAND, OBSERVE_COMMAND)
         assert set(self.uploads) >= HARNESS_UPLOADS
         if command == CANARY_COMMAND:
+            assert timeout == 90
             assert set(self.uploads) == HARNESS_UPLOADS
             result = json.loads(json.dumps(CANARY_EXPECTED))
             if self.client.fault == "canary":

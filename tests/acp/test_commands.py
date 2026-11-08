@@ -15,6 +15,32 @@ from proofhunter.acp.commands import MAX_COMMAND_CHARS
 
 RUN = "00000000-05e7-4001-8000-000000000001"
 PR = "https://github.com/proofhunter-demo/checkout-demo/pull/1"
+MENTION = "@agent1qt7qj4vrjwxjax7cd4n4ajgn9mrf97ke2lzaau72p8f4exydamxdxhxru5y"
+
+
+@pytest.mark.parametrize(("text", "expected"), [
+    (f"verify {PR}", VerifyCommand(PR)),
+    (f"status {RUN}", StatusCommand(RUN)),
+    (f"evidence {RUN}", EvidenceCommand(RUN)),
+    ("help", HelpCommand()),
+])
+@pytest.mark.parametrize("mention", [MENTION, "@proofhunter", "@ProofHunter", "**@proofhunter**"])
+def test_asi_routing_mention_is_not_a_second_command(
+        mention: str, text: str, expected: object) -> None:
+    assert parse_command(f"{mention} {text}") == expected
+
+
+@pytest.mark.parametrize("text", [
+    f"{MENTION} verify {PR} and status {RUN}",
+    f"{MENTION} {MENTION} verify {PR}",
+    f"@someone verify {PR}",
+    f"@proofhunter @proofhunter verify {PR}",
+    f"@proofhunter verify {PR} and status {RUN}",
+    f"**@proofhunter** **@proofhunter** status {RUN}",
+    f"**@proofhunter** verify {PR} and status {RUN}",
+])
+def test_mentions_do_not_allow_ambiguous_commands(text: str) -> None:
+    assert isinstance(parse_command(text), InvalidCommand)
 
 
 @pytest.mark.parametrize("text", [

@@ -1,0 +1,6 @@
+# Keep lint overrides outside the research-frozen production manifest.
+extend = "pyproject.toml"
+extend-exclude = ["coordinate_proofhunter.py", "docs/canary"]
+
+[lint.extend-per-file-ignores]
+"research/data/templates.py" = ["E501", "RUF005"]
