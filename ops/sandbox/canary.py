@@ -88,6 +88,7 @@ def dns_denied(name: str) -> bool:
                 "except socket.gaierror: sys.exit(2)\n"
             ), name],
             env=ENV, cwd="/", timeout=2, capture_output=True, check=False,
+            preexec_fn=isolate,
         )
     except subprocess.TimeoutExpired:
         return True

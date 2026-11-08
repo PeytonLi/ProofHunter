@@ -65,6 +65,7 @@ def run(
     def subprocess_run(command: list[str], **kwargs: Any) -> Any:
         if command[-1] in DNS_NAMES:
             assert kwargs["timeout"] == 2
+            assert kwargs["preexec_fn"] is module.isolate
             return SimpleNamespace(returncode=0 if command[-1] == resolves else 2)
         assert kwargs["preexec_fn"] is module.isolate
         assert json.loads(kwargs["env"]["PH_TARGETS"]) == list(CHILD_TARGETS)

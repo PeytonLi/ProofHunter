@@ -79,6 +79,13 @@ documented here:
 
 ## Amended canary schema
 
+Follow-up approved by Peyton on 2026-11-07: DNS denial is required inside the
+untrusted child's empty network namespace, after dropping to UID 65534, using
+the same isolation function as the child connectivity probes. The trusted root
+harness may resolve DNS on basic Daytona; that is not evidence of child egress.
+Each DNS subprocess has a two-second deadline. Namespace setup failures fail
+the canary closed. The changed harness hash invalidates earlier approvals.
+
 The tier-3 canary (`egress_denied`) is replaced by the restricted-egress schema
 in `runner.approval.CANARY_EXPECTED`: `egress_policy: "restricted"`,
 `dns_denied`, `metadata_denied`, `secrets_absent`, `restricted_child`,
@@ -92,7 +99,7 @@ namespace blocks the gateway, public IPs and metadata.
 - This amendment covers only `PeytonLi/ProofHunter-Demo` live runs.
 - It does not authorize upgrading the Daytona account or changing org-wide
   network policy.
-- It does not weaken metadata, DNS, credential-absence, timeout, resource-limit,
+- It does not weaken metadata, child-namespace DNS, credential-absence, timeout, resource-limit,
   deletion-verification or receipt requirements.
 - Revocation condition: any observed credential, metadata 2xx, internal
   ProofHunter/Render endpoint, or control failure invalidates this approval and
