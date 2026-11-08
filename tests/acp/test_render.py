@@ -37,6 +37,16 @@ async def test_execution_label_requires_reported_mode(mode: ExecutionMode | None
             assert f"Mode: {mode.value}." in reply
 
 
+async def test_queued_reply_separates_confirmation_and_progress_command() -> None:
+    status = await FixtureControlApi().create_run(RunRequest(pr_url=PR_URL), "queued-format")
+    reply = render_queued(status)
+    assert reply.startswith("**Run accepted**\n\n- State: queued\n")
+    assert f"- Run ID: `{status.run_id}`" in reply
+    assert "\n\nThe run continues in the background after this reply.\n\n" in reply
+    assert f"**Check progress**\n\n```text\n@proofhunter status {status.run_id}\n```" in reply
+    assert len(reply) <= MAX_REPLY_CHARS
+
+
 @pytest.mark.parametrize("case", ["buggy", "fixed"])
 def test_evidence_groups_results_and_preserves_receipt_details(case: str) -> None:
     receipt = fixture_receipt(case)

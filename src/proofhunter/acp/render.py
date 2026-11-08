@@ -155,13 +155,15 @@ def _mode_label(mode: ExecutionMode | None) -> str:
 
 def render_queued(status: RunStatus) -> str:
     detail = status.detail
-    lines = [f"Run accepted. Run ID: {status.run_id}", f"State: {status.status.value}"]
+    lines = ["**Run accepted**", "", f"- State: {status.status.value}",
+             f"- Run ID: `{status.run_id}`"]
     if detail is not None and detail.repo_full_name and detail.pr_number:
-        lines.append(f"PR: {safe_text(detail.repo_full_name)} #{detail.pr_number}")
-    lines.append(_mode_label(detail.execution_mode if detail else None))
-    lines.append(f"Check progress with: status {status.run_id}")
+        lines.append(f"- PR: {safe_text(detail.repo_full_name)} #{detail.pr_number}")
+    lines.append(f"- {_mode_label(detail.execution_mode if detail else None)}")
     if status.status in ACTIVE_STATES:
-        lines.append("The run continues in the background after this reply.")
+        lines.extend(["", "The run continues in the background after this reply."])
+    lines.extend(["", "**Check progress**", "", "```text",
+                  f"@proofhunter status {status.run_id}", "```"])
     return "\n".join(lines)
 
 
