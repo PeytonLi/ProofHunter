@@ -83,7 +83,7 @@ def test_bounded_wrapper_streams(
     )
 
     def popen(command: list[str], **kwargs: Any) -> Any:
-        assert command[:4] == ["/usr/bin/python3", "-I", "-B", "-c"]
+        assert command[:4] == ["/usr/local/bin/python3", "-I", "-B", "-c"]
         assert kwargs["env"] == module.ENV
         assert kwargs["start_new_session"] is True
         return process
@@ -124,3 +124,36 @@ def test_resource_policy_rejects_booleans() -> None:
                 }
             }
         )
+
+
+def test_child_network_namespace_before_privilege_drop(monkeypatch: pytest.MonkeyPatch) -> None:
+    module = wrapper()
+    calls: list[Any] = []
+    monkeypatch.setattr(module.os, "unshare", lambda flags: calls.append(("unshare", flags)))
+    monkeypatch.setattr(module.os, "setgroups", lambda groups: calls.append(("setgroups", groups)))
+    monkeypatch.setattr(module.os, "setgid", lambda gid: calls.append(("setgid", gid)))
+    monkeypatch.setattr(module.os, "setuid", lambda uid: calls.append(("setuid", uid)))
+    monkeypatch.setattr(
+        module.ctypes, "CDLL", lambda _: SimpleNamespace(prctl=lambda *a: calls.append("nnp") or 0)
+    )
+    monkeypatch.setattr(module.resource, "setrlimit", lambda kind, limit: calls.append("rlimit"))
+    module.restrict(256, 16, 5)
+    assert calls[:5] == [
+        ("unshare", module.os.CLONE_NEWNET),
+        ("setgroups", []),
+        ("setgid", 65534),
+        ("setuid", 65534),
+        "nnp",
+    ]
+
+
+def test_namespace_failure_aborts_before_privilege_drop(monkeypatch: pytest.MonkeyPatch) -> None:
+    module = wrapper()
+
+    def refuse(flags: int) -> None:
+        raise PermissionError("unshare refused")
+
+    monkeypatch.setattr(module.os, "unshare", refuse)
+    monkeypatch.setattr(module.os, "setuid", lambda uid: pytest.fail("continued without netns"))
+    with pytest.raises(PermissionError):
+        module.restrict(256, 16, 5)

@@ -232,6 +232,8 @@ Use SQLite migrations for `runs`, `idempotency_keys`, `inbound_messages`, `webho
 
 ## 7. Security acceptance criteria
 
+Amendment `PRD-A1-basic-daytona@2026-11-07` (docs/amendments/PRD-A1-basic-daytona.md), approved by Peyton on 2026-11-07, supersedes strict block-all egress for the `PeytonLi/ProofHunter-Demo` scope: basic-tier Daytona with restricted egress, explicit acceptance of the provider gateway `172.20.0.1:22` SSH exposure as residual risk, and the compensating controls listed there (exact-repo allowlist, zero secrets/env injection, pinned image, ephemeral sandboxes with verified deletion, strict timeouts, and an empty network namespace for the untrusted child).
+
 | Threat | Required control and verification |
 |---|---|
 | SSRF or scope escape | Parse with a real URL parser and validate canonical authority `github.com`, HTTPS, no user info/port/query/fragment/percent escapes, exactly `/owner/repo/pull/positive-int`; reject encoded separators, Unicode and overflow. Compare normalized names plus immutable GitHub repo/installation IDs. Construct paths against fixed `api.github.com` origin. Reject source redirects. Enforce same-repo head and base. Check that enrollment repo is public. |

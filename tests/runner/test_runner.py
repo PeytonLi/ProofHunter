@@ -8,13 +8,17 @@ from uuid import uuid4
 
 import pytest
 from daytona import CreateSandboxFromSnapshotParams
-from daytona.common.errors import DaytonaProcessExecutionTimeoutError
+from daytona.common.errors import DaytonaNotFoundError, DaytonaProcessExecutionTimeoutError
 
 from fixtures import adapters, catalog
 from proofhunter import contracts as c
 from proofhunter.config import load_settings
 from proofhunter.runner import DaytonaRunner, ReviewedFixtureRunner, create_runner_port
-from proofhunter.runner.daytona import CANARY_COMMAND, CANARY_EXPECTED, ENV, OBSERVE_COMMAND
+from proofhunter.runner import daytona as daytona_module
+from proofhunter.runner.approval import AMENDMENT, HARNESS_DIR, pinned_image
+from proofhunter.runner.daytona import CANARY_COMMAND, CANARY_EXPECTED, OBSERVE_COMMAND
+
+HARNESS_UPLOADS = {f"{HARNESS_DIR}/wrapper.py", f"{HARNESS_DIR}/canary.py"}
 
 
 def request(
@@ -71,13 +75,14 @@ class FakeSandbox:
         timeout: int | None = None,
     ) -> Any:
         assert cwd == "/"
-        assert env == ENV
+        assert env is None
         assert command in (CANARY_COMMAND, OBSERVE_COMMAND)
+        assert set(self.uploads) >= HARNESS_UPLOADS
         if command == CANARY_COMMAND:
-            assert not self.uploads
+            assert set(self.uploads) == HARNESS_UPLOADS
             result = json.loads(json.dumps(CANARY_EXPECTED))
             if self.client.fault == "canary":
-                result["egress_denied"] = False
+                result["metadata_denied"] = False
             if self.client.fault in result["probes_denied"]:
                 result["probes_denied"][self.client.fault] = False
             return SimpleNamespace(exit_code=0, result=json.dumps(result))
@@ -123,8 +128,20 @@ class FakeSandbox:
         return SimpleNamespace(exit_code=1 if fault == "nonzero" else 0, result=raw)
 
 
+class FakeSnapshots:
+    def __init__(self, client: "FakeSDK") -> None:
+        self.client = client
+
+    def get(self, name: str) -> Any:
+        image = pinned_image("sha256:" + "a" * 64)
+        if self.client.fault == "pin":
+            image = "python:3.12-slim"
+        return SimpleNamespace(name=name, image_name=image, state="active")
+
+
 class FakeSDK:
     def __init__(self) -> None:
+        self.snapshot = FakeSnapshots(self)
         self.created: list[FakeSandbox] = []
         self.deleted: list[FakeSandbox] = []
         self.params: list[CreateSandboxFromSnapshotParams] = []
@@ -141,7 +158,8 @@ class FakeSDK:
         assert params.network_block_all is True
         assert params.volumes == []
         assert params.secrets == {}
-        assert params.env_vars == ENV
+        assert params.env_vars == {}
+        assert params.ephemeral is True
         assert params.labels
         assert set(params.labels) == {"proofhunter.deployment", "proofhunter.run"}
         assert params.ttl_minutes == 2
@@ -163,6 +181,13 @@ class FakeSDK:
         if self.delete_fails:
             raise RuntimeError("fake deletion failure")
 
+    def get(self, sandbox_id: str) -> FakeSandbox:
+        if self.fault != "linger":
+            for sandbox in self.deleted:
+                if sandbox.id == sandbox_id:
+                    raise DaytonaNotFoundError("gone")
+        return next(s for s in self.created if s.id == sandbox_id)
+
 
 def configured(tmp_path: Path) -> tuple[DaytonaRunner, FakeSDK]:
     sdk = FakeSDK()
@@ -179,7 +204,8 @@ def configured(tmp_path: Path) -> tuple[DaytonaRunner, FakeSDK]:
                 "config_fingerprint": runner.fingerprint,
                 "image_digest": runner.image_digest,
                 "effective_policy_reviewed": True,
-                "daytona_account_tier": 3,
+                "daytona_account_tier": 1,
+                "amendment": AMENDMENT,
                 "canary_result": CANARY_EXPECTED,
             }
         )
@@ -195,8 +221,8 @@ def configured(tmp_path: Path) -> tuple[DaytonaRunner, FakeSDK]:
         ("daytona_account_tier", "3", "account_tier_invalid"),
         ("daytona_account_tier", 3.0, "account_tier_invalid"),
         ("daytona_account_tier", 0, "account_tier_invalid"),
-        ("daytona_account_tier", 1, "account_tier_insufficient"),
-        ("daytona_account_tier", 2, "account_tier_insufficient"),
+        ("amendment", None, "account_tier_insufficient"),
+        ("amendment", "PRD-A0", "account_tier_insufficient"),
         ("canary_result", None, "canary_result_missing"),
         ("canary_result", {}, "canary_result_not_denied"),
         ("canary_result", "secret-like hostile input", "canary_result_not_denied"),
@@ -240,7 +266,7 @@ async def test_approval_revocation_after_attestation(tmp_path: Path) -> None:
     assert (await runner.attest()).status is c.IsolationStatus.VERIFIED
     path = tmp_path / "runner-isolation-approval.json"
     approval = json.loads(path.read_text())
-    approval["daytona_account_tier"] = 2
+    del approval["amendment"]
     path.write_text(json.dumps(approval))
     assert (await runner.observe(request(runner=runner))).outcome is c.ObservationOutcome.DENIED
     assert runner.approval_refusal_reason == "account_tier_insufficient"
@@ -253,7 +279,7 @@ async def test_live_probe_failure_overrides_approval(tmp_path: Path, host: str) 
     sdk.fault = host
     assert (await runner.attest()).status is c.IsolationStatus.UNVERIFIED
     assert sdk.created == sdk.deleted
-    assert not any(s.uploads for s in sdk.created)
+    assert not any(set(s.uploads) - HARNESS_UPLOADS for s in sdk.created)
 
 
 async def test_fresh_instances_and_no_oracle_payload(tmp_path: Path) -> None:
@@ -273,7 +299,13 @@ async def test_fresh_instances_and_no_oracle_payload(tmp_path: Path) -> None:
     assert set(sdk.created[1].uploads) == {
         "/var/proofhunter/request.json",
         "/var/proofhunter/checkout.py",
+        *HARNESS_UPLOADS,
     }
+    harness = {name.rsplit("/", 1)[1]: data for name, data in sdk.created[1].uploads.items()}
+    assert runner.harness == daytona_module.harness_sha256(harness)
+    rows = [json.loads(x) for x in (tmp_path / "runner-ledger.jsonl").read_text().splitlines()]
+    verified = {r["sandbox_id"] for r in rows if r["event"] == "deletion_verified"}
+    assert verified == {s.id for s in sdk.created}
     assert one.source_sha256 == req.source_sha256
     assert one.stdout_sha256
 
@@ -364,7 +396,7 @@ async def test_isolation_denies_before_source(tmp_path: Path, reason: str) -> No
         assert (await runner.attest()).status is c.IsolationStatus.UNVERIFIED
     observed = await runner.observe(request(runner=runner))
     assert observed.outcome is c.ObservationOutcome.DENIED
-    assert not any(s.uploads for s in sdk.created)
+    assert not any(set(s.uploads) - HARNESS_UPLOADS for s in sdk.created)
 
 
 async def test_provenance_mismatch_and_deadline(tmp_path: Path) -> None:
@@ -445,3 +477,31 @@ def test_disabled_factory_does_not_construct_sdk(monkeypatch: pytest.MonkeyPatch
     runner = DaytonaRunner.from_settings(settings)
     assert not runner.enabled
     assert runner.client is None
+
+
+async def test_unpinned_snapshot_refused_before_allocation(tmp_path: Path) -> None:
+    runner, sdk = configured(tmp_path)
+    sdk.fault = "pin"
+    assert (await runner.attest()).status is c.IsolationStatus.UNVERIFIED
+    assert not sdk.created
+
+
+async def test_lingering_sandbox_fails_deletion_check(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(daytona_module, "DELETION_VERIFY_SECONDS", 0.05)
+    monkeypatch.setattr(daytona_module, "DELETION_POLL_SECONDS", 0.01)
+    runner, sdk = configured(tmp_path)
+    sdk.fault = "linger"
+    assert (await runner.attest()).status is c.IsolationStatus.UNVERIFIED
+    rows = [json.loads(x) for x in (tmp_path / "runner-ledger.jsonl").read_text().splitlines()]
+    assert rows[-1]["event"] == "deletion_unverified"
+    assert (await runner.observe(request(runner=runner))).outcome is c.ObservationOutcome.DENIED
+
+
+async def test_attestation_reports_restricted_egress(tmp_path: Path) -> None:
+    runner, _ = configured(tmp_path)
+    attestation = await runner.attest()
+    assert attestation.status is c.IsolationStatus.VERIFIED
+    assert attestation.egress_denied is False
+    assert attestation.metadata_denied is True

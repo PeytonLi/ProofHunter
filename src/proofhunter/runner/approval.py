@@ -7,29 +7,54 @@ from typing import Any
 from proofhunter.contracts import canonical_sha256, sha256_hex
 
 SANDBOX_FILES = Path(__file__).resolve().parents[3] / "ops" / "sandbox"
-OBSERVE_COMMAND = "/usr/bin/sudo -n /usr/bin/python3 -I /opt/proofhunter/wrapper.py"
-CANARY_COMMAND = "/usr/bin/sudo -n /usr/bin/python3 -I /opt/proofhunter/canary.py"
-ENV = {"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", "HOME": "/nonexistent"}
+HARNESS_FILES = ("wrapper.py", "canary.py")
+HARNESS_DIR = "/opt/proofhunter"
+PYTHON = "/usr/local/bin/python3"
+OBSERVE_COMMAND = f"{PYTHON} -I {HARNESS_DIR}/wrapper.py"
+CANARY_COMMAND = f"{PYTHON} -I {HARNESS_DIR}/canary.py"
+# PRD amendment A1: nothing is injected into a sandbox, not even PATH.
+ENV: dict[str, str] = {}
+PINNED_IMAGE_REPOSITORY = "python:3.12-slim"
+ALLOWED_REPOSITORIES = frozenset({"PeytonLi/ProofHunter-Demo"})
+AMENDMENT = "PRD-A1-basic-daytona@2026-11-07"
+EGRESS_POLICY = "restricted"
+CHILD_TARGETS = (
+    "172.20.0.1:22",
+    "140.82.112.3:443",
+    "151.101.0.223:443",
+    "1.1.1.1:443",
+    "169.254.169.254:80",
+    "169.254.170.2:80",
+)
+METADATA_TARGETS = ("169.254.169.254:80", "169.254.170.2:80")
+DNS_NAMES = (
+    "github.com",
+    "pypi.org",
+    "app.daytona.io",
+    "api.render.com",
+    "metadata.google.internal",
+)
 CANARY_EXPECTED: dict[str, Any] = {
-    "egress_denied": True,
+    "egress_policy": EGRESS_POLICY,
+    "dns_denied": True,
     "metadata_denied": True,
     "secrets_absent": True,
     "restricted_child": True,
-    "probes_denied": dict.fromkeys(
-        (
-            "github.com",
-            "raw.githubusercontent.com",
-            "pypi.org",
-            "files.pythonhosted.org",
-            "registry.npmjs.org",
-            "1.1.1.1",
-            "app.daytona.io",
-            "169.254.169.254",
-            "169.254.170.2",
-        ),
-        True,
-    ),
+    "child_network_isolated": True,
+    "probes_denied": {
+        **{f"dns:{name}": True for name in DNS_NAMES},
+        **{f"metadata:{target}": True for target in METADATA_TARGETS},
+        **{f"child:{target}": True for target in CHILD_TARGETS},
+    },
 }
+
+
+def pinned_image(image_digest: str) -> str:
+    return f"{PINNED_IMAGE_REPOSITORY}@{image_digest}"
+
+
+def allowed_repository(full_name: str) -> bool:
+    return full_name in ALLOWED_REPOSITORIES
 
 
 def valid_canary(data: Any) -> bool:
@@ -37,17 +62,25 @@ def valid_canary(data: Any) -> bool:
         return False
     probes = data["probes_denied"]
     return (
-        all(data[key] is True for key in CANARY_EXPECTED if key != "probes_denied")
+        data["egress_policy"] == EGRESS_POLICY
+        and all(
+            data[key] is True
+            for key in CANARY_EXPECTED
+            if key not in ("probes_denied", "egress_policy")
+        )
         and type(probes) is dict
         and set(probes) == set(CANARY_EXPECTED["probes_denied"])
         and all(value is True for value in probes.values())
     )
 
 
-def harness_sha256() -> str:
-    return sha256_hex(
-        b"".join((SANDBOX_FILES / name).read_bytes() for name in ("wrapper.py", "canary.py"))
-    )
+def harness_files() -> dict[str, bytes]:
+    return {name: (SANDBOX_FILES / name).read_bytes() for name in HARNESS_FILES}
+
+
+def harness_sha256(files: dict[str, bytes] | None = None) -> str:
+    files = harness_files() if files is None else files
+    return sha256_hex(b"".join(files[name] for name in HARNESS_FILES))
 
 
 def strict_json(raw: str) -> Any:
@@ -72,6 +105,11 @@ def config_fingerprint(snapshot: str, image_digest: str, harness: str, deploymen
             "network_block_all": True,
             "public": False,
             "env": ENV,
+            "secrets": {},
+            "ephemeral": True,
+            "egress_policy": EGRESS_POLICY,
+            "amendment": AMENDMENT,
+            "allowed_repositories": sorted(ALLOWED_REPOSITORIES),
             "cpu": 1,
             "memory_gib": 1,
             "uid": 65534,
@@ -90,7 +128,7 @@ def validate_approval(raw: str, *, fingerprint: str, image_digest: str) -> str |
         tier = approval.get("daytona_account_tier")
         if type(tier) is not int or tier < 1:
             return "account_tier_invalid"
-        if tier < 3:
+        if tier < 3 and approval.get("amendment") != AMENDMENT:
             return "account_tier_insufficient"
         if "canary_result" not in approval:
             return "canary_result_missing"
@@ -103,6 +141,7 @@ def validate_approval(raw: str, *, fingerprint: str, image_digest: str) -> str |
                 "image_digest": image_digest,
                 "effective_policy_reviewed": True,
                 "daytona_account_tier": tier,
+                "amendment": AMENDMENT,
                 "canary_result": CANARY_EXPECTED,
             }
             or approval["effective_policy_reviewed"] is not True

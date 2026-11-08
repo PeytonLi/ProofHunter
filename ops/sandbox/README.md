@@ -196,6 +196,35 @@ stricter one-CPU snapshot. There is no resource fallback to provider defaults.
    }
    ```
 
+   Under amendment `PRD-A1-basic-daytona@2026-11-07`
+   (docs/amendments/PRD-A1-basic-daytona.md) the approval instead records the
+   basic-tier restricted-egress schema; tier must still be the actual account
+   tier and `amendment` must be present for tier < 3:
+
+   ```json
+   {
+     "config_fingerprint":"<runner.fingerprint>",
+     "image_digest":"sha256:<64 hex>",
+     "effective_policy_reviewed":true,
+     "daytona_account_tier":1,
+     "amendment":"PRD-A1-basic-daytona@2026-11-07",
+     "canary_result":{
+       "egress_policy":"restricted",
+       "dns_denied":true,"metadata_denied":true,
+       "secrets_absent":true,"restricted_child":true,
+       "child_network_isolated":true,
+       "probes_denied":{
+         "dns:github.com":true,"dns:pypi.org":true,"dns:app.daytona.io":true,
+         "dns:api.render.com":true,"dns:metadata.google.internal":true,
+         "metadata:169.254.169.254:80":true,"metadata:169.254.170.2:80":true,
+         "child:172.20.0.1:22":true,"child:140.82.112.3:443":true,
+         "child:151.101.0.223:443":true,"child:1.1.1.1:443":true,
+         "child:169.254.169.254:80":true,"child:169.254.170.2:80":true
+       }
+     }
+   }
+   ```
+
    This is a trusted operator artifact, not a provider response or PR input.
    Live startup with the runner enabled validates this same local file and
    refuses missing or invalid evidence without constructing a provider client.
