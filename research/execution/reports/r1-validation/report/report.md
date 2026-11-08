@@ -87,11 +87,6 @@ Replicate spread (recall at max budget, per preregistered seed):
 | simple_heuristic | 0.565, 0.565, 0.565, 0.565, 0.565 | 0.000 |
 | builtin_eig | 0.435, 0.435, 0.435, 0.435, 0.435 | 0.000 |
 
-![Confirmed recall vs paired executions](offline_validation_recall_vs_executions.svg)
-![Confirmed recall vs dollars per episode](offline_validation_recall_vs_usd.svg)
-![Confirmed recall vs elapsed time](offline_validation_recall_vs_wall_ms.svg)
-![False-positive and inconclusive rates](offline_validation_fp_inconclusive.svg)
-![Component time breakdown](offline_validation_time_breakdown.svg)
 
 No ledger entries recorded for offline measurements.
 
@@ -149,11 +144,6 @@ Replicate spread (recall at max budget, per preregistered seed):
 | frontier_reviewer | 0.674, 0.674, 0.674, 0.674, 0.674 | 0.000 |
 | frontier_agent | 0.761, 0.761, 0.761, 0.761, 0.761 | 0.000 |
 
-![Confirmed recall vs paired executions](live_validation_recall_vs_executions.svg)
-![Confirmed recall vs dollars per episode](live_validation_recall_vs_usd.svg)
-![Confirmed recall vs elapsed time](live_validation_recall_vs_wall_ms.svg)
-![False-positive and inconclusive rates](live_validation_fp_inconclusive.svg)
-![Component time breakdown](live_validation_time_breakdown.svg)
 
 Cost/timing ledger (live only; includes failed and retried calls; estimated amounts are labelled and are not provider-measured):
 
@@ -161,4 +151,3 @@ Cost/timing ledger (live only; includes failed and retried calls; estimated amou
 |---|---|---|---|---|---|---|---|---|
 | model_inference | pilot | 881 | 881 | $3.2064 (881) | - | 0 | 1429773 | openai |
 
-![Component cost breakdown](live_cost_breakdown.svg)
