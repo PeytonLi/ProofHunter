@@ -627,7 +627,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     except Exception as error:
         reason = error.code.value if isinstance(error, AdapterError) else type(error).__name__
         label = "live" if args.profile == "live" else "offline_fixture"
-        print(f"{label} refused: {reason}")
+        detail = str(error) if isinstance(error, ConfigError) else ""
+        print(f"{label} refused: {reason} {detail}")
         return 1
 
 
