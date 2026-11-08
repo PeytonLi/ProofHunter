@@ -133,3 +133,10 @@ def test_secret_like_environment_fails(
 ) -> None:
     result = run(monkeypatch, capsys, env={"DAYTONA_API_KEY": "redacted"})
     assert result["secrets_absent"] is False
+
+
+def test_pinned_image_gpg_key_is_not_a_secret(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    result = run(monkeypatch, capsys, env={"GPG_KEY": "public-fingerprint"})
+    assert result["secrets_absent"] is True

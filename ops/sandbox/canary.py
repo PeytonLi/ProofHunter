@@ -29,6 +29,9 @@ CHILD_TARGETS = (
     "169.254.169.254:80",
     "169.254.170.2:80",
 )
+# Public build-time variables baked into the pinned python:3.12-slim image:
+# GPG_KEY is the public fingerprint used to verify the CPython source tarball.
+SAFE_ENV_NAMES = frozenset({"GPG_KEY"})
 CREDENTIAL_PATHS = (
     "/root/.aws",
     "/root/.config/gcloud",
@@ -88,6 +91,7 @@ def dns_denied(name: str) -> bool:
 def main() -> None:
     secrets_absent = not any(
         key.upper().endswith(("KEY", "TOKEN", "SECRET", "PASSWORD", "CREDENTIALS"))
+        and key not in SAFE_ENV_NAMES
         for key in os.environ
     ) and not any(Path(path).exists() for path in CREDENTIAL_PATHS)
     os.environ.clear()

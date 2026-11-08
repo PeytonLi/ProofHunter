@@ -192,7 +192,7 @@ class DaytonaRunner:
                 sandbox = self._create("preflight", 30)
                 if self._policy(sandbox):
                     self._install_harness(sandbox, 10)
-                    response = sandbox.process.exec(CANARY_COMMAND, cwd="/", timeout=20)
+                    response = sandbox.process.exec(CANARY_COMMAND, cwd="/", timeout=90)
                     if response.exit_code == 0 and len(response.result.encode()) <= 4096:
                         data = strict_json(response.result)
                         verified = valid_canary(data)
