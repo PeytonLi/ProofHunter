@@ -248,8 +248,11 @@ class ChatService:
             status = await self._client.create_run(RunRequest(pr_url=command.pr_url), key)
             return _Outcome(render_queued(status), final=True)
         if isinstance(command, StatusCommand):
-            return _Outcome(render_status(await self._client.get_status(command.run_id)),
-                            final=True)
+            status = await self._client.get_status(command.run_id)
+            mode = None
+            if status.receipt_sha256 and status.detail is None:
+                mode = (await self._client.get_receipt(command.run_id)).execution_mode
+            return _Outcome(render_status(status, execution_mode=mode), final=True)
         try:
             receipt = await self._client.get_receipt(command.run_id)
         except AdapterError as error:

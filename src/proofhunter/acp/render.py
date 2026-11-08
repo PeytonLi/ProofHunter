@@ -148,7 +148,9 @@ def _short(sha: str | None) -> str:
 def _mode_label(mode: ExecutionMode | None) -> str:
     if mode is ExecutionMode.LIVE:
         return LIVE_LABEL
-    return OFFLINE_LABEL
+    if mode is ExecutionMode.OFFLINE_FIXTURE:
+        return OFFLINE_LABEL
+    return "Mode: pending. Execution details are not available yet; check status."
 
 
 def render_queued(status: RunStatus) -> str:
@@ -163,7 +165,7 @@ def render_queued(status: RunStatus) -> str:
     return "\n".join(lines)
 
 
-def render_status(status: RunStatus) -> str:
+def render_status(status: RunStatus, *, execution_mode: ExecutionMode | None = None) -> str:
     detail = status.detail
     limits = status.budget.limits
     used = status.budget.used
@@ -204,7 +206,7 @@ def render_status(status: RunStatus) -> str:
                               for name, mode in sorted(detail.provider_modes.items()))
             lines.append(f"Providers: {modes}")
     lines.append(f"Attempts spent: {status.attempts_used}")
-    lines.append(_mode_label(detail.execution_mode if detail else None))
+    lines.append(_mode_label(detail.execution_mode if detail else execution_mode))
     if status.receipt_sha256:
         lines.append(f"Receipt SHA-256: {status.receipt_sha256}")
     lines.append(f"Details with: evidence {status.run_id}")
