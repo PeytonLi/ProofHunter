@@ -105,9 +105,10 @@ def _has_control_chars(text: str) -> bool:
 def _strip_wrapping(token: str) -> str:
     """Remove one layer of chat formatting around a token (``<url>``, backticks, quotes)."""
     token = token.strip()
-    for left, right in (("<", ">"), ("`", "`"), ('"', '"'), ("'", "'"), ("(", ")")):
+    for left, right in (("**", "**"), ("<", ">"), ("`", "`"), ('"', '"'), ("'", "'"),
+                        ("(", ")")):
         if len(token) >= 2 and token.startswith(left) and token.endswith(right):
-            return token[1:-1]
+            return token[len(left):-len(right)]
     return token.rstrip(".,;:!") if _URLISH.search(token) else token
 
 

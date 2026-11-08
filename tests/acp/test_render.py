@@ -43,7 +43,7 @@ async def test_queued_reply_separates_confirmation_and_progress_command() -> Non
     assert reply.startswith("**Run accepted**\n\n- State: queued\n")
     assert f"- Run ID: `{status.run_id}`" in reply
     assert "\n\nThe run continues in the background after this reply.\n\n" in reply
-    assert f"**Check progress**\n\n```text\n@proofhunter status {status.run_id}\n```" in reply
+    assert f"Send to @proofhunter:\n\n```text\nstatus {status.run_id}\n```" in reply
     assert len(reply) <= MAX_REPLY_CHARS
 
 
@@ -82,9 +82,9 @@ async def test_status_groups_summary_details_and_next_command(state: RunState) -
     assert len(reply) <= MAX_REPLY_CHARS
     if state is RunState.QUEUED:
         assert reply.startswith("**Run status: queued**\n\n")
-        assert f"```text\n@proofhunter status {status.run_id}\n```" in reply
+        assert f"Send to @proofhunter:\n\n```text\nstatus {status.run_id}\n```" in reply
     else:
-        assert f"```text\n@proofhunter evidence {status.run_id}\n```" in reply
+        assert f"Send to @proofhunter:\n\n```text\nevidence {status.run_id}\n```" in reply
         if state is RunState.COMPLETED:
             assert reply.startswith("**Verdict: confirmed_regression**\n\n")
             assert receipt.receipt_sha256 in reply

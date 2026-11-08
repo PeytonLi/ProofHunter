@@ -162,8 +162,8 @@ def render_queued(status: RunStatus) -> str:
     lines.append(f"- {_mode_label(detail.execution_mode if detail else None)}")
     if status.status in ACTIVE_STATES:
         lines.extend(["", "The run continues in the background after this reply."])
-    lines.extend(["", "**Check progress**", "", "```text",
-                  f"@proofhunter status {status.run_id}", "```"])
+    lines.extend(["", "**Check progress**", "", "Send to @proofhunter:", "", "```text",
+                  f"status {status.run_id}", "```"])
     return "\n".join(lines)
 
 
@@ -184,8 +184,8 @@ def render_status(status: RunStatus, *, execution_mode: ExecutionMode | None = N
             cov = detail.coverage
             lines.append(f"- Coverage: {len(cov.observed)} of {len(cov.required)} required tags")
         lines.append(f"- {_mode_label(detail.execution_mode if detail else None)}")
-        lines.extend(["", "**Check progress**", "", "```text",
-                      f"@proofhunter status {status.run_id}", "```"])
+        lines.extend(["", "**Check progress**", "", "Send to @proofhunter:", "", "```text",
+                      f"status {status.run_id}", "```"])
         return "\n".join(lines)
     if status.status is RunState.FAILED:
         lines = ["**Run failed**", "", "The job failed before producing a verdict.", "", *lines]
@@ -214,8 +214,8 @@ def render_status(status: RunStatus, *, execution_mode: ExecutionMode | None = N
     lines.append(f"- {_mode_label(detail.execution_mode if detail else execution_mode)}")
     if status.receipt_sha256:
         lines.extend(["", "Receipt SHA-256:", "", f"`{status.receipt_sha256}`"])
-    lines.extend(["", "**View evidence**", "", "```text",
-                  f"@proofhunter evidence {status.run_id}", "```"])
+    lines.extend(["", "**View evidence**", "", "Send to @proofhunter:", "", "```text",
+                  f"evidence {status.run_id}", "```"])
     return "\n".join(lines)
 
 
