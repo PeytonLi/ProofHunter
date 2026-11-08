@@ -1,4 +1,4 @@
-"""Redacted plain-text chat reports (PRD section 1 chat behavior, section 7 claims).
+"""Redacted chat reports (PRD section 1 chat behavior, section 7 claims).
 
 Everything rendered comes from validated public DTOs (``RunStatus``, ``ReceiptV1``)
 or fixed strings in this module. Control API error messages, provider bodies,
@@ -227,46 +227,53 @@ def _counterexample(receipt: ReceiptV1) -> PublicProbeRecord | None:
 
 
 def render_evidence(receipt: ReceiptV1) -> str:
-    lines = [f"Evidence for run {receipt.run_id}"]
     verdict = receipt.verdict
-    lines.append(f"Verdict: {verdict.value if verdict else 'none (job failed)'}")
-    lines.append(f"Reason: {explain_reason(receipt.reason_code)}")
+    lines = [f"**Verdict: {verdict.value if verdict else 'none (job failed)'}**", ""]
+    if verdict is not None:
+        lines.extend([VERDICT_WORDING[verdict], ""])
+    lines.append(f"- {_mode_label(receipt.execution_mode)}")
+    lines.append(f"- Reason: {explain_reason(receipt.reason_code)}")
     pinned = receipt.pinned_revision
     if pinned is not None:
-        lines.append(f"PR: {safe_text(pinned.owner)}/{safe_text(pinned.repo)} #{pinned.number}")
-        lines.append(f"Base SHA: {pinned.base_sha}")
-        lines.append(f"Head SHA: {pinned.head_sha}")
+        lines.extend(["", f"PR: {safe_text(pinned.owner)}/{safe_text(pinned.repo)} "
+                      f"#{pinned.number}"])
     probe = _counterexample(receipt)
     if probe is not None and receipt.replay is not None:
         candidate = probe.candidate
-        lines.append(f"Minimal reproducible input: prices_cents={list(candidate.prices_cents)} "
-                     f"discount_percent={candidate.discount_percent}")
+        lines.extend(["", "**Minimal reproducible input**", "", "```python",
+                      f"prices_cents = {list(candidate.prices_cents)}",
+                      f"discount_percent = {candidate.discount_percent}", "```", "",
+                      "**Results (cents)**", ""])
         expected = probe.oracle.expected_cents
-        lines.append(f"Expected: {expected if expected is not None else 'unavailable'}")
-        lines.append(f"Base: {_value(probe.base)}")
-        lines.append(f"Head: {_value(probe.head)}")
-        lines.append(f"Repeated head: {_value(probe.confirmation)}")
-        lines.append(f"Oracle: {safe_text(probe.oracle.oracle_version, 64)} "
-                     f"({probe.oracle.trust_tier.value})")
-        lines.append(f"Route: {probe.route.choice.value} ({probe.route.mode.value}), "
-                     f"EIG {probe.eig_bits} bits")
-        lines.append(f"Replay: {receipt.replay.command}")
+        lines.append(f"- Expected: {expected if expected is not None else 'unavailable'}")
+        lines.append(f"- Base: {_value(probe.base)}")
+        lines.append(f"- Head: {_value(probe.head)}")
+        lines.append(f"- Repeated head: {_value(probe.confirmation)}")
+        lines.extend(["", "**Replay**", "", "```bash", receipt.replay.command, "```"])
     else:
+        lines.extend(["", "**Coverage and limits**", ""])
         cov = receipt.coverage
         observed = ", ".join(t.value for t in cov.observed) or "none"
         missing = ", ".join(t.value for t in cov.missing) or "none"
-        lines.append(f"Coverage: {len(cov.observed)} of {len(cov.required)} required tags, "
+        lines.append(f"- Coverage: {len(cov.observed)} of {len(cov.required)} required tags, "
                      f"{cov.distinct_usable_pairs} distinct usable pairs")
-        lines.append(f"Observed: {observed}")
-        lines.append(f"Missing: {missing}")
-        lines.append(f"Probes completed: {len(receipt.probes)}")
+        lines.append(f"- Observed: {observed}")
+        lines.append(f"- Missing: {missing}")
+        lines.append(f"- Probes completed: {len(receipt.probes)}")
         limits = receipt.budget.limits
-        lines.append(f"Limits: {limits.max_pairs} probe pairs, {limits.max_sandbox_invocations} "
+        lines.append(f"- Limits: {limits.max_pairs} probe pairs, {limits.max_sandbox_invocations} "
                      f"sandbox invocations, {limits.deadline_seconds} s deadline. "
                      "Results apply only to the enrolled contract and the pinned SHAs.")
-    lines.append(f"Oracle version: {safe_text(receipt.policy_versions.oracle_version, 64)}")
-    lines.append(_mode_label(receipt.execution_mode))
-    lines.append(f"Receipt SHA-256: {receipt.receipt_sha256}")
+    lines.extend(["", "**Receipt details**", "", f"Run ID: `{receipt.run_id}`", ""])
+    if pinned is not None:
+        lines.extend([f"Base SHA: `{pinned.base_sha}`", "",
+                      f"Head SHA: `{pinned.head_sha}`", ""])
+    lines.append(f"- Oracle version: {safe_text(receipt.policy_versions.oracle_version, 64)}")
+    if probe is not None:
+        lines.append(f"- Oracle trust: {probe.oracle.trust_tier.value}")
+        lines.append(f"- Route: {probe.route.choice.value} ({probe.route.mode.value}), "
+                     f"EIG {probe.eig_bits} bits")
+    lines.extend(["", "Receipt SHA-256:", "", f"`{receipt.receipt_sha256}`"])
     return "\n".join(lines)
 
 

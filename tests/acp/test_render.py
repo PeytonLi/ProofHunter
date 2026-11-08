@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from fixtures.adapters import FixtureControlApi
-from proofhunter.acp.render import render_queued, render_status
+from proofhunter.acp.render import MAX_REPLY_CHARS, render_evidence, render_queued, render_status
 from proofhunter.contracts import (
     EvidenceCounts,
     ExecutionMode,
@@ -12,7 +12,7 @@ from proofhunter.contracts import (
     RunStatusDetail,
 )
 
-from .conftest import PR_URL
+from .conftest import PR_URL, fixture_receipt
 
 
 @pytest.mark.parametrize("mode", [None, ExecutionMode.LIVE, ExecutionMode.OFFLINE_FIXTURE])
@@ -34,3 +34,22 @@ async def test_execution_label_requires_reported_mode(mode: ExecutionMode | None
             assert "Mode: live." not in reply
         else:
             assert f"Mode: {mode.value}." in reply
+
+
+@pytest.mark.parametrize("case", ["buggy", "fixed"])
+def test_evidence_groups_results_and_preserves_receipt_details(case: str) -> None:
+    receipt = fixture_receipt(case)
+    reply = render_evidence(receipt)
+    assert reply.startswith(f"**Verdict: {receipt.verdict.value}**\n\n")
+    assert "\n\n**Receipt details**\n\n" in reply
+    assert receipt.receipt_sha256 in reply
+    assert receipt.run_id in reply
+    assert receipt.pinned_revision.base_sha in reply
+    assert receipt.pinned_revision.head_sha in reply
+    assert "Mode: offline_fixture." in reply
+    assert len(reply) <= MAX_REPLY_CHARS
+    if receipt.replay is not None:
+        assert f"```bash\n{receipt.replay.command}\n```" in reply
+        assert "\n\n**Results (cents)**\n\n- Expected:" in reply
+    else:
+        assert "\n\n**Coverage and limits**\n\n" in reply
