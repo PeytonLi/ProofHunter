@@ -58,7 +58,7 @@ filterwarnings = ["error::pydantic.PydanticDeprecatedSince20"]
 line-length = 100
 target-version = "py312"
 src = ["src", "."]
-extend-exclude = ["coordinate_proofhunter.py", "docs/canary"]
+extend-exclude = ["coordinate_proofhunter.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "S", "RUF", "PT", "SIM"]
@@ -67,7 +67,6 @@ ignore = ["S101", "RUF001", "RUF002", "RUF003"]
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S", "PT011"]
 "tools/gate.py" = ["S603", "S607"]
-"research/data/templates.py" = ["E501", "RUF005"]
 
 [tool.mypy]
 python_version = "3.12"

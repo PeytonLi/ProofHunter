@@ -63,6 +63,9 @@ def run(
         raise module.socket.gaierror("denied")
 
     def subprocess_run(command: list[str], **kwargs: Any) -> Any:
+        if command[-1] in DNS_NAMES:
+            assert kwargs["timeout"] == 2
+            return SimpleNamespace(returncode=0 if command[-1] == resolves else 2)
         assert kwargs["preexec_fn"] is module.isolate
         assert json.loads(kwargs["env"]["PH_TARGETS"]) == list(CHILD_TARGETS)
         out = child if child is not None else {
@@ -133,3 +136,26 @@ def test_secret_like_environment_fails(
 ) -> None:
     result = run(monkeypatch, capsys, env={"DAYTONA_API_KEY": "redacted"})
     assert result["secrets_absent"] is False
+
+
+@pytest.mark.parametrize(("value", "absent"), [
+    ("7169605F62C751356D054A26A821E680E5FA6305", True), ("unexpected-key", False),
+])
+def test_only_pinned_public_signing_key_is_allowed(monkeypatch, capsys, value, absent):
+    assert run(monkeypatch, capsys, env={"GPG_KEY": value})["secrets_absent"] is absent
+
+
+@pytest.mark.parametrize(("code", "denied"), [(0, False), (1, False), (2, True)])
+def test_dns_resolver_errors_fail_closed(monkeypatch, code, denied):
+    module = canary()
+    monkeypatch.setattr(module.subprocess, "run", lambda *a, **kw: SimpleNamespace(returncode=code))
+    assert module.dns_denied("github.com") is denied
+
+
+def test_dns_timeout_is_bounded(monkeypatch):
+    module = canary()
+    def timeout(*args, **kwargs):
+        assert kwargs["timeout"] == 2
+        raise module.subprocess.TimeoutExpired(args[0], 2)
+    monkeypatch.setattr(module.subprocess, "run", timeout)
+    assert module.dns_denied("github.com") is True

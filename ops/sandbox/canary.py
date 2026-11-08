@@ -13,6 +13,8 @@ from pathlib import Path
 
 ENV = {"PATH": "/usr/local/bin:/usr/bin:/bin", "LANG": "C.UTF-8", "HOME": "/nonexistent"}
 PYTHON = "/usr/local/bin/python3"
+# Public release-signing fingerprint shipped by the digest-pinned Python base image.
+PYTHON_GPG_KEY = "7169605F62C751356D054A26A821E680E5FA6305"
 DNS_NAMES = (
     "github.com",
     "pypi.org",
@@ -79,16 +81,24 @@ def metadata_denied(target: str) -> bool:
 
 def dns_denied(name: str) -> bool:
     try:
-        socket.getaddrinfo(name, 443)
-    except OSError:
+        result = subprocess.run(  # noqa: S603
+            [PYTHON, "-I", "-c", (
+                "import socket,sys\n"
+                "try: socket.getaddrinfo(sys.argv[1],443)\n"
+                "except socket.gaierror: sys.exit(2)\n"
+            ), name],
+            env=ENV, cwd="/", timeout=2, capture_output=True, check=False,
+        )
+    except subprocess.TimeoutExpired:
         return True
-    return False
+    return result.returncode == 2
 
 
 def main() -> None:
     secrets_absent = not any(
         key.upper().endswith(("KEY", "TOKEN", "SECRET", "PASSWORD", "CREDENTIALS"))
-        for key in os.environ
+        for key, value in os.environ.items()
+        if not (key == "GPG_KEY" and value == PYTHON_GPG_KEY)
     ) and not any(Path(path).exists() for path in CREDENTIAL_PATHS)
     os.environ.clear()
     os.environ.update(ENV)
