@@ -151,7 +151,7 @@ def parse_command(text: str) -> Command:
     tokens = [_strip_wrapping(t) for t in text.split()]
     tokens = [t for t in tokens if t]
     # ASI:One may forward the routing mention as part of the command text.
-    if tokens and _AGENT_MENTION.fullmatch(tokens[0]):
+    if tokens and (tokens[0].lower() == "@proofhunter" or _AGENT_MENTION.fullmatch(tokens[0])):
         tokens = tokens[1:]
     if not tokens:
         return InvalidCommand(InvalidReason.EMPTY)

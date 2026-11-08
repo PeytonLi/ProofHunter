@@ -24,14 +24,18 @@ MENTION = "@agent1qt7qj4vrjwxjax7cd4n4ajgn9mrf97ke2lzaau72p8f4exydamxdxhxru5y"
     (f"evidence {RUN}", EvidenceCommand(RUN)),
     ("help", HelpCommand()),
 ])
-def test_asi_routing_mention_is_not_a_second_command(text: str, expected: object) -> None:
-    assert parse_command(f"{MENTION} {text}") == expected
+@pytest.mark.parametrize("mention", [MENTION, "@proofhunter", "@ProofHunter"])
+def test_asi_routing_mention_is_not_a_second_command(
+        mention: str, text: str, expected: object) -> None:
+    assert parse_command(f"{mention} {text}") == expected
 
 
 @pytest.mark.parametrize("text", [
     f"{MENTION} verify {PR} and status {RUN}",
     f"{MENTION} {MENTION} verify {PR}",
     f"@someone verify {PR}",
+    f"@proofhunter @proofhunter verify {PR}",
+    f"@proofhunter verify {PR} and status {RUN}",
 ])
 def test_mentions_do_not_allow_ambiguous_commands(text: str) -> None:
     assert isinstance(parse_command(text), InvalidCommand)
