@@ -1,3 +1,4 @@
+# ruff: noqa: RUF005, E501
 """Reviewed, deterministic, parameterized ``checkout.py`` variant templates (Track A).
 
 Every rendered source defines ``total_cents(prices_cents, discount_percent)`` for the
