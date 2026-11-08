@@ -1,7 +1,8 @@
 """Pod-side QLoRA SFT (standalone). Loss on completion tokens only; prompts never truncated.
 
-Rows: {"id", "split", "prompt", "completion"}. Saves a checkpoint per epoch, scores each on
-validation generations (via the caller), and writes ``train_log.json``.
+Rows: {"id", "split", "prompt", "completion"}. Saves a checkpoint per epoch (plus quarter-epoch
+safety saves ``epoch-N-qK``), writes ``progress.json`` every 25 rows and ``train_log.json`` at
+each epoch end; validation generations are scored by the caller.
 """
 
 from __future__ import annotations
@@ -73,11 +74,17 @@ def main() -> int:
                            "dropped_train": dropped_train, "dropped_val": dropped_val,
                            "steps": [], "epochs": []}
     step, t0 = 0, time.time()
+    quarter = max(1, steps_per_epoch // 4)
+    progress = Path(args.out) / "progress.json"
+    Path(args.out).mkdir(parents=True, exist_ok=True)
     model.train()
     for epoch in range(cfg["epochs"]):
         order = list(range(len(train_enc)))
         random.shuffle(order)
         for i, idx in enumerate(order):
+            if i % 25 == 0:
+                progress.write_text(json.dumps({"epoch": epoch + 1, "row": i, "rows": len(order),
+                                                "step": step, "t": round(time.time() - t0, 1)}))
             loss = loss_of(train_enc[idx]) / cfg["grad_accum"]
             loss.backward()
             if (i + 1) % cfg["grad_accum"] == 0 or i + 1 == len(order):
@@ -88,6 +95,10 @@ def main() -> int:
                 step += 1
                 log["steps"].append({"step": step, "loss": float(loss) * cfg["grad_accum"],
                                      "t": round(time.time() - t0, 1)})
+                ep_step = step - epoch * steps_per_epoch
+                if ep_step % quarter == 0 and ep_step < steps_per_epoch:
+                    name = f"epoch-{epoch + 1}-q{ep_step // quarter}"
+                    model.save_pretrained(Path(args.out) / name, safe_serialization=True)
                 if step >= total:
                     break
         model.eval()

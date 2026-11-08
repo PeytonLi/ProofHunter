@@ -27,12 +27,14 @@ from research.training.runpod import (
     RunpodClient,
     RunpodError,
     _wait_ready,
+    attributed_entry,
     ensure_key,
     estimate_usd,
     verify_teardown,
 )
 
-STATE: Final = Path.home() / ".cache/proofhunter-research/pod.json"
+STATE_DIR: Final = Path.home() / ".cache/proofhunter-research"
+STATE = STATE_DIR / "pod.json"
 REMOTE: Final = "/workspace/ph"
 FALLBACK: Final = ("rtx4090", "a6000", "a40")
 
@@ -220,9 +222,121 @@ def finish(run_id: str, out: Path, train_path: Path, val_path: Path, epoch: int,
     return 0
 
 
+def _read(path: Path, split: object) -> list[object]:
+    from research.schemas.models import GeneratorExample
+
+    rows = [GeneratorExample.model_validate_json(x)
+            for x in path.read_text().splitlines() if x.strip()]
+    if any(r.split is not split for r in rows):
+        raise SystemExit(f"{path} contains rows outside split {split}")
+    return list(rows)
+
+
+def _with_state(name: str) -> None:
+    global STATE
+    STATE = STATE_DIR / f"pod-{name}.json"
+
+
+def launch_train(run_id: str, train_path: Path, val_path: Path, out: Path) -> int:
+    """Stage the run on the train pod and start QLoRA detached (survives SSH drops)."""
+    from research.schemas.models import GeneratorExample, Split
+    from research.training.qlora import QloraTrainer, TrainConfig
+
+    train_l = [r for r in _read(train_path, Split.TRAIN) if isinstance(r, GeneratorExample)]
+    val_l = [r for r in _read(val_path, Split.VALIDATION) if isinstance(r, GeneratorExample)]
+    pod = attach()
+    trainer = QloraTrainer(run_id=run_id, config=TrainConfig(), pod=pod)
+    run_dir = f"{REMOTE}/runs/{run_id}"
+    out.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory() as tmp:
+        hashes = trainer.stage(train_l, val_l, Path(tmp))
+        (out / "stage_hashes.json").write_text(json.dumps(hashes, indent=1, sort_keys=True))
+        pod.run(f"mkdir -p {run_dir}")
+        for item in sorted(Path(tmp).iterdir()):
+            pod.put(item, f"{run_dir}/{item.name}")
+    pod.run(f"cd {run_dir} && nohup python train_qlora.py --model-dir /workspace/model "
+            f"--data sft.jsonl --config config.json --out ckpt > train.out 2>&1 &")
+    print(json.dumps({"launched": run_id, "pod": pod.pod_id}))
+    return 0
+
+
+def watch(run_id: str, out: Path, val_path: Path, ledger: JsonlLedger) -> int:
+    """Evaluate each epoch checkpoint from the train pod on the eval pod as it appears."""
+    from research.generator.model import GENERATIONS_FILE, adapter_sha256, load_generations
+    from research.generator.scoring import score_generations
+    from research.schemas.models import GeneratorExample, Split
+
+    val = [r for r in _read(val_path, Split.VALIDATION) if isinstance(r, GeneratorExample)]
+    _with_state("train")
+    tpod = attach()
+    _with_state("eval")
+    epod = attach()
+    run_dir = f"{REMOTE}/runs/{run_id}"
+    stage = out / "eval_stage"
+    if not stage.exists():
+        stage.mkdir(parents=True)
+        tpod.get(f"{run_dir}/val_prompts.jsonl", stage / "val_prompts.jsonl")
+        tpod.get(f"{run_dir}/hf_generate.py", stage / "hf_generate.py")
+        tpod.get(f"{run_dir}/policy.json", stage / "policy.json")
+        epod.run(f"mkdir -p {run_dir}/ckpt")
+        for item in sorted(stage.iterdir()):
+            epod.put(item, f"{run_dir}/{item.name}")
+    done = {p.parent.name for p in (out / "checkpoints").glob(f"*/{GENERATIONS_FILE}")}
+    start = time.time()
+    try:
+        while True:
+            raw = tpod.run(f"cat {run_dir}/ckpt/train_log.json 2>/dev/null || echo null")
+            log = json.loads(raw) if raw.strip() != "null" else None
+            prog = tpod.run(f"cat {run_dir}/ckpt/progress.json 2>/dev/null; "
+                            f"pgrep -f train_qlora.py >/dev/null && echo ' alive' || echo ' dead'")
+            print(json.dumps({"t": time.strftime("%H:%M:%S"), "progress": prog.strip()}),
+                  flush=True)
+            for ep in (log or {}).get("epochs", []):
+                name = ep["checkpoint"]
+                if name in done:
+                    continue
+                local = out / "checkpoints" / name
+                tpod.get(f"{run_dir}/ckpt/{name}", local)
+                epod.put(local, f"{run_dir}/ckpt/{name}")
+                epod.run(f"cd {run_dir} && python hf_generate.py --model-dir /workspace/model "
+                         f"--prompts val_prompts.jsonl --policy policy.json --adapter ckpt/{name} "
+                         f"--out ckpt/{name}/{GENERATIONS_FILE}", timeout=7200)
+                epod.get(f"{run_dir}/ckpt/{name}/{GENERATIONS_FILE}", local / GENERATIONS_FILE)
+                score = score_generations(val, load_generations(local / GENERATIONS_FILE))
+                rec = {"checkpoint": name, "adapter_sha256": adapter_sha256(local),
+                       "val_loss": ep["val_loss"], **score.__dict__}
+                (local / "validation_score.json").write_text(json.dumps(rec, indent=1))
+                print(json.dumps({"EVAL": rec}), flush=True)
+                done.add(name)
+            if log is not None:
+                (out / "train_log.json").write_text(json.dumps(log, indent=1))
+            if log is not None and "wall_s" in log and all(
+                    e["checkpoint"] in done for e in log["epochs"]):
+                return 0
+            if "dead" in prog and (log is None or "wall_s" not in log):
+                raise SystemExit("training process died before finishing")
+            time.sleep(120)
+    finally:
+        ledger.append(attributed_entry(f"{run_id}-eval-{int(start)}", epod.pod_id,
+                                       time.time() - start))
+
+
+def freeze_best(run_id: str, out: Path, train_path: Path, val_path: Path) -> int:
+    from research.schemas.models import GeneratorExample, Split
+    from research.training.qlora import QloraTrainer, TrainConfig
+
+    val = [r for r in _read(val_path, Split.VALIDATION) if isinstance(r, GeneratorExample)]
+    trainer = QloraTrainer(run_id=run_id, config=TrainConfig())
+    hashes = json.loads((out / "stage_hashes.json").read_text())
+    digest = trainer.freeze(trainer.select(val, out), val, out, hashes)
+    print(json.dumps({"adapter_sha256": digest}))
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="podctl")
-    ap.add_argument("action", choices=["up", "status", "run", "smoke", "train", "finish", "down"])
+    ap.add_argument("action", choices=["up", "status", "run", "smoke", "train", "finish", "down",
+                                       "launch-train", "watch", "freeze"])
     ap.add_argument("--gpu", choices=sorted(GPU_CHOICES), default="rtx4090")
     ap.add_argument("--max-hours", type=float, default=8.0)
     ap.add_argument("--idle-minutes", type=int, default=45)
@@ -233,8 +347,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--train", type=Path)
     ap.add_argument("--val", type=Path)
     ap.add_argument("--epoch", type=int, default=1)
+    ap.add_argument("--name", default=None, help="pod state name (train, eval)")
     args = ap.parse_args(argv)
     ledger = JsonlLedger(args.ledger)
+    if args.name:
+        _with_state(args.name)
+    if args.action == "launch-train":
+        return launch_train(args.run_id, args.train, args.val, args.out)
+    if args.action == "watch":
+        return watch(args.run_id, args.out, args.val, ledger)
+    if args.action == "freeze":
+        return freeze_best(args.run_id, args.out, args.train, args.val)
     if args.action == "up":
         return up(args.gpu, args.max_hours, args.idle_minutes, ledger)
     if args.action == "down":
