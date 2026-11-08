@@ -9,6 +9,7 @@ from proofhunter.contracts import (
     ExecutionMode,
     RunKind,
     RunRequest,
+    RunState,
     RunStatusDetail,
 )
 
@@ -53,3 +54,31 @@ def test_evidence_groups_results_and_preserves_receipt_details(case: str) -> Non
         assert "\n\n**Results (cents)**\n\n- Expected:" in reply
     else:
         assert "\n\n**Coverage and limits**\n\n" in reply
+
+
+@pytest.mark.parametrize("state", [RunState.QUEUED, RunState.COMPLETED, RunState.FAILED])
+async def test_status_groups_summary_details_and_next_command(state: RunState) -> None:
+    receipt = fixture_receipt("buggy")
+    status = await FixtureControlApi().create_run(RunRequest(pr_url=PR_URL), "status-format")
+    status = status.model_copy(update={
+        "status": state,
+        "verdict": receipt.verdict if state is RunState.COMPLETED else None,
+        "receipt_sha256": receipt.receipt_sha256 if state is RunState.COMPLETED else None,
+        "reason_code": receipt.reason_code if state is RunState.COMPLETED else None,
+    })
+    reply = render_status(status, execution_mode=ExecutionMode.LIVE)
+    assert f"- Run ID: `{status.run_id}`" in reply
+    assert f"- State: {state.value}" in reply
+    assert len(reply) <= MAX_REPLY_CHARS
+    if state is RunState.QUEUED:
+        assert reply.startswith("**Run status: queued**\n\n")
+        assert f"```text\n@proofhunter status {status.run_id}\n```" in reply
+    else:
+        assert f"```text\n@proofhunter evidence {status.run_id}\n```" in reply
+        if state is RunState.COMPLETED:
+            assert reply.startswith("**Verdict: confirmed_regression**\n\n")
+            assert receipt.receipt_sha256 in reply
+            assert "- Mode: live." in reply
+        else:
+            assert reply.startswith("**Run failed**\n\n")
+            assert "failed before producing a verdict" in reply

@@ -169,47 +169,51 @@ def render_status(status: RunStatus, *, execution_mode: ExecutionMode | None = N
     detail = status.detail
     limits = status.budget.limits
     used = status.budget.used
-    lines = [f"Run {status.run_id}", f"State: {status.status.value}"]
+    lines = [f"- Run ID: `{status.run_id}`", f"- State: {status.status.value}"]
     if detail is not None and detail.repo_full_name and detail.pr_number:
-        lines.append(f"PR: {safe_text(detail.repo_full_name)} #{detail.pr_number}, "
+        lines.append(f"- PR: {safe_text(detail.repo_full_name)} #{detail.pr_number}, "
                      f"base {_short(detail.base_sha)}, head {_short(detail.head_sha)}")
     if status.status in ACTIVE_STATES:
-        lines.append(f"Attempts spent: {status.attempts_used} of "
+        lines = [f"**Run status: {status.status.value}**", "", *lines]
+        lines.append(f"- Attempts spent: {status.attempts_used} of "
                      f"{limits.max_sandbox_invocations} sandbox invocations, "
                      f"{used.pairs} of {limits.max_pairs} probe pairs")
         if detail is not None and detail.coverage is not None:
             cov = detail.coverage
-            lines.append(f"Coverage: {len(cov.observed)} of {len(cov.required)} required tags")
-        lines.append(_mode_label(detail.execution_mode if detail else None))
-        lines.append(f"Poll again with: status {status.run_id}")
+            lines.append(f"- Coverage: {len(cov.observed)} of {len(cov.required)} required tags")
+        lines.append(f"- {_mode_label(detail.execution_mode if detail else None)}")
+        lines.extend(["", "**Check progress**", "", "```text",
+                      f"@proofhunter status {status.run_id}", "```"])
         return "\n".join(lines)
     if status.status is RunState.FAILED:
-        lines.append("The job failed before producing a verdict.")
-        lines.append(f"Reason: {explain_reason(status.reason_code)}")
+        lines = ["**Run failed**", "", "The job failed before producing a verdict.", "", *lines]
+        lines.append(f"- Reason: {explain_reason(status.reason_code)}")
     else:
         verdict = status.verdict
         assert verdict is not None
-        lines.append(f"Verdict: {verdict.value}")
+        summary = [f"**Verdict: {verdict.value}**", ""]
         if verdict is not Verdict.INCONCLUSIVE:
-            lines.append(VERDICT_WORDING[verdict])
-        lines.append(f"Reason: {explain_reason(status.reason_code)}")
+            summary.extend([VERDICT_WORDING[verdict], ""])
+        lines = summary + lines
+        lines.append(f"- Reason: {explain_reason(status.reason_code)}")
     if status.is_stale:
-        lines.append("The PR head has moved since this run; the result applies only to the "
+        lines.append("- The PR head has moved since this run; the result applies only to the "
                      "pinned head SHA.")
     if detail is not None:
         ev = detail.evidence
-        lines.append(f"Evidence: {ev.matches} matches, {ev.head_mismatches} head mismatches, "
+        lines.append(f"- Evidence: {ev.matches} matches, {ev.head_mismatches} head mismatches, "
                      f"{ev.shared_mismatches} shared mismatches, {ev.base_mismatches} base "
                      f"mismatches, {ev.excluded} excluded, {ev.confirmations} confirmations")
         if detail.provider_modes:
             modes = ", ".join(f"{name.value} {mode.value}"
                               for name, mode in sorted(detail.provider_modes.items()))
-            lines.append(f"Providers: {modes}")
-    lines.append(f"Attempts spent: {status.attempts_used}")
-    lines.append(_mode_label(detail.execution_mode if detail else execution_mode))
+            lines.append(f"- Providers: {modes}")
+    lines.append(f"- Attempts spent: {status.attempts_used}")
+    lines.append(f"- {_mode_label(detail.execution_mode if detail else execution_mode)}")
     if status.receipt_sha256:
-        lines.append(f"Receipt SHA-256: {status.receipt_sha256}")
-    lines.append(f"Details with: evidence {status.run_id}")
+        lines.extend(["", "Receipt SHA-256:", "", f"`{status.receipt_sha256}`"])
+    lines.extend(["", "**View evidence**", "", "```text",
+                  f"@proofhunter evidence {status.run_id}", "```"])
     return "\n".join(lines)
 
 
