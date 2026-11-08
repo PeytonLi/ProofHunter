@@ -33,7 +33,7 @@ Simplify to a tool-using frontier LLM agent for quality; keep the simple heurist
 
 ## Not done / caveats
 - Sealed test-set evaluation not run; all results are validation.
-- Tuned Qwen adapter result not available at time of writing (training on Runpod was still in progress).
+- No tuned Qwen adapter exists: training was stopped at the deadline 51 minutes into epoch 1 of 3, before the first epoch-end checkpoint. Runpod pod `mozp9af8wlaf9h` was deleted and verified gone (1.14 h, about $1.02 estimated). See PR #12 and `research/artifacts/generator/full-qlora-v1/teardown-evidence.json`.
 - Frontier 4-model × 3-role grid ran only as a 3-case smoke; not reported as a result.
 - Only 4 clean controls in the pilot; false-positive evidence is weak.
 - Track B (SWE-smith) is metadata-only; no target code executed.

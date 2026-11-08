@@ -477,7 +477,7 @@ th{{font-family:{MONO};font-size:.66rem;letter-spacing:.12em;text-transform:uppe
 Frontier arms use gpt-6.1-sol with measured cost. Sealed test-set results are not included; these are validation results and may not generalize beyond the synthetic checkout task.</p>
 {"".join(figs)}
 <section><p class="eyebrow">Metric 12</p><h2>Qwen2.5-Coder-7B hypothesis generator</h2>
-<p class="sub">QLoRA tuning on Runpod RTX 4090; tuned validation result pending at time of writing.</p>
+<p class="sub">QLoRA training stopped at the deadline before the first checkpoint; no tuned adapter exists. Pod deleted and verified.</p>
 <div class="stats">{stat_html}</div></section>
 <section><p class="eyebrow">Recommendation</p><h2>Simplify to a strong tool-using LLM; keep the heuristic as the free fallback</h2>
 <table><tr><th>Option</th><th>Evidence</th><th>Verdict</th></tr>
