@@ -1,0 +1,77 @@
+{
+ "adapter_sha256": "394642670e665649c4f63a9652424975d12355c2468ea88ccdb9fb71726d7473",
+ "base_model": "Qwen/Qwen2.5-Coder-7B-Instruct",
+ "base_revision": "c03e6d358207e414f1eca0bb1891e29f1db0e242",
+ "decoding": {
+  "do_sample": false,
+  "dtype": "bfloat16",
+  "max_new_tokens": 1024,
+  "max_prompt_tokens": 4096,
+  "num_beams": 1,
+  "policy_id": "generator-decoding@1",
+  "repetition_penalty": 1.0,
+  "seed": 1234,
+  "stop": [
+   "<|im_end|>"
+  ],
+  "temperature": 0.0,
+  "top_k": 0,
+  "top_p": 1.0
+ },
+ "files": {
+  "adapter_config.json": "d3dea9e938b53b0244528349df5865631e878bcd0a4fb270c81acfd572d1aaf4",
+  "adapter_model.safetensors": "0b89312be88c29d4a18fdc63b9996819c006b50f54766ae141f1033ebd36522e",
+  "generations.jsonl": "121c68c106173538bf775fd7a3354896accd8816fa171d2cd62a6a6402e52dc8"
+ },
+ "pod_image": "runpod/pytorch@sha256:61a4aafb0094cd773f11eefa378929d5a687bd775febeb78eac62fc824141fb5",
+ "pod_lock_sha256": "b363098b8c256876b4757b44058d52909bc650490b35b6275d626e6e9070beb4",
+ "prompt_format_sha256": "2980ad42b8bb739005da7878e6d6cf4d78413673907449f19e1d5a4d6e52abb9",
+ "prompt_format_version": "gen-prompt-v1",
+ "schema": "research-generator-adapter-manifest-v1",
+ "selected": "epoch-1",
+ "selection_split": "validation",
+ "sft_sha256": "0e7b455f4e38a99bed7f6362fc0dc5db5bee2e4e186f9c053e91b98f3ccbf038",
+ "stage_files_sha256": "596ffd4c65ea8cec5e85ce6f6856f71367f9c3d38b073af2b5c389af95cd0547",
+ "tokenizer_revision": "c03e6d358207e414f1eca0bb1891e29f1db0e242",
+ "train_config": {
+  "config_id": "qlora-smoke",
+  "epochs": 1,
+  "grad_accum": 1,
+  "learning_rate": 0.0002,
+  "lora_alpha": 32,
+  "lora_dropout": 0.05,
+  "lora_r": 16,
+  "max_seq_tokens": 5120,
+  "max_steps": 4,
+  "quantization": "nf4-double-quant-bf16-compute",
+  "seed": 20261107,
+  "target_modules": [
+   "q_proj",
+   "k_proj",
+   "v_proj",
+   "o_proj",
+   "gate_proj",
+   "up_proj",
+   "down_proj"
+  ],
+  "warmup_steps": 1
+ },
+ "untuned_validation_score": {
+  "clean_precision": 0.0,
+  "mode_recall": 0.0,
+  "n": 2,
+  "ref_hit_rate": 0.0,
+  "score": 0.075,
+  "valid_rate": 0.5
+ },
+ "val_loss": 0.42410166561603546,
+ "val_prompts_sha256": "9010f8c1490f91e92e3684c8cf36acba5267b2a821a2553832f570e66a854c1c",
+ "validation_score": {
+  "clean_precision": 0.0,
+  "mode_recall": 0.0,
+  "n": 2,
+  "ref_hit_rate": 0.0,
+  "score": 0.075,
+  "valid_rate": 0.5
+ }
+}

@@ -1,48 +1,35 @@
 # Generator lane handoff (LANE=generator)
 
-- Branch: `devin/1794090000-research/generator` (pushed, no PR). Code commit: `4625957` (this file is in the next commit on top of it).
-- Setup SHA rebased onto: `cadc5b4d91828fec1adcb5341a11c2c466e57c1f` (schemas/interfaces from `13b9667`).
-- Only owned paths changed: `research/generator/**`, `research/training/**`, `tests/research/generator/**`, `research/artifacts/generator/**`. No edits to src/, bench/, schemas/, fixtures/, tools/, config/, the production lock, research/cli.py or research/schemas.
+- Branch `devin/1794090000-research/generator`, on setup `cadc5b4d91828fec1adcb5341a11c2c466e57c1f`. Dataset input: branch `b48a61f9a9b53ba1a8bbd9cb89a53f86b7a30d1c`, tarball sha256 `046c59ca78329a9f31ea98d196bf95cd24571cc69f38b030851e5b47b151da98` (train.jsonl `cc5c1412...e5e48e9`, validation.jsonl `57a119d8...10c48866`, both match the dataset report).
+- Only owned paths changed (`research/generator/**`, `research/training/**`, `tests/research/generator/**`, `research/artifacts/generator/**`). No shared schema/interface change.
 
-## What is built
-- `research/generator/prompt.py`: `PROMPT_FORMAT_VERSION="gen-prompt-v1"`, `build_input` (base+head checkout.py, unified diff, pinned behavior spec, no labels, no template params), `render_prompt` (exact Qwen ChatML text), `parse_plan` (strict production `HypothesisPlanPayload`, 16 KiB cap, first proposal per mode wins), `check_grounded` (refs must be inside the head file).
-- `research/generator/examples.py`: `build_examples(store, split)`; refuses the test split; targets come from train/validation labels (family -> production mode, witness hash grounds modeled modes, refs = changed head lines; clean -> `other` only).
-- `research/generator/model.py`: `load_generator("qwen_untuned"|"qwen_qlora", adapter=, revision=)`. Both kinds use the same prompt, decoding policy, parse/ground rule and built-in-plan fallback. Generations are produced on the GPU pod and replayed by rendered-prompt sha256; the adapter manifest hash and base revision are checked on load.
-- `research/generator/decoding.py`: one policy for both arms (greedy, max 1024 new tokens, prompts over 4096 tokens excluded and reported, never truncated, bf16, seed 1234).
-- `research/generator/scoring.py`: validation-only checkpoint score (mode recall, clean precision, ref hit rate, valid rate). Raises on non-validation examples.
-- `research/generator/ledger.py`: JSONL ledger of frozen `LedgerEntry` records (validated on write and read).
-- `research/training/qlora.py`: `QloraTrainer` (GeneratorTrainer). One Runpod pod: deadman, hash-locked deps, base model download with every weight sha256 and tokenizer git OID checked, untuned validation generations, QLoRA SFT (nf4, r=16, alpha=32, all attention+MLP projections, loss on completion only), one checkpoint per epoch, validation generations per checkpoint, local selection on validation, frozen adapter manifest.
-- `research/training/runpod.py`: REST client, pod session that always deletes the pod, verifies it is gone from GET and list, has a local kill timer plus an on-pod deadman, refuses any job estimated above $50, and writes a ledger entry (with teardown_verified) even on failure.
-- `research/generator/commands.py` `prepare_generator_examples`, `research/training/commands.py` `train_generator` (CLI dispatch already in research/cli.py; `--dry-run` prints the plan and max estimate).
+## Results (validation only; test labels never read)
+| arm | n | valid-plan parse rate | score | clean precision | mode recall | ref hit |
+|---|---|---|---|---|---|---|
+| untuned Qwen2.5-Coder-7B-Instruct @ c03e6d35 | 300 | 0.46 | 0.069 | 0.00 | n/a (no modeled-mode targets) | n/a |
+| QLoRA tuned | not run | - | - | - | - | - |
 
-## Pins and hashes
-- Base and tokenizer: `Qwen/Qwen2.5-Coder-7B-Instruct@c03e6d358207e414f1eca0bb1891e29f1db0e242` (weights sha256 and tokenizer OIDs in `research/generator/pins.py`).
-- Pod image: `runpod/pytorch@sha256:61a4aafb0094cd773f11eefa378929d5a687bd775febeb78eac62fc824141fb5` (torch 2.4.0, CUDA 12.4.1, Py 3.11).
-- Pod lock `research/training/pod-requirements.lock` sha256: `b363098b8c256876b4757b44058d52909bc650490b35b6275d626e6e9070beb4`.
-- Prompt format `gen-prompt-v1` sha256: `2980ad42b8bb739005da7878e6d6cf4d78413673907449f19e1d5a4d6e52abb9`.
-- Behavior spec sha256 (same text as production `_CONTRACT`, test-checked): `9412f12f6839e1b8e07680de3551ffb6194857362f8095366fa9471250bbe7c2`.
-- Decoding policy JSON sha256: `1005be16a4b5a55c2367a2ae9faffe708b68f8066305ee34456e4309975df36d`.
-- Dataset hashes: none (no dataset examples exist yet). Adapter hash: none (no training run).
+- **No tuned adapter exists.** Coordinator deadline: the pod was deleted at 00:00:30 UTC after 51 min inside epoch 1 of 3. Checkpoints are written only at epoch end, so none was saved. `adapter_sha256`: none.
+- The untuned arm proposes all three modes in every valid plan, so precision is 0. Every validation example is labeled `other`, so the validation score only measures "valid plan without a modeled rounding mode". Train has 1,958 `other`, 42 `per_item_rounding` and 0 `half_even_rounding`. This was reported to the data lane.
+- The smoke run (4 train and 2 validation examples built from reviewed `fixtures/demo/revisions` sources, never executed) went end to end on the pod. Smoke adapter sha256 `394642670e665649c4f63a9652424975d12355c2468ea88ccdb9fb71726d7473`. It is a pipeline check only, not a result (`smoke-adapter-manifest.json`).
 
-## Tests (all run on this commit)
-- `research/.venv/bin/python -m pytest -q tests/research` -> 94 passed, 2 skipped. (`uv run --project research --locked` fails offline here: the uv cache lacks the scipy 1.18.1 wheel LightGBM needs; the existing research venv was used.)
-- `research/.venv/bin/ruff check research/generator research/training tests/research/generator` -> all checks passed.
-- `research/.venv/bin/mypy research/generator research/training tests/research/generator` -> no issues in 20 files.
-- `UV_OFFLINE=1 PROOFHUNTER_PROFILE=offline uv run --locked pytest -q` -> 1271 passed, 2 skipped.
-- `... uv run --locked ruff check .` -> all checks passed. `... mypy src bench tools tests/integration` -> no issues in 81 files.
-- `... python tools/gate.py setup` -> PASSED. `... python tools/gate.py integrated` -> PASSED.
-- `research/.venv/bin/python -m research.cli train-generator --train T --validation V --out O --run-id smoke-dry --smoke --dry-run` -> exit 0, max estimate $2.67 (RTX 4090, 3 h cap); wrong-split input exits 1.
+## Cost and teardown
+- Pod `mozp9af8wlaf9h` (RTX 4090 secure, $0.89/h): 1.1425 h, **$1.017 estimated**. Create probe `nw0jfse5wbkg90`: $0.0007. Total about **$1.02**, max job estimate $7.12. Costs are estimates (costPerHr × wall time); Runpod billing was not read back.
+- Teardown verified: DELETE, then GET `/pods/mozp9af8wlaf9h` returns nothing and the pod list is empty (`full-qlora-v1/teardown-evidence.json`). The ledger (`full-qlora-v1/ledger.jsonl`, frozen `LedgerEntry`) has 2 paid entries with `teardown_verified=true` and 2 unpaid usage-attribution entries.
 
-## Costs
-- $0 spent. No pod created, no paid calls, so the ledger is empty.
+## Pins
+- Base and tokenizer `Qwen/Qwen2.5-Coder-7B-Instruct@c03e6d358207e414f1eca0bb1891e29f1db0e242`. Weight sha256s and tokenizer OIDs were verified on the pod.
+- Image `runpod/pytorch@sha256:61a4aafb0094cd773f11eefa378929d5a687bd775febeb78eac62fc824141fb5`. Lock sha256 `b363098b8c256876b4757b44058d52909bc650490b35b6275d626e6e9070beb4`.
+- Prompt `gen-prompt-v1` format sha256 `2980ad42...abb9`. Decoding policy sha256 `1005be16...df36d` (greedy, 1024 new tokens, 4096 prompt-token limit, no truncation). Train config `qlora-v1` (nf4, r16/α32, lr 2e-4, grad_accum 8, 3 epochs).
+- Spec texts: the production spec `9412f12f...` and the dataset-lane spec `a9576375...` are both registered in `prompt.SPEC_TEXTS`, so dataset examples keep their hashes. The two lanes use different spec wording; this should be unified.
 
-## Stopping point and remaining dependencies
-1. `RUNPOD_API_KEY` is not in this session's environment, so nothing live ran: no untuned validation, no smoke training. Code is ready; with the key: `research train-generator ... --smoke` first.
-2. Dataset branch `devin/1794090000-research/dataset` is not pushed yet. Needs a `CaseStore` factory (default `research.data.store:open_store`, overridable with `--store-factory`). Then: `research prepare-generator-examples --store ROOT --split train|validation --out F`, then `research train-generator`.
-3. Family -> mode mapping uses family keywords (`per_line`/`per_item` -> per_item_rounding, `half_even`/`banker` -> half_even_rounding, else other). Check it against the dataset lane's final family ids.
+## Tests
+- `UV_OFFLINE=1 PROOFHUNTER_PROFILE=offline uv run --project research --locked pytest -q tests/research` -> 94 passed, 2 skipped.
+- Lane ruff and mypy (22 files) clean. Production `pytest -q` -> 1271 passed, 2 skipped. `ruff check .` and `mypy src bench tools tests/integration` are clean. `gate.py setup` and `gate.py integrated` PASSED.
+
+## How to resume (adds about 3.5 h of GPU, about $3)
+`podctl up` -> `podctl train --run-id ... --train T --val V --out O` (or `podctl finish --epoch 1` to stop after epoch 1 and freeze) -> `podctl down`, all with `RUNPOD_API_KEY` bound per command. One epoch takes more than 51 min on a 4090. Saving a mid-epoch checkpoint, or setting `max_steps`, would make a deadline-bounded run possible.
 
 ## Known limitations
-- Pod scripts (`research/training/pod/*.py`) have only been type- and lint-checked. They have never run on a GPU.
-- The deadman uses `runpodctl remove pod` and falls back to killing PID 1. The local kill timer and the post-run delete + list check are the primary teardown.
-- Costs recorded are `estimated` (costPerHr x wall time). Runpod billing is not read back.
-- Greedy decoding instead of Qwen's sampling defaults, applied the same way to both arms.
+- Runpod rejected `allowedCudaVersions` ("no instances available"), so it is dropped from the pod request.
+- The on-pod idle and deadman guards fall back to `kill 1`, because `RUNPOD_API_KEY` is not injected into the pod. Local delete plus verify is the primary teardown.

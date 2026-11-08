@@ -168,9 +168,61 @@ def full(run_id: str, out: Path, train_path: Path, val_path: Path, ledger: Jsonl
     return 0
 
 
+def finish(run_id: str, out: Path, train_path: Path, val_path: Path, epoch: int,
+           ledger: JsonlLedger) -> int:
+    """Stop training after ``epoch`` checkpoints, evaluate them on validation and freeze."""
+    from research.generator.model import GENERATIONS_FILE, sha256_file
+    from research.schemas.models import GeneratorExample, Split
+    from research.training.qlora import QloraTrainer, TrainConfig
+
+    def read(path: Path, split: Split) -> list[GeneratorExample]:
+        rows = [GeneratorExample.model_validate_json(x)
+                for x in path.read_text().splitlines() if x.strip()]
+        if any(r.split is not split for r in rows):
+            raise SystemExit(f"{path} contains rows outside split {split.value}")
+        return rows
+
+    pod = attach()
+    run_dir = f"{REMOTE}/runs/{run_id}"
+    while f"epoch-{epoch}" not in pod.run(f"ls {run_dir}/ckpt 2>/dev/null || true"):
+        time.sleep(30)
+    time.sleep(20)
+    pod.run(f"pkill -f train_qlora.py || true; touch {REMOTE}/keepalive")
+    start = time.time()
+    try:
+        pod.get(f"{run_dir}/ckpt/train_log.json", out / "train_log.json")
+        log = json.loads((out / "train_log.json").read_text())
+        log["epochs"] = [e for e in log["epochs"] if e["epoch"] <= epoch]
+        log["stopped_after_epoch"] = epoch
+        (out / "train_log.json").write_text(json.dumps(log, indent=1))
+        gen = (f"cd {run_dir} && python hf_generate.py --model-dir /workspace/model "
+               f"--prompts val_prompts.jsonl --policy policy.json")
+        for e in log["epochs"]:
+            name = e["checkpoint"]
+            pod.run(f"{gen} --adapter ckpt/{name} --out ckpt/{name}/{GENERATIONS_FILE}",
+                    timeout=7200)
+            pod.get(f"{run_dir}/ckpt/{name}", out / "checkpoints" / name)
+    finally:
+        (out / "finish_pod_log.txt").write_text("\n".join(pod.log))
+        from research.training.runpod import attributed_entry
+        ledger.append(attributed_entry(f"{run_id}-finish", pod.pod_id, time.time() - start))
+    st = _state()
+    trainer = QloraTrainer(run_id=run_id, config=TrainConfig(), ledger=ledger, pod=pod,
+                           max_hours=float(str(st["max_hours"])))
+    train_l, val_l = read(train_path, Split.TRAIN), read(val_path, Split.VALIDATION)
+    with tempfile.TemporaryDirectory() as tmp:
+        hashes = trainer.stage(train_l, val_l, Path(tmp))
+        listing = "".join(f"{p.name}:{sha256_file(p)}\n" for p in sorted(Path(tmp).iterdir()))
+    import hashlib
+    hashes["stage_files_sha256"] = hashlib.sha256(listing.encode()).hexdigest()
+    digest = trainer.freeze(trainer.select(val_l, out), val_l, out, hashes)
+    print(json.dumps({"adapter_sha256": digest, "out": str(out)}))
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="podctl")
-    ap.add_argument("action", choices=["up", "status", "run", "smoke", "train", "down"])
+    ap.add_argument("action", choices=["up", "status", "run", "smoke", "train", "finish", "down"])
     ap.add_argument("--gpu", choices=sorted(GPU_CHOICES), default="rtx4090")
     ap.add_argument("--max-hours", type=float, default=8.0)
     ap.add_argument("--idle-minutes", type=int, default=45)
@@ -180,6 +232,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--cmd", default="nvidia-smi")
     ap.add_argument("--train", type=Path)
     ap.add_argument("--val", type=Path)
+    ap.add_argument("--epoch", type=int, default=1)
     args = ap.parse_args(argv)
     ledger = JsonlLedger(args.ledger)
     if args.action == "up":
@@ -188,6 +241,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return down(ledger)
     if args.action == "smoke":
         return smoke(args.run_id, args.out, ledger)
+    if args.action == "finish":
+        return finish(args.run_id, args.out, args.train, args.val, args.epoch, ledger)
     if args.action == "train":
         return full(args.run_id, args.out, args.train, args.val, ledger)
     session = attach()
