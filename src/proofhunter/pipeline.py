@@ -25,6 +25,7 @@ from proofhunter.ports import (
     SourcePort,
 )
 from proofhunter.runner import create_runner_port
+from proofhunter.runner.approval import allowed_repository
 
 T = TypeVar("T")
 
@@ -69,6 +70,10 @@ class VerificationPipeline:
             ).resolve(record.target.canonical_url)
             if target != record.target:
                 raise ValueError("enrollment identity mismatch")
+            if self.settings.daytona.enable_live_runner and not allowed_repository(
+                enrollment.repo_full_name
+            ):
+                raise ValueError("repository not on basic-tier allowlist")
             self.enrollment = enrollment
         mode = c.ExecutionMode.OFFLINE_FIXTURE if self.settings.offline else c.ExecutionMode.LIVE
         github_started = self.github_calls() if self.github_calls else 0

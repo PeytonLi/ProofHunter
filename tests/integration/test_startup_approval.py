@@ -10,7 +10,12 @@ from proofhunter import cli
 from proofhunter import contracts as c
 from proofhunter.config import ServiceRole, load_settings
 from proofhunter.ports import ConfigError
-from proofhunter.runner.approval import CANARY_EXPECTED, config_fingerprint, harness_sha256
+from proofhunter.runner.approval import (
+    AMENDMENT,
+    CANARY_EXPECTED,
+    config_fingerprint,
+    harness_sha256,
+)
 from proofhunter.runner.daytona import DaytonaRunner
 from tests.integration.test_live_cli import environment, trusted
 
@@ -59,7 +64,8 @@ def test_startup_local_approval(
         "config_fingerprint": fingerprint,
         "image_digest": image,
         "effective_policy_reviewed": True,
-        "daytona_account_tier": 3,
+        "daytona_account_tier": 1,
+        "amendment": AMENDMENT,
         "canary_result": json.loads(json.dumps(CANARY_EXPECTED)),
     }
     if fault == "image":
@@ -72,11 +78,11 @@ def test_startup_local_approval(
             deployment,
         )
     if fault == "tier":
-        approval["daytona_account_tier"] = 2
+        del approval["amendment"]
     if fault == "canary_missing":
         del approval["canary_result"]
     if fault == "probe_missing":
-        del approval["canary_result"]["probes_denied"]["github.com"]
+        del approval["canary_result"]["probes_denied"]["metadata:169.254.169.254:80"]
     if fault in CANARY_EXPECTED["probes_denied"]:
         approval["canary_result"]["probes_denied"][fault] = False
     raw = json.dumps(approval)
@@ -88,7 +94,13 @@ def test_startup_local_approval(
     }.get(fault, raw)
     if fault != "missing":
         (tmp_path / "runner-isolation-approval.json").write_text(raw)
-    enrollment = trusted().model_copy(update={"snapshot_id": snapshot, "image_digest": image})
+    enrollment = trusted().model_copy(
+        update={
+            "snapshot_id": snapshot,
+            "image_digest": image,
+            "repo_full_name": "PeytonLi/ProofHunter-Demo",
+        }
+    )
     monkeypatch.setattr(
         "proofhunter.runner.daytona.Daytona",
         lambda *a, **kw: pytest.fail("startup constructed SDK"),
@@ -117,3 +129,27 @@ def test_disabled_startup_without_approval(tmp_path: Path) -> None:
 def test_offline_startup_without_approval(tmp_path: Path) -> None:
     settings = load_settings({"PROOFHUNTER_PROFILE": "offline"})
     cli.live_trust_gate(settings, [trusted()])
+
+
+def test_live_runner_allowlist_is_demo_repository_only(tmp_path: Path) -> None:
+    settings = load_settings(
+        {
+            **environment(tmp_path),
+            "DAYTONA_SNAPSHOT": "synthetic-test-only-snapshot",
+            "DAYTONA_IMAGE_DIGEST": "sha256:" + "a" * 64,
+        },
+        role=ServiceRole.API,
+    )
+    settings = settings.model_copy(
+        update={"daytona": settings.daytona.model_copy(update={"enable_live_runner": True})}
+    )
+    for name in ("team/checkout", "peytonli/proofhunter-demo", "PeytonLi/ProofHunter"):
+        enrollment = trusted().model_copy(
+            update={
+                "snapshot_id": "synthetic-test-only-snapshot",
+                "image_digest": "sha256:" + "a" * 64,
+                "repo_full_name": name,
+            }
+        )
+        with pytest.raises(ConfigError, match=r"^repository not on basic-tier allowlist$"):
+            cli.live_trust_gate(settings, [enrollment])

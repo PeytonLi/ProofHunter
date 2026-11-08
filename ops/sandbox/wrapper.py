@@ -1,4 +1,4 @@
-"""Trusted root-owned snapshot entry point. Never run this on the control plane."""
+"""Trusted entry point uploaded per sandbox and run as root. Never run on the control plane."""
 
 import contextlib
 import ctypes
@@ -12,7 +12,8 @@ import subprocess
 import time
 from pathlib import Path
 
-ENV = {"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", "HOME": "/nonexistent"}
+PYTHON = "/usr/local/bin/python3"
+ENV = {"PATH": "/usr/local/bin:/usr/bin:/bin", "LANG": "C.UTF-8", "HOME": "/nonexistent"}
 CHILD = (
     "import sys,json;sys.path.insert(0,'/tmp/proofhunter-target');"
     "from checkout import total_cents;d=json.load(sys.stdin);"
@@ -22,6 +23,8 @@ CHILD = (
 
 
 def restrict(memory_mib: int, processes: int, seconds: int) -> None:
+    # PRD amendment A1: the untrusted child gets an empty network namespace while still root.
+    os.unshare(os.CLONE_NEWNET)
     os.setgroups([])
     os.setgid(65534)
     os.setuid(65534)
@@ -62,7 +65,7 @@ def execute(data: dict[str, object]) -> tuple[str, int | None, bool]:
     (target / "checkout.py").write_bytes(source)
     (target / "checkout.py").chmod(0o444)
     process = subprocess.Popen(  # noqa: S603
-        ["/usr/bin/python3", "-I", "-B", "-c", CHILD],
+        [PYTHON, "-I", "-B", "-c", CHILD],
         cwd=str(target),
         env=ENV,
         stdin=subprocess.PIPE,

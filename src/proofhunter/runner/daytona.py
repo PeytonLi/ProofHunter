@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from daytona import CreateSandboxFromSnapshotParams, Daytona, DaytonaConfig
-from daytona.common.errors import DaytonaTimeoutError
+from daytona.common.errors import DaytonaNotFoundError, DaytonaTimeoutError
 
 from proofhunter.config import Settings
 from proofhunter.contracts import (
@@ -27,17 +27,22 @@ from proofhunter.contracts import (
 )
 from proofhunter.runner.approval import (
     CANARY_COMMAND,
-    ENV,
+    HARNESS_DIR,
     OBSERVE_COMMAND,
     config_fingerprint,
+    harness_files,
     harness_sha256,
     local_approval_refusal,
+    pinned_image,
     strict_json,
     valid_canary,
 )
 from proofhunter.runner.approval import (
     CANARY_EXPECTED as CANARY_EXPECTED,
 )
+
+DELETION_VERIFY_SECONDS = 30.0
+DELETION_POLL_SECONDS = 1.0
 
 
 class DaytonaRunner:
@@ -57,7 +62,8 @@ class DaytonaRunner:
         self.deployment = deployment
         self.state_dir = state_dir
         self.enabled = enabled
-        self.harness = harness_sha256()
+        self.files = harness_files()
+        self.harness = harness_sha256(self.files)
         self.fingerprint = config_fingerprint(snapshot, image_digest, self.harness, deployment)
         self._attestation: IsolationAttestation | None = None
         self.approval_refusal_reason: str | None = None
@@ -113,14 +119,14 @@ class DaytonaRunner:
             snapshot=self.snapshot,
             public=False,
             network_block_all=True,
-            env_vars=ENV.copy(),
+            env_vars={},
             labels={"proofhunter.deployment": self.deployment, "proofhunter.run": run_id},
             volumes=[],
             secrets={},
             auto_stop_interval=1,
             auto_delete_interval=0,
             ttl_minutes=2,
-            os_user="daytona",
+            ephemeral=True,
         )
         sandbox = self.client.create(params, timeout=timeout)
         try:
@@ -130,6 +136,18 @@ class DaytonaRunner:
             raise
         return sandbox
 
+    def _pinned(self) -> bool:
+        snapshot = self.client.snapshot.get(self.snapshot)
+        return bool(
+            snapshot.name == self.snapshot
+            and snapshot.image_name == pinned_image(self.image_digest)
+            and str(getattr(snapshot.state, "value", snapshot.state)).lower() == "active"
+        )
+
+    def _install_harness(self, sandbox: Any, timeout: int) -> None:
+        for name, data in self.files.items():
+            sandbox.fs.upload_file(data, f"{HARNESS_DIR}/{name}", timeout=timeout)
+
     def _policy(self, sandbox: Any) -> bool:
         return bool(
             sandbox.public is False
@@ -137,11 +155,24 @@ class DaytonaRunner:
             and sandbox.snapshot == self.snapshot
             and sandbox.cpu == 1
             and sandbox.memory == 1
+            and not getattr(sandbox, "env", None)
+            and not getattr(sandbox, "volumes", None)
         )
 
     def _delete(self, sandbox: Any, run_id: str) -> None:
         self.client.delete(sandbox, timeout=5, wait=True)
         self._ledger("deleted", sandbox.id, run_id)
+        deadline = time.monotonic() + DELETION_VERIFY_SECONDS
+        while True:
+            try:
+                self.client.get(sandbox.id)
+            except DaytonaNotFoundError:
+                self._ledger("deletion_verified", sandbox.id, run_id)
+                return
+            if time.monotonic() >= deadline:
+                self._ledger("deletion_unverified", sandbox.id, run_id)
+                raise RuntimeError("sandbox deletion unverified")
+            time.sleep(DELETION_POLL_SECONDS)
 
     def _approved(self) -> bool:
         self.approval_refusal_reason = local_approval_refusal(
@@ -157,10 +188,11 @@ class DaytonaRunner:
         verified = False
         sandbox = None
         try:
-            if self.enabled and self._approved():
-                sandbox = self._create("preflight", 15)
+            if self.enabled and self._approved() and self._pinned():
+                sandbox = self._create("preflight", 30)
                 if self._policy(sandbox):
-                    response = sandbox.process.exec(CANARY_COMMAND, cwd="/", env=ENV, timeout=10)
+                    self._install_harness(sandbox, 10)
+                    response = sandbox.process.exec(CANARY_COMMAND, cwd="/", timeout=20)
                     if response.exit_code == 0 and len(response.result.encode()) <= 4096:
                         data = strict_json(response.result)
                         verified = valid_canary(data)
@@ -179,7 +211,7 @@ class DaytonaRunner:
             image_digest=self.image_digest,
             harness_sha256=self.harness,
             network_block_all=True,
-            egress_denied=True if verified else None,
+            egress_denied=False if verified else None,
             metadata_denied=True if verified else None,
             checked_at=datetime.now(UTC),
             config_fingerprint=self.fingerprint,
@@ -223,6 +255,7 @@ class DaytonaRunner:
             if allowed:
                 sandbox = self._create(request.run_id, remaining())
                 if self._policy(sandbox):
+                    self._install_harness(sandbox, remaining())
                     nonce = secrets.token_hex(32)
                     binding = {
                         "attempt_id": request.attempt_id,
@@ -250,7 +283,6 @@ class DaytonaRunner:
                     response = sandbox.process.exec(
                         OBSERVE_COMMAND,
                         cwd="/",
-                        env=ENV.copy(),
                         timeout=min(remaining(), request.resources.execution_timeout_seconds + 1),
                     )
                     remaining()

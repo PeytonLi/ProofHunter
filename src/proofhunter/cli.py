@@ -27,7 +27,13 @@ from proofhunter.config import (
 )
 from proofhunter.pipeline import VerificationPipeline, WallClock, compose
 from proofhunter.ports import AdapterError, ApiDependencies, ConfigError
-from proofhunter.runner.approval import config_fingerprint, harness_sha256, local_approval_refusal
+from proofhunter.runner.approval import (
+    allowed_repository,
+    config_fingerprint,
+    harness_sha256,
+    local_approval_refusal,
+    validate_approval,
+)
 from proofhunter.store import create_store
 from proofhunter.worker import VerificationWorker
 
@@ -58,14 +64,12 @@ def live_trust_gate(settings: Settings, enrollments: Sequence[c.Enrollment]) -> 
             or settings.daytona.image_digest != enrollment.image_digest
         ):
             raise ConfigError("runner provisioning required")
+        if settings.daytona.enable_live_runner and not allowed_repository(
+            enrollment.repo_full_name
+        ):
+            raise ConfigError("repository not on basic-tier allowlist")
     if not settings.offline and settings.daytona.enable_live_runner:
-        harness = harness_sha256()
-        fingerprint = config_fingerprint(
-            settings.daytona.snapshot or "",
-            settings.daytona.image_digest or "",
-            harness,
-            c.canonical_sha256(str(settings.db_path.resolve()))[:24],
-        )
+        fingerprint = runner_fingerprint(settings)
         reason = local_approval_refusal(
             settings.db_path.parent,
             fingerprint=fingerprint,
@@ -75,8 +79,20 @@ def live_trust_gate(settings: Settings, enrollments: Sequence[c.Enrollment]) -> 
             raise ConfigError(reason)
 
 
+def runner_fingerprint(settings: Settings) -> str:
+    return config_fingerprint(
+        settings.daytona.snapshot or "",
+        settings.daytona.image_digest or "",
+        harness_sha256(),
+        c.canonical_sha256(str(settings.db_path.resolve()))[:24],
+    )
+
+
 def live_settings(env: dict[str, str], role: ServiceRole) -> Settings:
     settings = load_settings(env, role=role)
+    approval = env.get("PROOFHUNTER_RUNNER_APPROVAL_JSON")
+    if approval is not None:
+        materialize_approval(settings, approval)
     raw = env.get("PROOFHUNTER_ENROLLMENTS_JSON")
     if raw is not None:
         materialize_enrollments(settings, raw)
@@ -84,17 +100,33 @@ def live_settings(env: dict[str, str], role: ServiceRole) -> Settings:
     return settings
 
 
+def materialize_approval(settings: Settings, raw: str) -> None:
+    if settings.offline or not settings.daytona.enable_live_runner:
+        raise ConfigError("runner approval requires the live runner")
+    reason = validate_approval(
+        raw,
+        fingerprint=runner_fingerprint(settings),
+        image_digest=settings.daytona.image_digest or "",
+    )
+    if reason is not None:
+        raise ConfigError(reason)
+    write_external(settings.db_path.parent / "runner-isolation-approval.json", raw.strip() + "\n")
+
+
 def materialize_enrollments(settings: Settings, raw: str) -> None:
     registry = c.EnrollmentRegistry.model_validate_json(raw)
     live_trust_gate(settings, [item for item in registry.enrollments if item.enabled])
-    path = settings.enrollments_path
+    write_external(settings.enrollments_path, registry.model_dump_json(indent=2) + "\n")
+
+
+def write_external(path: Path, text: str) -> None:
     if path.is_symlink() or path.resolve().is_relative_to(Path(__file__).resolve().parents[2]):
         raise ConfigError("inline enrollment requires external regular path")
     descriptor, temporary = tempfile.mkstemp(prefix=".enrollment-", dir=path.parent)
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8") as output:
             os.fchmod(output.fileno(), 0o600)
-            output.write(registry.model_dump_json(indent=2) + "\n")
+            output.write(text)
             output.flush()
             os.fsync(output.fileno())
         os.replace(temporary, path)
