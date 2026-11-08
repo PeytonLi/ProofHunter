@@ -1,0 +1,47 @@
+{
+ "schema": "generator-results-v1",
+ "run_id": "full-qlora-v1",
+ "pod_id": "mozp9af8wlaf9h",
+ "gpu": "NVIDIA GeForce RTX 4090",
+ "dataset": {
+  "branch_sha": "b48a61f9a9b53ba1a8bbd9cb89a53f86b7a30d1c",
+  "tarball_sha256": "046c59ca78329a9f31ea98d196bf95cd24571cc69f38b030851e5b47b151da98",
+  "train_jsonl_sha256": "cc5c14121f548500dff1aa3a2810dea02e33b737b901d1b3d22debe2ad5e48e9",
+  "validation_jsonl_sha256": "57a119d8bbf92b9816e0af52bb40fd597808818a144dc896b4593e6910c48866",
+  "train_examples": 2000,
+  "validation_examples": 300
+ },
+ "untuned_validation": {
+  "n": 300,
+  "valid_rate": 0.46,
+  "mode_recall": 0.0,
+  "clean_precision": 0.0,
+  "ref_hit_rate": 0.0,
+  "score": 0.069,
+  "generations_sha256": "28b0a2e3439f0afb6c53d1834b1b0b00bf7e4d84c01ccd8c24b753766ef32e3d",
+  "finish_reason_stop": 300,
+  "excluded_overlong": 0
+ },
+ "tuned_validation": null,
+ "adapter_sha256": null,
+ "stopped": "coordinator deadline: pod deleted at 00:00:30 UTC after 51 min of epoch 1 of 3; no checkpoint had been saved (checkpoints are written at epoch end), so no adapter exists",
+ "smoke": {
+  "run_id": "smoke-1",
+  "adapter_sha256": "394642670e665649c4f63a9652424975d12355c2468ea88ccdb9fb71726d7473",
+  "train_examples": 4,
+  "validation_examples": 2,
+  "note": "pipeline check on reviewed-fixture smoke examples only; not a result"
+ },
+ "cost": {
+  "pod_lifetime_hours": 1.142534,
+  "estimated_usd": 1.016855,
+  "probe_usd": 0.00065,
+  "total_estimated_usd": 1.017505,
+  "cost_status": "estimated (costPerHr x wall time; Runpod billing not read back)",
+  "max_estimate_usd": 7.12
+ },
+ "teardown": {
+  "pod_deleted_verified": true,
+  "evidence": "teardown-evidence.json"
+ }
+}
