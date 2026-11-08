@@ -1,7 +1,6 @@
 # ProofHunter research track — deadline report (validation only)
 
-Graphs: `graphs.html` (self-contained, inline SVG, diagram-design editorial skin). Regenerate with
-`python3 research/reports/final/build_graphs.py`. Every number is read from committed artifacts:
+Every number is read from committed artifacts:
 `research/execution/reports/r1-validation/*-pilot-report.json`, `.../report/scores.json`, and
 `research/artifacts/ranker/real-v2/validation-comparison.json`.
 
